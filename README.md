@@ -19,7 +19,7 @@ index can be used to mount the PCAP any time later making the data available alm
 We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not 
 available as packages in most of the Linux distribution around. So, for the moment you have to build pcapFS from source.
 
-Building pcapFS works best on rather modern Linux distribution. See the [corresponding section](building-pcapfs) of 
+Building pcapFS works best on rather modern Linux distribution. See the [corresponding section](#building-pcapfs) of 
 this README for further details.  
 
 # Using pcapFS
