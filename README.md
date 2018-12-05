@@ -291,9 +291,3 @@ Note that decoding options are independent from an implemented protocol detectio
 As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you 
 need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are 
 different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies).
-
-# Limitations
-- only TCP and UDP
-- Only one XOR key file
-- Only PCAP (no PCAP NG)
-- API not completely stable yet
