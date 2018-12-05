@@ -4,9 +4,9 @@ convenient to analyze the payload (and to some extend the metadata) of your capt
 
 While there are already several tools out there which are able to extract data from your PCAPs, pcapFS has some 
 features that make it different from these tools—most notably:
-- fast access to the payload
-- direct PCAP access
-- multi/split PCAP support
+
+- fast and direct access to the payload (i.e. without prior extraction)
+- support for multi/split PCAPs
 - almost arbitrary sortable virtual directory hierarchy
 - on the fly decoding and decrypting
 
@@ -14,6 +14,16 @@ Instead of extracting the payload (i.e. copying the data to disk), pcapFS provid
 To speed the access up, an index is created when a PCAP is mounted for the first time. This takes almost the same time 
 as opening a PCAP with Wireshark. After the index is created, we can use it for all further operations. Moreover, the 
 index can be used to mount the PCAP any time later making the data available almost instantly.
+
+# Protocols and Decoders
+In pcapFS each protocol and decoder is implemented as a *virtual file*. These virtual files store references into other virtual files or directly into the PCAP, which are used to read their data. Currently the following protocols and decoders are supported:
+
+- raw TCP and UDP
+- HTTP 1.1
+- FTP
+- SSL (currently decryption is limited)
+- DNS
+- XOR
 
 # Getting pcapFS
 We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not 
@@ -37,12 +47,12 @@ $ pcapfs /path/to/some/test.pcap /mount/point
 
 To unmount a previously mounted network capture use `fusermount3` with the `-u` switch:
 ```bash
-fusermount3 -u /mount/point
+$ fusermount3 -u /mount/point
 ```
 
-Since the example above did not specify any index file, pcapFS automatically created an index file for you. This file 
+Since the example above did not specify any index file, pcapFS automatically creates an index file for you. This file 
 will be in the current working directory and will be named somthing like `20181130-125450_pcapfs.index` (the first 
-component is the date when the index was created, the second the time, and the last ones just a fixed string). You can 
+component is the date when the index was created, the second the time, and the last one is just a fixed string). You can 
 use this index if you want to mount the PCAP again using the `-i` or `--index` switches:
 ```
 $ pcapfs -i 20181130-125450_pcapfs.index /path/to/some/pcap /mount/point
@@ -51,13 +61,13 @@ If you provide a path to a non-existing index file on the command line, an index
 you.
 
 If you don't want your index to be written to disk, use the `-m` or `--in-memory` options. This skips the writing of 
-the index. This, of course, means that the index has to be rebuilt the next time you want to mount the PCAP.
+the index which, of course, means that the index has to be rebuilt the next time you want to mount the PCAP.
 
 ## Mounting Multiple/Split PCAPs
 pcapFS lets you mount multiple PCAPs at the same time. The mount point will contain the payload of all PCAPs as if 
 only one PCAP would have been mounted. It makes no difference if the PCAPs you mount are completely unrelated or if 
-you are providing several PCAPs representing a very long network capture. Note that conversation spanning over two or 
-more PCAPs are entirely supported by pcapFS, i.e. no prior merging of PCAPs required to be able to extract your long 
+you are providing a very long network capture split into several PCAPs. Note that conversations spanning over two or 
+more PCAPs are entirely supported by pcapFS, i.e. no prior merging of PCAPs is required in order to extract your long 
 lasting download from multiple PCAPs!
 
 For this purpose, you can specify a directory instead of a regular PCAP file:
@@ -223,9 +233,7 @@ $ pcapfs --sortby=/foo/protocol/domain/path /path/to/some/test.pcap /mount/point
 As you can see, the `foo` component lead to the creation of the `PCAPFS_PROP_NOT_AVAIL` folder containing the 
 directories for the protocols. There are additional `PCAPFS_PROP_NOT_AVAIL` folders in `tcp` and `ssl`. This is 
 because the parsers for TCP and SSL do not provide the `domain` and `path` properties. The HTTP parser on the other 
-hand provides these properties leading to the `server.test` and `image` subdirectories. So, in the current 
-implementation there is not way to easily figure out whether you mistyped a property or whether your PCAP doesn't 
-contain the protocol providing it. 
+hand provides these properties leading to the `server.test` and `image` subdirectories. 
 
 ## Decrypting and Decoding Traffic
 It is possible for pcapFS to decrypt and decode certain protocols on the fly if you provide it with the corresponding 
@@ -277,11 +285,12 @@ In case of the SSL example above, all connections from source IP 1.2.3.4 and sou
 SSL protocol parser. For XOR we defined two rules both stating that connection meeting the criteria should be parsed 
 with the XOR parser: the first one matches all connections from source IP 1.2.3.4 to destination IP 4.3.2.1 and 
 destination port 2345, the second one matches all UDP "connections" from source port 1111 to destination port 2222. 
+Note that decoding options are independent from an implemented protocol detection. E.g. you can specify a certain port for HTTP decoding, but the HTTP parser still checks if the transferred data over this port is valid HTTP.
 
 # Building pcapFS
 As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you 
 need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are 
-different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies/README.md).
+different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies).
 
 # Limitations
 - only TCP and UDP
