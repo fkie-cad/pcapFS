@@ -32,6 +32,19 @@ available as packages in most of the Linux distribution around. So, for the mome
 Building pcapFS works best on rather modern Linux distribution. See the [corresponding section](#building-pcapfs) of 
 this README for further details.  
 
+# Building pcapFS
+As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you 
+need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are 
+different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies).
+
+Afterwards you can build pcapFS like:
+```
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+```
+
 # Using pcapFS
 
 ## Mounting Network Data
@@ -287,7 +300,3 @@ with the XOR parser: the first one matches all connections from source IP 1.2.3.
 destination port 2345, the second one matches all UDP "connections" from source port 1111 to destination port 2222. 
 Note that decoding options are independent from an implemented protocol detection. E.g. you can specify a certain port for HTTP decoding, but the HTTP parser still checks if the transferred data over this port is valid HTTP.
 
-# Building pcapFS
-As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you 
-need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are 
-different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies).
