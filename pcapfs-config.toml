@@ -1,0 +1,23 @@
+[general]
+  sortby = "/dstIP/dstPort/srcIP"
+
+[keys]
+  keyfiles = [
+    "/path/to/some/key.file",
+    "relative/path/to/other/key.file",
+  ]
+
+
+[[decode.xor.properties]]
+  srcIP = "1.2.3.4"
+  dstIP = "4.3.2.1"
+  dstPort = 2345
+
+[[decode.xor.properties]]
+  srcPort = 1111
+  dstPort = 2222
+  protocol = "udp"
+
+[[decode.ssl.properties]]
+  srcIP = "1.2.3.4"
+  srcPort = 8080

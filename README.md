@@ -1,5 +1,290 @@
-# pcapFS
-A FUSE module to mount captured network data.
+# pcapFS – Mounting Network Data
+pcapFS is a FUSE module allowing it to mount captured network data as a virtual file system. This makes it especially 
+convenient to analyze the payload (and to some extend the metadata) of your captured network traffic.
 
-**Release:** We are about to release the source code during this year's [OSDFCon](https://www.osdfcon.org/events_2018/pcapfs-mounting-network-data-for-on-the-fly-analysis/).
+While there are already several tools out there which are able to extract data from your PCAPs, pcapFS has some 
+features that make it different from these tools—most notably:
+- fast access to the payload
+- direct PCAP access
+- multi/split PCAP support
+- almost arbitrary sortable virtual directory hierarchy
+- on the fly decoding and decrypting
 
+Instead of extracting the payload (i.e. copying the data to disk), pcapFS provides direct access into the PCAP files. 
+To speed the access up, an index is created when a PCAP is mounted for the first time. This takes almost the same time 
+as opening a PCAP with Wireshark. After the index is created, we can use it for all further operations. Moreover, the 
+index can be used to mount the PCAP any time later making the data available almost instantly.
+
+# Getting pcapFS
+We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not 
+available as packages in most of the Linux distribution around. So, for the moment you have to build pcapFS from source.
+
+Building pcapFS works best on rather modern Linux distribution. See the [corresponding section](building-pcapfs) of 
+this README for further details.  
+
+# Using pcapFS
+
+## Mounting Network Data
+The general way to mount a network capture looks like this:
+```
+$ pcapfs [options] <pcap> <mountpoint>
+```
+
+So, just mounting a single PCAP is as simple as:
+```
+$ pcapfs /path/to/some/test.pcap /mount/point
+```
+
+To unmount a previously mounted network capture use `fusermount3` with the `-u` switch:
+```bash
+fusermount3 -u /mount/point
+```
+
+Since the example above did not specify any index file, pcapFS automatically created an index file for you. This file 
+will be in the current working directory and will be named somthing like `20181130-125450_pcapfs.index` (the first 
+component is the date when the index was created, the second the time, and the last ones just a fixed string). You can 
+use this index if you want to mount the PCAP again using the `-i` or `--index` switches:
+```
+$ pcapfs -i 20181130-125450_pcapfs.index /path/to/some/pcap /mount/point
+```
+If you provide a path to a non-existing index file on the command line, an index with this name will be created for 
+you.
+
+If you don't want your index to be written to disk, use the `-m` or `--in-memory` options. This skips the writing of 
+the index. This, of course, means that the index has to be rebuilt the next time you want to mount the PCAP.
+
+## Mounting Multiple/Split PCAPs
+pcapFS lets you mount multiple PCAPs at the same time. The mount point will contain the payload of all PCAPs as if 
+only one PCAP would have been mounted. It makes no difference if the PCAPs you mount are completely unrelated or if 
+you are providing several PCAPs representing a very long network capture. Note that conversation spanning over two or 
+more PCAPs are entirely supported by pcapFS, i.e. no prior merging of PCAPs required to be able to extract your long 
+lasting download from multiple PCAPs!
+
+For this purpose, you can specify a directory instead of a regular PCAP file:
+```
+$ pcapfs /path/to/some/pcaps/ /mount/point
+```
+In the example above pcapFS would try to mount all regular files contained in the `/path/to/some/pcaps` folder. If you
+want to limit the files to be mounted, you can provide a file name suffix to only include files ending with this 
+suffix, e.g.  
+```
+$ pcapfs --pcap-suffix=.pcap /path/to/some/pcaps/ /mount/point
+```
+This would tell pcapFS to only mount files ending with `.pcap` from the directory `/path/to/some/pcaps`.
+
+## Sorting the Virtual Directory Hierarchy
+If nothing else is specified, pcapFS will create a directory structure looking something like this:
+```
+$ pcapfs /path/to/some/test.pcap /mnt/point
+$ tree -r -L 1 /mnt/point
+/mnt/point/
+├── udp
+├── tcp
+├── ssl
+├── http
+├── ftp
+└── dns
+
+6 directories, 0 files
+```
+That is, the first directory level contains the protocols detected and parsed by pcapFS. Within these directories you 
+will find the payload of the corresponding conversations as files.
+
+```
+$ tree -r -L 2 /mnt/point/ | grep -A 3 -E ' (udp|tcp|ssl|http|dns)'
+├── udp
+│   ├── 0-9_UDPFILE3
+│   ├── 0-99816_UDPFILE1522
+│   ├── 0-99773_UDPFILE1521
+--
+├── tcp
+│   ├── 0-99886_tcp3927
+│   ├── 0-9977_tcp687
+│   ├── 0-99112_tcp3922
+--
+├── ssl
+│   ├── 9997-656_SSL
+│   ├── 999-5_SSL
+│   ├── 9984-3081_SSL
+--
+├── http
+│   ├── 998-811
+│   ├── 9986-93333_icons-16x16.png
+│   ├── 9986-81178_header-desk-logo.png
+--
+└── dns
+    ├── 998-0_RES-18314
+    ├── 997-0_REQ-18314
+    ├── 99-0_RES-63051
+
+```
+pcapFS is, however, not limited to this directory layout. Instead, it lets you choose the layout that is most suitable 
+for your current analysis. For instance, assume that you are interested in the ports a particular host has send packets 
+to. In this case you could call pcapFS like this:
+```
+$ pcapfs --sortby=/srcIP/dstPort/dstIP /path/to/some/test.pcap /mount/point
+```
+After that your directory hierarchy should look like the following:
+```
+$ tree -rd -L 3 /mnt/point/
+/mnt/point/
+...
+├── 172.16.139.241
+│   └── 53
+│       └── 172.16.128.202
+├── 172.16.133.99
+│   ├── 8200
+│   │   └── 67.217.88.86
+│   ├── 5500
+│   │   └── 172.16.139.250
+│   ├── 443
+│   │   ├── 96.43.146.48
+│   │   ├── 96.43.146.22
+│   │   ├── 96.43.146.176
+│   │   ├── 64.74.80.70
+│   │   ├── 64.74.80.15
+│   │   ├── 216.219.115.54
+│   │   ├── 216.219.115.17
+│   │   ├── 216.115.217.144
+│   │   ├── 216.115.216.44
+│   │   ├── 216.115.209.97
+│   │   ├── 216.115.208.199
+│   │   ├── 173.194.43.3
+│   │   └── 157.56.240.102
+│   ├── 1900
+│   │   └── 239.255.255.250
+│   ├── 1853
+│   │   └── 67.217.78.32
+│   ├── 138
+│   │   └── 172.16.133.255
+│   └── 137
+│       └── 172.16.133.255
+├── 172.16.133.97
+│   ├── 8014
+│   │   └── 172.16.128.169
+│   ├── 5500
+│   │   └── 172.16.139.250
+│   ├── 5462
+│   │   └── 172.16.139.250
+│   ├── 5447
+│   │   └── 172.16.139.250
+│   ├── 443
+│   │   ├── 96.43.146.22
+│   │   ├── 96.43.146.176
+│   │   └── 157.56.240.102
+│   ├── 1900
+...
+```
+The `--sortby` argument used above defines the layout of the virtual directory hierarchy created for you. pcapFS 
+provides what we call *properties* for this. The following table lists the properties which are currently available 
+along with the protocol they origin from:
+
+| Property | Protocol | Description |
+| -------- | -------- | ----------- |
+| protocol | *n/a*    | A protocol implemented in pcapFS |
+| srcIP    | ip       | Source IP address |
+| dstIP    | ip       | Destination IP address |
+| srcPort  | tcp, udp | Source port |
+| dstPort  | tcp, udp | Destination port |
+| srcPort  | tcp, udp | Source port |
+| domain   | http     | The domain parsed from the HTTP Host header |
+| path     | http     | The path parsed from a HTTP request |
+
+A protocol implemented in pcapFS can define its own properties based on values it parsed. Therefore, as more and more 
+protocols are added to pcapFS, you will have very fine grained possibilities to build your directory hierarchy.
+
+Note that the current implementation does not check whether a property you specified actually exists. That is, you 
+could also provide the following `sortby` argument:
+```
+$ pcapfs --sortby=/foo/protocol/domain/path /path/to/some/test.pcap /mount/point
+/mount/point
+└── PCAPFS_PROP_NOT_AVAIL
+    ├── tcp
+    │   └── PCAPFS_PROP_NOT_AVAIL
+    │       ├── 0-139_tcp10
+    │       └── 0-131_tcp9
+    ├── ssl
+    │   └── PCAPFS_PROP_NOT_AVAIL
+    │       └── 0-1838_SSL
+    └── http
+        └── server.test
+            ├── image
+            │   ├── 8-308_png
+            │   └── 7-311_jpeg
+            ├── 6-309_json
+            ├── 5-333_gzip
+            ├── 4-339_deflate
+            ├── 3-318_html
+            ├── 2-312_headers
+            └── 1-306_ip
+
+8 directories, 11 files
+```
+As you can see, the `foo` component lead to the creation of the `PCAPFS_PROP_NOT_AVAIL` folder containing the 
+directories for the protocols. There are additional `PCAPFS_PROP_NOT_AVAIL` folders in `tcp` and `ssl`. This is 
+because the parsers for TCP and SSL do not provide the `domain` and `path` properties. The HTTP parser on the other 
+hand provides these properties leading to the `server.test` and `image` subdirectories. So, in the current 
+implementation there is not way to easily figure out whether you mistyped a property or whether your PCAP doesn't 
+contain the protocol providing it. 
+
+## Decrypting and Decoding Traffic
+It is possible for pcapFS to decrypt and decode certain protocols on the fly if you provide it with the corresponding 
+key material. Right now, we have prototypical support for SSL (just the `SSL_RSA_WITH_RC4_128_MD5` cipher suite) and 
+XOR. Both need a key file containing the key material which can be provided either via the command line (`-k` or 
+`--keys`) or via the [configuration file](#configuration-file). The argument can be a single file or a directory 
+containing multiple key files. Example key files can be found in the [tests folder](tests/system/keyfiles). Note that 
+we are still in the process of deciding on an adequate file format, so be prepared for changes here.
+
+## Configuration File
+pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file 
+looks like this:
+
+```toml
+[general]
+  sortby = "/dstIP/dstPort/srcIP"
+
+[keys]
+  keyfiles = [
+    "/path/to/some/key.file",
+    "relative/path/to/other/key.file",
+  ]
+
+
+[[decode.xor.properties]]
+  srcIP = "1.2.3.4"
+  dstIP = "4.3.2.1"
+  dstPort = 2345
+
+[[decode.xor.properties]]
+  srcPort = 1111
+  dstPort = 2222
+  protocol = "udp"
+
+[[decode.ssl.properties]]
+  srcIP = "1.2.3.4"
+  srcPort = 8080
+
+```
+The `[general]` section allows setting the `sortby` option described above.
+
+The `[keys]` section allows you to define a list of paths to key files. Note that relative paths are interpreted as 
+relative to the config file. Just as with the `-k` command line option, you are free to use files or directories here. 
+
+The `[decode]` section can be used to provide custom protocol parsing and decoding rules. That is, you can tell pcapFS 
+which parser to use for connections meeting given criteria. The example config above defines three rules, two for XOR 
+decoding and one for SSL. As the `properties` key implies, you can use pcapFS properties to define your decoding rules. 
+In case of the SSL example above, all connections from source IP 1.2.3.4 and source Port 8080 would be parsed with the 
+SSL protocol parser. For XOR we defined two rules both stating that connection meeting the criteria should be parsed 
+with the XOR parser: the first one matches all connections from source IP 1.2.3.4 to destination IP 4.3.2.1 and 
+destination port 2345, the second one matches all UDP "connections" from source port 1111 to destination port 2222. 
+
+# Building pcapFS
+As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you 
+need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are 
+different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies/README.md).
+
+# Limitations
+- only TCP and UDP
+- Only one XOR key file
+- Only PCAP (no PCAP NG)
+- API not completely stable yet
