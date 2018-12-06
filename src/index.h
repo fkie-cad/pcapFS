@@ -34,6 +34,9 @@ namespace pcapfs {
 
         void insert(std::vector<pcapfs::FilePtr> &files);
 
+        void insertPcaps(std::vector<pcapfs::FilePtr> &files);
+
+
         void insertKeyCandidates(std::vector<pcapfs::FilePtr> &files);
 
         void write(const Path &path);
@@ -48,11 +51,14 @@ namespace pcapfs {
 
         uint64_t getNextID(const std::string &type);
 
+        void assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps);
+
     private:
         std::string currentWorkingDirectory;
 
         std::unordered_map<std::string, uint64_t> counter;
         std::unordered_map<std::string, FilePtr> files;
+        std::vector<pcapfs::FilePtr> storedPcaps;
 
         void increaseID(const std::string &type);
 

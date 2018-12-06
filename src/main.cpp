@@ -86,7 +86,6 @@ int main(int argc, const char *argv[]) {
     pcapfs::Index index;
     index.setCurrentWorkingDirectory(boost::filesystem::current_path().string());
     std::vector<pcapfs::FilePtr> pcapFiles = pcapfs::PcapFile::createFromPaths(config.pcaps);
-    index.insert(pcapFiles);
 
     //TODO: use factory as well (only get key vfiles)
     if (!config.keyFiles.empty()) {
@@ -99,10 +98,11 @@ int main(int argc, const char *argv[]) {
     if (config.indexInMemory) { LOG_INFO << "Using an in-memory index"; }
 
     //TODO: needs to check the index file here as well, if it matches the pcaps
+
     if (!fs::is_regular_file(config.indexFilePath) || (fs::is_regular_file(config.indexFilePath) && config.rewrite)) {
         LOG_TRACE << "Creating index";
 
-        //TODO: use pcap real files instead of direct paths
+        index.insertPcaps(pcapFiles);
         std::vector<pcapfs::FilePtr> tcpFiles = pcapfs::TcpFile::createVirtualFilesFromPcaps(pcapFiles);
         index.insert(tcpFiles);
         std::vector<pcapfs::FilePtr> udpFiles = pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(pcapFiles);
@@ -122,6 +122,7 @@ int main(int argc, const char *argv[]) {
         LOG_INFO << "Reading from index file " << config.indexFilePath.string();
         try {
             index.read(config.indexFilePath);
+            index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
             std::cerr << "Error: " << err.what() << std::endl;
             return 2;

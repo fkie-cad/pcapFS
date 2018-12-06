@@ -118,6 +118,11 @@ void pcapfs::Index::insert(std::vector<pcapfs::FilePtr> &ptrFiles) {
     }
 }
 
+void pcapfs::Index::insertPcaps(std::vector<pcapfs::FilePtr> &ptrFiles) {
+    for (auto &ptrFile: ptrFiles) {
+        storedPcaps.push_back(ptrFile);
+        insert(ptrFile);
+    }}
 
 void pcapfs::Index::insertKeyCandidates(std::vector<pcapfs::FilePtr> &files) {
     for (auto &keyFile: files) {
@@ -136,7 +141,13 @@ std::vector<pcapfs::FilePtr> pcapfs::Index::getCandidatesOfType(const std::strin
 }
 
 
+
 void pcapfs::Index::write(const pcapfs::Path &path) {
+    for(auto &storedPcap : storedPcaps){
+        boost::filesystem::path p(storedPcap->getFilename());
+        storedPcap->setFilename(p.filename().string());
+    }
+
     std::stringstream indexOutput;
     boost::archive::text_oarchive archive(indexOutput);
     IndexHeader header;
@@ -179,16 +190,44 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
     archive >> numberOfFiles;
 
     FilePtr currentPtr;
+    std::vector<FilePtr> pcapFilesFromIndex;
     std::string type;
     std::string indexFilename;
     for (uint64_t i = 0; i < numberOfFiles; i++) {
         archive >> indexFilename;
         archive >> type;
-        //TODO: factory?!
         currentPtr = pcapfs::FileFactory::createFilePtr(type);
         currentPtr->deserialize(archive);
         currentPtr->filetype = type;
+        if(type == "pcap"){
+            storedPcaps.push_back(currentPtr);
+        }
         files.insert({indexFilename, currentPtr});
     }
-    //TODO: handling for pcap check
 }
+
+void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> & pcaps) {
+    for(auto &storedPcap : storedPcaps){
+        bool available = false;
+        for(auto &pcap : pcaps){
+            boost::filesystem::path p(pcap->getFilename());
+            if(p.filename() == storedPcap->getFilename()){
+                if(pcap->getFilesizeRaw() == storedPcap->getFilesizeRaw()){
+                    available = true;
+                    break;
+                    storedPcap->setFilename(pcap->getFilename());
+                } else {
+                    LOG_ERROR << "sizes of pcap " << storedPcap->getFilename() << " don't match!";
+                    LOG_ERROR << "expected " << std::to_string(storedPcap->getFilesizeRaw()) << " bytes, got " <<
+                              pcap->getFilesizeRaw();
+                }
+            }
+        }
+
+        if(!available){
+            LOG_ERROR << "couldn't find pcap " << storedPcap->getFilename() << "!";
+            throw pcapfs::IndexError("couldn't find pcap " + storedPcap->getFilename() + "!");
+        }
+    }
+}
+
