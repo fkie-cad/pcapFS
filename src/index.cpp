@@ -214,8 +214,8 @@ void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> & pcap
             if(p.filename() == storedPcap->getFilename()){
                 if(pcap->getFilesizeRaw() == storedPcap->getFilesizeRaw()){
                     available = true;
-                    break;
                     storedPcap->setFilename(pcap->getFilename());
+                    break;
                 } else {
                     LOG_ERROR << "sizes of pcap " << storedPcap->getFilename() << " don't match!";
                     LOG_ERROR << "expected " << std::to_string(storedPcap->getFilesizeRaw()) << " bytes, got " <<
