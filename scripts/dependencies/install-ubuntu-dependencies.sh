@@ -20,10 +20,13 @@ boost_pkgs='
     libboost-system-dev
 '
 
-if [ "${distro}" = 'Ubuntu' ]; then
+if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
+    while sudo fuser /var/lib/apt/lists/lock; do
+        sleep 1
+    done
     sudo apt-get update
     sudo apt-get install -y ${common_pkgs}
-    if [ "${release}" = '14.04' ]; then
+    if [[ "${release}" = '14.04' ]]; then
         PYTHON_VERSION='3.6'
         sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
@@ -43,7 +46,7 @@ if [ "${distro}" = 'Ubuntu' ]; then
             meson \
             ninja
         ${here}/install-boost.sh
-    elif [ "${release}" = '16.04' ]; then
+    elif [[ "${release}" = '16.04' ]]; then
         sudo apt-get install -y \
                     ${boost_pkgs} \
                     ninja-build \
@@ -51,7 +54,7 @@ if [ "${distro}" = 'Ubuntu' ]; then
         pip3 install --upgrade \
             cmake \
             meson
-    elif [ "${release}" = '18.04' ]; then
+    elif [[ "${release}" = '18.04' || "${release}" = 'kali-rolling' ]]; then
         sudo apt-get install -y \
                     ${boost_pkgs} \
                     cmake \
