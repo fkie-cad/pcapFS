@@ -3,8 +3,9 @@ We continuously build pcapFS on the following platforms:
 
 | Distribution | Release |
 |---|---|
-|**CentOS**| 6 |
-|CentOS|7|
+|**CentOS**| 7 |
+|**Kali**|  |
+|Kali|Light|
 |**Ubuntu**| 14.04|
 |Ubuntu| 16.04|
 |Ubuntu|18.04|

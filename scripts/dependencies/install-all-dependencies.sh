@@ -5,11 +5,11 @@ saved_pwd="$(pwd -P)"
 
 function determine_distro() {
     lsb_release="$(which lsb_release 2> /dev/null)"
-    if [ -n "${lsb_release}" ]; then
+    if [[ -n "${lsb_release}" ]]; then
         echo "$(lsb_release -is)"
         return
     fi
-    if [ -f '/etc/centos-release' ]; then
+    if [[ -f '/etc/centos-release' ]]; then
         echo 'CentOS'
         return
     fi
@@ -17,11 +17,11 @@ function determine_distro() {
 
 function determine_release() {
     distro="$1"
-    if [ "${distro}" = 'CentOS' ]; then
+    if [[ "${distro}" = 'CentOS' ]]; then
         sudo yum install -y redhat-lsb-core
     fi
     lsb_release="$(which lsb_release)"
-    if [ -n "${lsb_release}" ]; then
+    if [[ -n "${lsb_release}" ]]; then
         echo "$(${lsb_release} -rs)"
     else
         echo "Error: Please make sure that 'lsb_release' is available on your system!" >&2
@@ -34,9 +34,9 @@ distro="$(determine_distro)"
 release="$(determine_release "${distro}")"
 
 install_dependencies=''
-if [ "${distro}" = 'Ubuntu' ]; then
+if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     install_dependencies='install-ubuntu-dependencies.sh'
-elif [ "${distro}" = 'CentOS' ]; then
+elif [[ "${distro}" = 'CentOS' ]]; then
     sudo yum install -y redhat-lsb-core
     install_dependencies='install-centos-dependencies.sh'
 else

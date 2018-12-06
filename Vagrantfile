@@ -4,6 +4,7 @@
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
+    vb.gui = false
   end
   #config.vm.synced_folder "../../", "/pcap/"
   #config.vm.provision "shell", "path": "scripts/vagrant/provision.sh"
@@ -26,6 +27,14 @@ Vagrant.configure("2") do |config|
   end
   config.vm.define "centos-7" do |centos7|
     centos7.vm.box = "bento/centos-7"
+  end
+
+  # Kali boxes
+  config.vm.define "kali" do |kali|
+    kali.vm.box = "offensive-security/kali-linux"
+  end
+  config.vm.define "kali-light" do |kali_light|
+    kali_light.vm.box = "offensive-security/kali-linux-light"
   end
 
   # Ubuntu boxes
