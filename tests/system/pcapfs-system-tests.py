@@ -17,7 +17,6 @@ def mount_pcap(pcap, params=None):
     with tempfile.TemporaryDirectory() as tmpdir:
         params.extend((pcap, tmpdir))
         cmd = ['pcapfs', *params]
-        print(' '.join(cmd))
         try:
             subprocess.check_call(cmd)
             yield tmpdir
