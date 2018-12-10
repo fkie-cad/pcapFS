@@ -48,7 +48,8 @@ namespace {
 
 
     void assertIndexHeaderIsCompatible(const IndexHeader &header) {
-        if (header.version.first > PCAPFS_INDEX_MAJOR_VERSION) {
+        if ((header.version.first >= 1 && header.version.first > PCAPFS_INDEX_MAJOR_VERSION) ||
+            (header.version.first < 1 && header.version.second > PCAPFS_INDEX_MINOR_VERSION)) {
             throw pcapfs::IndexError(
                     "Incompatible index version! The version of the index you tried to read is " +
                     header.getIndexVersionString() + " while the version of pcapFS you are using supports only " +
@@ -122,7 +123,9 @@ void pcapfs::Index::insertPcaps(std::vector<pcapfs::FilePtr> &ptrFiles) {
     for (auto &ptrFile: ptrFiles) {
         storedPcaps.push_back(ptrFile);
         insert(ptrFile);
-    }}
+    }
+}
+
 
 void pcapfs::Index::insertKeyCandidates(std::vector<pcapfs::FilePtr> &files) {
     for (auto &keyFile: files) {
@@ -141,9 +144,8 @@ std::vector<pcapfs::FilePtr> pcapfs::Index::getCandidatesOfType(const std::strin
 }
 
 
-
 void pcapfs::Index::write(const pcapfs::Path &path) {
-    for(auto &storedPcap : storedPcaps){
+    for (auto &storedPcap : storedPcaps) {
         boost::filesystem::path p(storedPcap->getFilename());
         storedPcap->setFilename(p.filename().string());
     }
@@ -199,20 +201,20 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         currentPtr = pcapfs::FileFactory::createFilePtr(type);
         currentPtr->deserialize(archive);
         currentPtr->filetype = type;
-        if(type == "pcap"){
+        if (type == "pcap") {
             storedPcaps.push_back(currentPtr);
         }
         files.insert({indexFilename, currentPtr});
     }
 }
 
-void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> & pcaps) {
-    for(auto &storedPcap : storedPcaps){
+void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps) {
+    for (auto &storedPcap : storedPcaps) {
         bool available = false;
-        for(auto &pcap : pcaps){
+        for (auto &pcap : pcaps) {
             boost::filesystem::path p(pcap->getFilename());
-            if(p.filename() == storedPcap->getFilename()){
-                if(pcap->getFilesizeRaw() == storedPcap->getFilesizeRaw()){
+            if (p.filename() == storedPcap->getFilename()) {
+                if (pcap->getFilesizeRaw() == storedPcap->getFilesizeRaw()) {
                     available = true;
                     storedPcap->setFilename(pcap->getFilename());
                     break;
@@ -224,7 +226,7 @@ void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> & pcap
             }
         }
 
-        if(!available){
+        if (!available) {
             LOG_ERROR << "couldn't find pcap " << storedPcap->getFilename() << "!";
             throw pcapfs::IndexError("couldn't find pcap " + storedPcap->getFilename() + "!");
         }
