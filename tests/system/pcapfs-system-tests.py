@@ -21,7 +21,8 @@ def mount_pcap(pcap, params=None):
             subprocess.check_call(cmd)
             yield tmpdir
         finally:
-            subprocess.check_call(['fusermount3', '-u', tmpdir])
+            if '--no-mount' not in params and '-n' not in params:
+                subprocess.check_call(['fusermount3', '-u', tmpdir])
 
 
 class TestBasicFunctionality:
