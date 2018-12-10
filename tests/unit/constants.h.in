@@ -1,0 +1,14 @@
+#ifndef PCAPFS_UNITTESTS_CONSTANTS_H
+#define PCAPFS_UNITTESTS_CONSTANTS_H
+
+
+namespace pcapfs {
+    namespace tests {
+
+        static const char *TEST_PCAP_PATH = "@TEST_PCAP_PATH@";
+
+    }
+}
+
+
+#endif //PCAPFS_UNITTESTS_CONSTANTS_H

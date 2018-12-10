@@ -176,6 +176,10 @@ namespace {
         if (opts.config.pcaps.empty()) {
             throw ArgumentError("No PCAP file(s) provided.");
         }
+        if (opts.config.mountpoint.empty() and !opts.config.noMount) {
+            throw ArgumentError(
+                    "No mount point provided. This is only valid in combination with the --no-mount option.");
+        }
     }
 
 
@@ -209,7 +213,7 @@ namespace {
             po::options_description positional_arguments;
             positional_arguments.add_options()
                     ("pcap-path", po::value<fs::path>(&(opts.config.pcapPath))->required(), "pcap-path")
-                    ("mountpoint", po::value<fs::path>(&(opts.config.mountpoint))->required(), "mountpoint");
+                    ("mountpoint", po::value<fs::path>(&(opts.config.mountpoint)), "mountpoint");
 
             options.add(pcapfs_options).add(fuse_options).add(positional_arguments);
             visible_options.add(pcapfs_options).add(fuse_options);
@@ -237,10 +241,10 @@ namespace {
                 throw pcapfs::ArgumentError(e.what());
             }
 
-            opts.config.mountpoint = vm["mountpoint"].as<fs::path>();
             opts.config.pcapPath = vm["pcap-path"].as<fs::path>();
             opts.config.pcaps = pcapfs::utils::getFilesFromPath(vm["pcap-path"].as<fs::path>(), opts.config.pcapSuffix);
 
+            if (vm.count("mountpoint")) { opts.config.mountpoint = vm["mountpoint"].as<fs::path>(); }
             if (vm.count("in-memory")) { opts.config.indexInMemory = true; }
             if (vm.count("no-mount")) { opts.config.noMount = true; }
             if (vm.count("rewrite")) { opts.config.rewrite = true; }

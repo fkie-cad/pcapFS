@@ -8,6 +8,7 @@
 /dependencies/
 /requirements/
 /src/versions.h
+/tests/unit/constants.h
 
 .directory/
 .DS_Store
