@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import random
+import string
 import subprocess
 import tempfile
 from contextlib import contextmanager
@@ -7,22 +9,6 @@ from contextlib import contextmanager
 import pytest
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-
-
-@contextmanager
-def mount_pcap(pcap, params=None):
-    if params is None:
-        params = list()
-    params.append('-m')
-    with tempfile.TemporaryDirectory() as tmpdir:
-        params.extend((pcap, tmpdir))
-        cmd = ['pcapfs', *params]
-        try:
-            subprocess.check_call(cmd)
-            yield tmpdir
-        finally:
-            if '--no-mount' not in params and '-n' not in params:
-                subprocess.check_call(['fusermount3', '-u', tmpdir])
 
 
 class TestBasicFunctionality:
@@ -80,11 +66,66 @@ class TestConfigFile:
             assert get_file_list(mountpoint) == expected_files_with_xor
 
 
+class TestIndex:
+
+    def test_that_a_nonexisting_index_file_gets_written(self, test_pcap):
+        with empty_index_file() as index:
+            with mount_pcap(test_pcap, inmem=False, params=['--index={idx}'.format(idx=index), '--no-mount']):
+                assert os.path.isfile(index)
+                assert os.path.getsize(index) > 0
+
+    def test_that_an_empty_index_file_gets_overwritten(self, test_pcap):
+        with empty_index_file(create=True) as index:
+            with mount_pcap(test_pcap, inmem=False, params=['--index={idx}'.format(idx=index), '--no-mount']):
+                assert os.path.isfile(index)
+                assert os.path.getsize(index) > 0
+
+
+@contextmanager
+def mount_pcap(pcap, inmem=True, params=None):
+    if params is None:
+        params = list()
+    if inmem:
+        params.append('-m')
+    with tempfile.TemporaryDirectory() as tmpdir:
+        params.extend((pcap, tmpdir))
+        cmd = ['pcapfs', *params]
+        print(' '.join(cmd))
+        try:
+            subprocess.check_call(cmd)
+            yield tmpdir
+        finally:
+            if '--no-mount' not in params and '-n' not in params:
+                tries_left = 10
+                try:
+                    subprocess.check_call(['fusermount3', '-u', tmpdir])
+                except OSError:
+                    if tries_left == 0:
+                        raise
+                    tries_left -= 1
+
+
+@contextmanager
+def empty_index_file(create=False):
+    index = generate_random_string(10)
+    if create:
+        open(index, 'a').close()
+    yield index
+    try:
+        os.remove(index)
+    except FileNotFoundError:
+        pass
+
+
 def get_file_list(folder):
     files = list()
     for d in os.listdir(folder):
         files.extend(os.path.join(d, f) for f in os.listdir(os.path.join(folder, d)))
     return sorted(files)
+
+
+def generate_random_string(length):
+    return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
 
 
 @pytest.fixture

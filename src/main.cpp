@@ -99,7 +99,8 @@ int main(int argc, const char *argv[]) {
 
     //TODO: needs to check the index file here as well, if it matches the pcaps
 
-    if (!fs::is_regular_file(config.indexFilePath) || (fs::is_regular_file(config.indexFilePath) && config.rewrite)) {
+    if (!fs::is_regular_file(config.indexFilePath) ||
+        (fs::is_regular_file(config.indexFilePath) && (fs::is_empty(config.indexFilePath) || config.rewrite))) {
         LOG_TRACE << "Creating index";
 
         index.insertPcaps(pcapFiles);
