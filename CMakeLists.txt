@@ -12,12 +12,13 @@ set(ENV{PKG_CONFIG_PATH}
 
 configure_file(${CMAKE_SOURCE_DIR}/src/versions.h.in ${CMAKE_SOURCE_DIR}/src/versions.h)
 
+find_package(Boost COMPONENTS filesystem iostreams log program_options system serialization REQUIRED)
+find_package(cpptoml REQUIRED)
 find_package(FUSE3 REQUIRED)
 find_package(Fusepp REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(OpenSSL 1.1 REQUIRED)
 find_package(PcapPlusPlus REQUIRED)
-find_package(Boost COMPONENTS filesystem iostreams log program_options system serialization REQUIRED)
 find_package(ZLIB REQUIRED)
 
 set(PCAPFS_COMMON_SOURCES
