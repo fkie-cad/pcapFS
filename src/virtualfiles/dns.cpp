@@ -79,19 +79,13 @@ namespace {
             if (ans == nullptr) {
                 output_json["Answers"] = std::vector<nlohmann::json>();
             } else {
-                //LOG_ERROR << "parsing answers";
                 std::vector<nlohmann::json> answers;
                 while (ans != nullptr) {
-
-                    //LOG_ERROR << "type is: " << dnsTypeToString(ans->getDnsType());
-                    //LOG_ERROR << "name is: " << ans->getName();
-
                     answers.push_back({{"name",  ans->getName()},
                                        {"data",  pcapfs::DnsFile::getDataAsString(ans)},
                                        {"ttl",   std::to_string(ans->getTTL())},
                                        {"type",  dnsTypeToString(ans->getDnsType())},
                                        {"class", dnsClassToString(ans->getDnsClass())}});
-                    //LOG_ERROR << "data string is:" << pcapfs::DnsFile::getDataAsString(ans);
                     ans = newDnsLayer.getNextAnswer(ans);
                 }
 
@@ -126,7 +120,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
     //right now, assume one udp virtual file contains one dns request/response
     pcpp::Packet packet;
     pcpp::DnsLayer dns;
-    SimpleOffset soffset;
+    SimpleOffset soffset{};
     std::shared_ptr<pcapfs::DnsFile> resultPtr = std::make_shared<pcapfs::DnsFile>();
 
     if ((filePtr->getProperty(prop::dstPort) == "53" || filePtr->getProperty(prop::srcPort) == "53") &&
@@ -146,9 +140,6 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
         resultPtr->setProperty(prop::proto, FILE_TYPE_NAME);
         resultPtr->flags.set(pcapfs::flags::PROCESSED);
-
-        //LOG_ERROR << "from " << filePtr->getProperty(prop::srcIp) << ":" << filePtr->getProperty(prop::srcPort)
-        //<< " to " << filePtr->getProperty(prop::dstIp) << ":" << filePtr->getProperty(prop::dstPort);
 
         resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
 
@@ -190,7 +181,7 @@ size_t pcapfs::DnsFile::read(uint64_t startOffset, size_t length, const Index &i
 
 std::string pcapfs::DnsFile::getDataAsString(pcpp::DnsResource *resource) {
     if (resource->getDnsType() == pcpp::DNS_TYPE_A or resource->getDnsType() == pcpp::DNS_TYPE_AAAA) {
-        return resource->getDataAsString();
+        return resource->getData()->toString();
     } else {
         return "";
     }
@@ -198,5 +189,4 @@ std::string pcapfs::DnsFile::getDataAsString(pcpp::DnsResource *resource) {
 
 
 bool pcapfs::DnsFile::registeredAtFactory =
-        pcapfs::FileFactory::registerAtFactory(FILE_TYPE_NAME, pcapfs::DnsFile::create,
-                                               pcapfs::DnsFile::parse);
+        pcapfs::FileFactory::registerAtFactory(FILE_TYPE_NAME, pcapfs::DnsFile::create, pcapfs::DnsFile::parse);
