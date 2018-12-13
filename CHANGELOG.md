@@ -1,5 +1,9 @@
 # Changelog
 
+##[Unreleased]
+###Added
+- Add preference values for DNS MX records
+
 ## [0.2.0] - 2018-12-13
 ### Added
 - Check that PCAP file names given on the command line match the ones stored in an index file
