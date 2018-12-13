@@ -1,7 +1,7 @@
 # Changelog
 
-##[Unreleased]
-###Added
+## [Unreleased]
+### Added
 - Add preference values for DNS MX records
 
 ## [0.2.0] - 2018-12-13
