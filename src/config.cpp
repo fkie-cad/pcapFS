@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -242,7 +243,10 @@ namespace {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }
             if (vm.count("keys")) {
-                for (const auto &path : vm["keys"].as<std::vector<fs::path>>()) {
+                auto keyFilePaths = vm["keys"].as<std::vector<fs::path>>();
+                std::sort(keyFilePaths.begin(), keyFilePaths.end());
+                keyFilePaths.erase(std::unique(keyFilePaths.begin(), keyFilePaths.end()), keyFilePaths.end());
+                for (const auto &path : keyFilePaths) {
                     const auto keyFiles = pcapfs::utils::getFilesFromPath(path, "");
                     opts.config.keyFiles.insert(opts.config.keyFiles.end(), keyFiles.cbegin(), keyFiles.cend());
                 }
