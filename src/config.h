@@ -12,8 +12,7 @@
 namespace pcapfs {
     namespace options {
 
-        class PcapFsOptions {
-        public:
+        struct PcapFsOptions {
             Path indexFilePath;
             Path configFilePath;
             Path pcapPath;
@@ -31,6 +30,8 @@ namespace pcapfs {
             DecodeMap decodeMap;
 
             const DecodeMapEntry getDecodeMapFor(const std::string &file) { return decodeMap[file]; };
+
+            void validate() const;
         };
 
 
@@ -88,6 +89,8 @@ namespace pcapfs {
 
 
     Configuration parseOptions(int argc, const char *argv[]);
+
+    void assertValidOptions(const Configuration &config);
 }
 
 #endif //PCAPFS_CONFIG_H

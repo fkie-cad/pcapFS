@@ -19,23 +19,26 @@ SCENARIO("test the command line parsing", "[cmdline]") {
         WHEN("the --no-mount option is not provided") {
             argc = 3;
             const char *argv[] = {"pcapfs", "-m", pcapfs::tests::TEST_PCAP_PATH};
-            THEN("pcapfs should throw an ArgumentError") {
-                REQUIRE_THROWS_AS(pcapfs::parseOptions(argc, argv), pcapfs::ArgumentError);
+            const auto opts = pcapfs::parseOptions(argc, argv);
+            THEN("assertValidOptions should throw an ArgumentError") {
+                REQUIRE_THROWS_AS(pcapfs::assertValidOptions(opts), pcapfs::ArgumentError);
             }
         }
 
         argc = 4;
         WHEN("the --no-mount option is provided") {
             const char *argv[] = {"pcapfs", "-m", "--no-mount", pcapfs::tests::TEST_PCAP_PATH};
-            THEN("pcapfs should not throw") {
-                REQUIRE_NOTHROW(pcapfs::parseOptions(argc, argv));
+            const auto opts = pcapfs::parseOptions(argc, argv);
+            THEN("assertValidOptions should not throw") {
+                REQUIRE_NOTHROW(pcapfs::assertValidOptions(opts));
             }
         }
 
         WHEN("the -n option is provided") {
             const char *argv[] = {"pcapfs", "-m", "-n", pcapfs::tests::TEST_PCAP_PATH};
-            THEN("pcapfs should not throw") {
-                REQUIRE_NOTHROW(pcapfs::parseOptions(argc, argv));
+            const auto opts = pcapfs::parseOptions(argc, argv);
+            THEN("assertValidOptions should not throw") {
+                REQUIRE_NOTHROW(pcapfs::assertValidOptions(opts));
             }
         }
     }

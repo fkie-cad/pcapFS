@@ -171,18 +171,6 @@ namespace {
     }
 
 
-    void assertValidOptions(const pcapfs::options::CommandLineOptions &opts) {
-        using pcapfs::ArgumentError;
-        if (opts.config.pcaps.empty()) {
-            throw ArgumentError("No PCAP file(s) provided.");
-        }
-        if (opts.config.mountpoint.empty() and !opts.config.noMount) {
-            throw ArgumentError(
-                    "No mount point provided. This is only valid in combination with the --no-mount option.");
-        }
-    }
-
-
     class CommandLineParser {
     public:
         CommandLineParser()
@@ -276,7 +264,6 @@ namespace {
             opts.fuseArgs.add("-s");    //TODO: check if this really causes problems
             opts.fuseArgs.add(opts.config.mountpoint.string());
 
-            assertValidOptions(opts);
             return opts;
         };
 
@@ -299,6 +286,18 @@ namespace {
         pcapfs::options::CommandLineOptions opts;
     };
 
+}
+
+
+void pcapfs::options::PcapFsOptions::validate() const {
+    using pcapfs::ArgumentError;
+    if (pcaps.empty()) {
+        throw ArgumentError("No PCAP file(s) provided.");
+    }
+    if (mountpoint.empty() and !noMount) {
+        throw ArgumentError(
+                "No mount point provided. This is only valid in combination with the --no-mount option.");
+    }
 }
 
 
@@ -362,4 +361,9 @@ pcapfs::Configuration pcapfs::parseOptions(int argc, const char **argv) {
     config.showHelp = commandLineOptions.showHelp;
     config.showVersion = commandLineOptions.showVersion;
     return config;
+}
+
+
+void pcapfs::assertValidOptions(const pcapfs::Configuration &config) {
+    config.pcapfsOptions.validate();
 }
