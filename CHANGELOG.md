@@ -4,6 +4,9 @@
 ### Added
 - Add preference values for DNS MX records
 
+### Changed
+- Allow multiple key files (-k/--keys) on the command line
+
 ## [0.2.0] - 2018-12-13
 ### Added
 - Check that PCAP file names given on the command line match the ones stored in an index file
