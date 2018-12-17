@@ -3,6 +3,7 @@
 #include "../filefactory.h"
 #include "../keyfiles/xorkey.h"
 #include "../logging.h"
+#include "../properties.h"
 
 
 std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx) {
@@ -11,7 +12,7 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
     //TODO: segfault if this is appliead to metadata (why?)
     if (condition & !filePtr->flags.test(pcapfs::flags::IS_METADATA)) {
         std::shared_ptr<XorFile> resultPtr = std::make_shared<XorFile>();
-        SimpleOffset offset;
+        SimpleOffset offset{};
         offset.start = 0;
         offset.id = filePtr->getIdInIndex();
         offset.length = filePtr->getFilesizeProcessed();
@@ -20,11 +21,11 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setTimestamp(filePtr->getTimestamp());
         resultPtr->filename = "xor";
-        resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-        resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-        resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-        resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-        resultPtr->setProperty("protocol", "xor");
+        resultPtr->setProperty(pcapfs::prop::srcIp, filePtr->getProperty(pcapfs::prop::srcIp));
+        resultPtr->setProperty(pcapfs::prop::dstIp, filePtr->getProperty(pcapfs::prop::dstIp));
+        resultPtr->setProperty(pcapfs::prop::srcPort, filePtr->getProperty(pcapfs::prop::srcPort));
+        resultPtr->setProperty(pcapfs::prop::dstPort, filePtr->getProperty(pcapfs::prop::dstPort));
+        resultPtr->setProperty(pcapfs::prop::proto, "xor");
         resultPtr->setFiletype("xor");
 
         if (!idx.getCandidatesOfType("xorkey").empty()) {
