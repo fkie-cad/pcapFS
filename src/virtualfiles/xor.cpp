@@ -6,6 +6,11 @@
 #include "../properties.h"
 
 
+namespace {
+    const char *FILE_TYPE_NAME = "xor";
+}
+
+
 std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx) {
     std::vector<FilePtr> resultVector;
     bool condition = filePtr->meetsDecodeMapCriteria("xor");
@@ -20,13 +25,13 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->setFilesizeRaw(filePtr->getFilesizeRaw());
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setTimestamp(filePtr->getTimestamp());
-        resultPtr->filename = "xor";
+        resultPtr->filename = FILE_TYPE_NAME;
         resultPtr->setProperty(pcapfs::prop::srcIp, filePtr->getProperty(pcapfs::prop::srcIp));
         resultPtr->setProperty(pcapfs::prop::dstIp, filePtr->getProperty(pcapfs::prop::dstIp));
         resultPtr->setProperty(pcapfs::prop::srcPort, filePtr->getProperty(pcapfs::prop::srcPort));
         resultPtr->setProperty(pcapfs::prop::dstPort, filePtr->getProperty(pcapfs::prop::dstPort));
-        resultPtr->setProperty(pcapfs::prop::proto, "xor");
-        resultPtr->setFiletype("xor");
+        resultPtr->setProperty(pcapfs::prop::proto, FILE_TYPE_NAME);
+        resultPtr->setFiletype(FILE_TYPE_NAME);
 
         if (!idx.getCandidatesOfType("xorkey").empty()) {
             std::vector<FilePtr> keyFiles = idx.getCandidatesOfType("xorkey");
@@ -62,12 +67,11 @@ size_t pcapfs::XorFile::read(uint64_t startOffset, size_t length, const Index &i
 
 
 void pcapfs::XorFile::XOR(Bytes &data, char *key, size_t keySize) {
-    //xor can be done inplace
     for (size_t i = 0; i < data.size(); i++) {
         data[i] = data[i] ^ *(key + (i % keySize));
     }
 }
 
 
-bool pcapfs::XorFile::registeredAtFactory =
-        pcapfs::FileFactory::registerAtFactory("xor", pcapfs::XorFile::create, pcapfs::XorFile::parse);
+auto registeredAtFactory = pcapfs::FileFactory::registerAtFactory(FILE_TYPE_NAME, pcapfs::XorFile::create,
+                                                                  pcapfs::XorFile::parse);
