@@ -181,7 +181,7 @@ namespace {
                     ("help,h", "print this help and exit")
                     ("index,i", po::value<fs::path>(&(opts.config.indexFilePath)), "index file to use")
                     ("in-memory,m", "use an in-memory index")
-                    ("keys,k", po::value<fs::path>(), "path to a key file or a directory with key files")
+                    ("keys,k", po::value<std::vector<fs::path>>(), "path to a key file or a directory with key files")
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
                     ("no-mount,n", "only create an index file, don't mount the PCAP(s)")
@@ -242,7 +242,10 @@ namespace {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }
             if (vm.count("keys")) {
-                opts.config.keyFiles = pcapfs::utils::getFilesFromPath(vm["keys"].as<fs::path>(), "");
+                for (const auto &path : vm["keys"].as<std::vector<fs::path>>()) {
+                    const auto keyFiles = pcapfs::utils::getFilesFromPath(path, "");
+                    opts.config.keyFiles.insert(opts.config.keyFiles.end(), keyFiles.cbegin(), keyFiles.cend());
+                }
             }
 
             if (!opts.config.indexInMemory && opts.config.indexFilePath.empty()) {
