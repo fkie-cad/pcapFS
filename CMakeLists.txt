@@ -84,6 +84,7 @@ if (BUILD_TESTING)
             ${PCAPFS_COMMON_SOURCES}
             tests/unit/main.cpp
             tests/unit/test-command-line-options.cpp
+            tests/unit/test-utils.cpp
             )
     target_compile_features(unittests PRIVATE ${COMPILE_FEATURES})
     target_link_libraries(unittests PRIVATE ${PCAPFS_LINK_LIBRARIES} Catch2::Catch2)
