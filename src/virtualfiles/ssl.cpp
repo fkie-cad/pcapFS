@@ -49,7 +49,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
     //Step 3: process all logical breaks in underlying virtual file
     for (unsigned int i = 0; i < numElements; ++i) {
-        //LOG_ERROR << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
+        LOG_DEBUG << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
 
         //get correct size (depending on element processed)
@@ -89,45 +89,45 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                                SERVER_RANDOM_SIZE);
 
                         offsetInLogicalFragment += serverHelloMessage->getMessageLength();
-                        //LOG_ERROR << "found server hello message";
+                        LOG_DEBUG << "found server hello message";
                         //TODO: Segfault in cipher suite?!
-                        //LOG_ERROR << "chosen cipher suite: " << serverHelloMessage->getCipherSuite()->asString();
+                        LOG_DEBUG << "chosen cipher suite: " << serverHelloMessage->getCipherSuite()->asString();
                         if (serverHelloMessage->getCipherSuite()) {
                             cipherSuite = serverHelloMessage->getCipherSuite()->asString();
                         } else {
                             cipherSuite = "UNKNOWN_CIPHER_SUITE";
                         }
                         processedSSLHandshake = true;
-                        //LOG_ERROR << "handshake completed";
+                        LOG_DEBUG << "handshake completed";
                     } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
                         pcpp::SSLCertificateMessage *certificateMessage =
                                 dynamic_cast<pcpp::SSLCertificateMessage *>(handshakeMessage);
                         offsetInLogicalFragment += certificateMessage->getMessageLength();
                         //TODO: sslcert as a virtual file
-                        //LOG_ERROR << "found certificiate!";
+                        LOG_DEBUG << "found certificiate!";
                     } else if (handshakeType == pcpp::SSL_SERVER_DONE) {
                         pcpp::SSLServerHelloDoneMessage *serverHelloDoneMessage =
                                 dynamic_cast<pcpp::SSLServerHelloDoneMessage *>(handshakeMessage);
                         offsetInLogicalFragment += serverHelloDoneMessage->getMessageLength();
-                        //LOG_ERROR << "found server hello done!";
+                        LOG_DEBUG << "found server hello done!";
                     } else if (handshakeType == pcpp::SSL_CLIENT_KEY_EXCHANGE) {
                         pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage =
                                 dynamic_cast<pcpp::SSLClientKeyExchangeMessage *>(handshakeMessage);
                         offsetInLogicalFragment += clientKeyExchangeMessage->getMessageLength();
-                        //LOG_ERROR << "found client key exchange with length " <<
+                        LOG_DEBUG << "found client key exchange with length " <<
                         clientKeyExchangeMessage->getClientKeyExchangeParamsLength();
                     } else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN) {
                         //TODO: right now assuming these are encrypted handshake messages;
                         pcpp::SSLUnknownMessage *unknownMessage =
                                 dynamic_cast<pcpp::SSLUnknownMessage *>(handshakeMessage);
                         offsetInLogicalFragment += unknownMessage->getMessageLength();
-                        //LOG_ERROR << "encrypted handshake message";
+                        LOG_DEBUG << "encrypted handshake message";
                         if (isClientMessage(i) && clientChangeCipherSpec) {
                             clientEncryptedData += unknownMessage->getMessageLength();
-                            //LOG_ERROR << "client encrypted " << std::to_string(clientEncryptedData);
+                            LOG_DEBUG << "client encrypted " << std::to_string(clientEncryptedData);
                         } else if (serverChangeCipherSpec) {
                             serverEncryptedData += unknownMessage->getMessageLength();
-                            //LOG_ERROR << "server encrypted " << std::to_string(serverEncryptedData);
+                            LOG_DEBUG << "server encrypted " << std::to_string(serverEncryptedData);
                         }
                     }
 
@@ -135,10 +135,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 //TODO: metadata followed by application data without connection break?!
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
                 if (isClientMessage(i)) {
-                    //LOG_ERROR << "client starting encryption now!";
+                    LOG_DEBUG << "client starting encryption now!";
                     clientChangeCipherSpec = true;
                 } else {
-                    //LOG_ERROR << "server starting encryption now!";
+                    LOG_DEBUG << "server starting encryption now!";
                     serverChangeCipherSpec = true;
                 }
 
@@ -210,23 +210,23 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 //TODO: processedsize should be set
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
 
-                //LOG_ERROR << "found server app data";
+                LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
                     resultPtr->previousBytes.push_back(clientEncryptedData);
                     clientEncryptedData += encryptedDataLen;
                     resultPtr->keyForFragment.push_back(0);
-                    //LOG_ERROR << "client encrypted " << std::to_string(clientEncryptedData);
+                    LOG_DEBUG << "client encrypted " << std::to_string(clientEncryptedData);
                 } else if (!isClientMessage(i) && serverChangeCipherSpec) {
                     resultPtr->previousBytes.push_back(serverEncryptedData);
                     serverEncryptedData += encryptedDataLen;
                     resultPtr->keyForFragment.push_back(1);
-                    //LOG_ERROR << "server encrypted " << std::to_string(serverEncryptedData);
+                    LOG_DEBUG << "server encrypted " << std::to_string(serverEncryptedData);
                 }
 
                 offsetInLogicalFragment += completeSSLLen;
             }
 
-            //LOG_ERROR << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
+            LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
             sslLayer->parseNextLayer();
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());
         }
@@ -248,8 +248,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom,
     for (auto &keyFile: keyFiles) {
         std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
 
-        if (memcmp((char *) sslKeyFile->getClientRandom().data(), clientRandom, sslKeyFile->getClientRandom().size()) ==
-            0) {
+        if (memcmp((char *) sslKeyFile->getClientRandom().data(), clientRandom, sslKeyFile->getClientRandom().size()) == 0) {
             return sslKeyFile->getMasterSecret();
         }
     }
@@ -275,7 +274,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
     dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
-    //LOG_ERROR << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
 
     //decrypt data using keys and RC4
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
@@ -348,7 +347,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         //TODO: is start=0 really good for missing data?
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
-            //LOG_ERROR << "filling data";
+            LOG_DEBUG << "filling data";
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
