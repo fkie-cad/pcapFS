@@ -256,12 +256,53 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom,
     return Bytes();
 }
 
-//TODO: Entry Point for new decryption algorithm, document it
+
+
+/*
+ * Decryption Engine:
+ * We use pcap plus plus to detect the matching cipher. Pcap plus plus does provide the IANA mapping via the method
+ *   pcpp::SSLCipherSuite::getCipherSuiteByName(std::__cxx11::string cipherSuite)
+ * 
+ * Decryption is handled by openssl bindings since pcap plus plus provides only parsing for SSL/TLS.
+ * 
+ * OpenSSL Ciphers vs standard (good to know):
+ * https://testssl.sh/openssl-iana.mapping.html
+ * 
+ * symetric ssl encryption enum in pcap plus plus:
+ * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
+ * 
+ */
 pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char *key) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
+        
         case pcpp::SSL_SYM_RC4_128:
+            /*
+             * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
+             * 
+             * Cipher Suite	Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
+             * [0x05]       RC4-SHA                     RSA             RC4             128         TLS_RSA_WITH_RC4_128_SHA
+             * [0x18]       ADH-RC4-MD5                 DH              RC4             128         TLS_DH_anon_WITH_RC4_128_MD5
+             * [0x1e]                                   FORTEZZA        FORTEZZA_RC4    128         SSL_FORTEZZA_KEA_WITH_RC4_128_SHA
+             * [0x20]       KRB5-RC4-SHA                KRB5            RC4             128         TLS_KRB5_WITH_RC4_128_SHA
+             * [0x24]       KRB5-RC4-MD5                KRB5            RC4             128         TLS_KRB5_WITH_RC4_128_MD5
+             * [0x66]       DHE-DSS-RC4-SHA             DH              RC4             128         TLS_DHE_DSS_WITH_RC4_128_SHA
+             * [0x8a]       PSK-RC4-SHA                 PSK             RC4             128         TLS_PSK_WITH_RC4_128_SHA
+             * [0x8e]                                   PSK/DHE         RC4             128         TLS_DHE_PSK_WITH_RC4_128_SHA
+             * [0x92]                                   PSK/RSA         RC4             128         TLS_RSA_PSK_WITH_RC4_128_SHA
+             * [0xc002]     ECDH-ECDSA-RC4-SHA          ECDH/ECDSA      RC4             128         TLS_ECDH_ECDSA_WITH_RC4_128_SHA
+             * [0xc007]     ECDHE-ECDSA-RC4-SHA         ECDH            RC4             128         TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
+             * [0xc00c]     ECDH-RSA-RC4-SHA            ECDH/RSA        RC4             128         TLS_ECDH_RSA_WITH_RC4_128_SHA
+             * [0xc011]     ECDHE-RSA-RC4-SHA           ECDH            RC4             128         TLS_ECDHE_RSA_WITH_RC4_128_SHA
+             * [0xc016]     AECDH-RC4-SHA               ECDH            RC4             128         TLS_ECDH_anon_WITH_RC4_128_SHA
+             * [0xc033]     ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
+             * [0x010080]   RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
+             * [0x020080]   EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
+             */
             return decryptRc4(padding, length, data, key);
+        
+        
+        case pcpp::SSL_SYM_RC
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
