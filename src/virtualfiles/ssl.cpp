@@ -240,8 +240,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 }
 
 //TODO: What does this function?
-pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom,
-                                                         const Index &idx) {
+pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, const Index &idx) {
 
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
 
