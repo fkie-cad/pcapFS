@@ -276,6 +276,10 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
+        /*
+         * RC4 in SSL/TLS implemented cipher suites are decrypted here:
+         */
+        
         case pcpp::SSL_SYM_RC4_128:
             /*
              * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
@@ -297,13 +301,45 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0xc016]         AECDH-RC4-SHA               ECDH            RC4             128         TLS_ECDH_anon_WITH_RC4_128_SHA
              * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
-             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
              */
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             return decryptRc4(padding, length, data, key);
         
         
         case pcpp::SSL_SYM_RC4_64:
+            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             return decryptRc4(padding, length, data, key);
+            
+            
+        case pcpp::SSL_SYM_RC4_56:
+            //TODO: maybe the last 72 bytes have to be zero to have 128bit rc4
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return decryptRc4(padding, length, data, key);
+            
+            
+        case pcpp::SSL_SYM_RC4_128_EXPORT40:
+            /* 
+             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
+             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
+             * 
+             * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
+             */
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return decryptRc4(padding, length, data, key);
+            
+            
+        case pcpp::SSL_SYM_RC4_40:
+            /* 
+             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
+             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
+             * 
+             * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
+             */
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return decryptRc4(padding, length, data, key);
+            
+            
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
