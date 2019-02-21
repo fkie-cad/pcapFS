@@ -239,7 +239,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     return resultVector;
 }
 
-
+//TODO: What does this function?
 pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom,
                                                          const Index &idx) {
 
@@ -256,7 +256,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom,
     return Bytes();
 }
 
-
+//TODO: Entry Point for new decryption algorithm, document it
 pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char *key) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
@@ -288,7 +288,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     return decryptedData;
 }
 
-
+//TODO: not abstract enough to handle all ciphers
 pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     size_t KEY_MATERIAL_SIZE = 128;
