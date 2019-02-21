@@ -302,7 +302,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             return decryptRc4(padding, length, data, key);
         
         
-        case pcpp::SSL_SYM_RC
+        case pcpp::SSL_SYM_RC4_64:
+            return decryptRc4(padding, length, data, key);
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
