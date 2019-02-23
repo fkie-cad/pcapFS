@@ -336,13 +336,42 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return decryptRc4(padding, length, data, key);
+            return decrypt_RC4_40(padding, length, data, key);
             
             
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
     return Bytes();
+}
+
+
+/*
+ * Wrapper function for RC4_40 implementation
+ */
+pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key) {
+    
+    const int KEYSIZE_RC4_40 = 5;
+    
+    Bytes decryptedData(padding + length);
+    Bytes dataToDecrypt(padding);
+    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
+    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    
+    //decrypt data using keys and RC4
+    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    const unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
+    RC4_KEY rc4Key;
+    RC4_set_key(&rc4Key, KEYSIZE_RC4_40, keyToUse);
+    RC4(&rc4Key, dataToDecrypt.size(), dataToDecryptPtr, decryptedData.data());
+    
+    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
+    
+    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    
+    LOG_DEBUG << "DECRYPTED RC4_40 DATA: " << decryptedContent << std::endl;
+    
+    return decryptedData;
 }
 
 
@@ -361,7 +390,11 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     RC4(&rc4Key, dataToDecrypt.size(), dataToDecryptPtr, decryptedData.data());
 
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
-
+    
+    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    
+    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << std::endl;
+    
     return decryptedData;
 }
 

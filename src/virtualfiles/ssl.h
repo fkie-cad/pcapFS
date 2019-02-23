@@ -38,6 +38,8 @@ namespace pcapfs {
 
         static Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *key);
 
+        static Bytes decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key);
+        
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;
