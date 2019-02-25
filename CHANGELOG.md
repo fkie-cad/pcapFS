@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2019-02-25
+### Fixed
+- Fix crash when the link layer protocol is not Ethernet (Issue #9)
+
 ## [0.2.0] - 2018-12-13
 ### Added
 - Check that PCAP file names given on the command line match the ones stored in an index file
