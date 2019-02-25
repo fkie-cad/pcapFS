@@ -57,7 +57,7 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 }
 
-int pcapfs::TcpFile::calcIpPayload(pcpp::Packet p) {
+int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
     if (p.isPacketOfType(pcpp::IPv4)) {
         pcpp::IPv4Layer *ip = p.getLayerOfType<pcpp::IPv4Layer>();
         if (ip == nullptr) {
@@ -201,7 +201,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
 
         for (size_t i = 1; reader->getNextPacket(rawPacket); i++) {
 
-            pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket);
+            pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket, pcpp::TCP);
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
             state.currentOffset.frameNr = i;
 
