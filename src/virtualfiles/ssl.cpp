@@ -386,20 +386,6 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_AES_128_CBC(uint64_t padding, size_t leng
  */
 pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key) {
     
-    const int KEY_SIZE_RC4_40 = 5;
-    int return_code = 0;
-    
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
-    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
-    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
-    
-    //decrypt data using keys and RC4
-    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    const unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
-    
-    
-    
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
      * 
@@ -410,6 +396,17 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
      * 
      */
     
+    const int KEY_SIZE_RC4_40 = 5;
+    int return_code = 0;
+    
+    Bytes decryptedData(padding + length);
+    Bytes dataToDecrypt(padding);
+    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
+    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    
+    //decrypt data using keys and RC4
+    unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
     
     EVP_CIPHER_CTX *ctx;
     
@@ -430,7 +427,6 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
      * (the actual value of 'enc' being supplied in a previous call).
      * 
      */
-    
     return_code = EVP_CipherInit_ex(ctx, EVP_rc4_40(), NULL, keyToUse, NULL, 0);
     
     if(return_code != 1) {
@@ -448,6 +444,35 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
         LOG_DEBUG << "KEY SIZE after update: " << EVP_CIPHER_CTX_key_length(ctx) << std::endl;
     }
     
+    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
+    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4_40(), NULL, keyToUse, NULL);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
+    }
+    
+    
+    int len = dataToDecrypt.size();
+    
+    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
+    EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
+    
+    int outl = dataToDecrypt.size();
+    
+    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
+    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data(), &outl);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << std::endl;
+    }
+    
+    write(1, dataToDecryptPtr, 32);
+    
+    //remove the padding
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
