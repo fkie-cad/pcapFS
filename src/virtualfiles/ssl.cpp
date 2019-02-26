@@ -305,8 +305,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return decryptRc4(padding, length, data, key);
-        
+            return decrypt_RC4_128(padding, length, data, key);
+            
         
         case pcpp::SSL_SYM_RC4_64:
             //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
@@ -382,6 +382,111 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_AES_128_CBC(uint64_t padding, size_t leng
 
 
 /*
+ * Wrapper function for RC4_128 implementation
+ */
+pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_128(uint64_t padding, size_t length, char *data, char *key) {
+    
+    /*
+     * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
+     * 
+     * This is basically the key idea when using symmetric decryption in openssl
+     * 
+     * And this manpage contains additional information about the API:
+     * https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     * 
+     */
+    
+    int return_code;
+    
+    int len;
+    int plaintext_len;
+    
+    Bytes decryptedData(padding + length);
+    Bytes dataToDecrypt(padding);
+    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
+    LOG_DEBUG << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: " << dataToDecrypt.size();
+    
+    //decrypt data using keys and RC4
+    unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    unsigned char *rc4_key = reinterpret_cast<unsigned char *>(key);
+    
+    printf("ciphertext:\n");
+    BIO_dump_fp (stdout, (const char *)dataToDecrypt.data(), dataToDecrypt.size());
+    
+    EVP_CIPHER_CTX *ctx;
+    
+    ctx = EVP_CIPHER_CTX_new();
+    
+    if(ctx == NULL) {
+        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
+    }
+    
+    
+    /*
+     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     * 
+     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
+     * The operation performed depends on the value of the enc parameter.
+     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
+     * (the actual value of 'enc' being supplied in a previous call).
+     * 
+     */
+    
+    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
+    return_code = EVP_CipherInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL, 0);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
+    }
+    
+    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
+    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
+    }
+    
+    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
+    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
+    }
+    
+    plaintext_len = len;
+    
+    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
+    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
+    }
+     
+    plaintext_len += len; 
+    
+    //remove the padding
+    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
+    
+    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    
+    printf("plaintext:\n");
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
+    
+    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << " KEY TO USE: " << rc4_key << std::endl;
+    
+    return decryptedData;
+}
+
+
+/*
  * Wrapper function for RC4_40 implementation
  */
 pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key) {
@@ -397,16 +502,22 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
      */
     
     const int KEY_SIZE_RC4_40 = 5;
-    int return_code = 0;
+    int return_code;
+    
+    int len;
+    int plaintext_len;
     
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
     dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
-    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_DEBUG << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: " << dataToDecrypt.size();
     
     //decrypt data using keys and RC4
     unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
+    unsigned char *rc4_key = reinterpret_cast<unsigned char *>(key);
+    
+    printf("ciphertext:\n");
+    BIO_dump_fp (stdout, (const char *)dataToDecrypt.data(), dataToDecrypt.size());
     
     EVP_CIPHER_CTX *ctx;
     
@@ -416,7 +527,6 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
         LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
     }
     
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
     
     /*
      * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
@@ -427,7 +537,9 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
      * (the actual value of 'enc' being supplied in a previous call).
      * 
      */
-    return_code = EVP_CipherInit_ex(ctx, EVP_rc4_40(), NULL, keyToUse, NULL, 0);
+    
+    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
+    return_code = EVP_CipherInit_ex(ctx, EVP_rc4_40(), NULL, rc4_key, NULL, 0);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
@@ -435,17 +547,18 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
         LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
     }
     
+        
     //int EVP_CIPHER_CTX_set_key_length(EVP_CIPHER_CTX *x, int keylen);
     return_code = EVP_CIPHER_CTX_set_key_length(ctx, KEY_SIZE_RC4_40);
-    
-    if(return_code != 1) {
+     if(return_code != 1) {
         LOG_ERROR << "EVP_CIPHER_CTX_set_key_length() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
         LOG_DEBUG << "KEY SIZE after update: " << EVP_CIPHER_CTX_key_length(ctx) << std::endl;
     }
+
     
     //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4_40(), NULL, keyToUse, NULL);
+    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4_40(), NULL, rc4_key, NULL);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
@@ -453,31 +566,37 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
         LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
     }
     
-    
-    int len = dataToDecrypt.size();
-    
     // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
+    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
     
-    int outl = dataToDecrypt.size();
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
+    }
+    
+    plaintext_len = len;
     
     //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data(), &outl);
+    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << std::endl;
+        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
     }
     
-    write(1, dataToDecryptPtr, 32);
+    plaintext_len += len; 
     
     //remove the padding
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
-    LOG_DEBUG << "DECRYPTED RC4_40 DATA: " << decryptedContent << " KEY TO USE: " << keyToUse << std::endl;
+    printf("plaintext:\n");
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
+    
+    LOG_DEBUG << "DECRYPTED RC4_40 DATA: " << decryptedContent << " KEY TO USE: " << rc4_key << std::endl;
     
     return decryptedData;
 }
@@ -493,6 +612,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     //decrypt data using keys and RC4
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     const unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
+        
     RC4_KEY rc4Key;
     RC4_set_key(&rc4Key, KEY_SIZE, keyToUse);
     RC4(&rc4Key, dataToDecrypt.size(), dataToDecryptPtr, decryptedData.data());
