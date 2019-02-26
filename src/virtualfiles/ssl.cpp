@@ -4,6 +4,9 @@
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/rc4.h>
+#include <openssl/aes.h>
+#include <openssl/ossl_typ.h>
+
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
 
@@ -334,9 +337,14 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
              * 
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
-             */
+             */            
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             return decrypt_RC4_40(padding, length, data, key);
+            
+            
+        case pcpp::SSL_SYM_AES_128_CBC:
+            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return decrypt_AES_128_CBC(padding, length, data, key);
             
             
         default:
@@ -346,12 +354,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
 }
 
 
-/*
- * Wrapper function for RC4_40 implementation
- */
-pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key) {
-    
-    const int KEYSIZE_RC4_40 = 5;
+//AES testing stub
+pcapfs::Bytes pcapfs::SslFile::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key) {
     
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
@@ -361,15 +365,94 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
     //decrypt data using keys and RC4
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     const unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
-    RC4_KEY rc4Key;
-    RC4_set_key(&rc4Key, KEYSIZE_RC4_40, keyToUse);
-    RC4(&rc4Key, dataToDecrypt.size(), dataToDecryptPtr, decryptedData.data());
+    
+    //DUMMY TEMPLATE:
+    //AES_KEY aes128cbcKey;
+    //AES_set_decrypt_key(keyToUse,1,&aes128cbcKey);
+    //AES_decrypt(dataToDecryptPtr, decryptedData.data(), &aes128cbcKey);
     
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
-    LOG_DEBUG << "DECRYPTED RC4_40 DATA: " << decryptedContent << std::endl;
+    LOG_DEBUG << "DECRYPTED AES_128_CBC DATA: " << decryptedContent << " KEY TO USE: " << keyToUse << " KEY: " << key << std::endl;
+    
+    return decryptedData;
+}
+
+
+/*
+ * Wrapper function for RC4_40 implementation
+ */
+pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key) {
+    
+    const int KEY_SIZE_RC4_40 = 5;
+    int return_code = 0;
+    
+    Bytes decryptedData(padding + length);
+    Bytes dataToDecrypt(padding);
+    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
+    LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    
+    //decrypt data using keys and RC4
+    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    const unsigned char *keyToUse = reinterpret_cast<unsigned char *>(key);
+    
+    
+    
+    /*
+     * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
+     * 
+     * This is basically the key idea when using symmetric decryption in openssl
+     * 
+     * And this manpage contains additional information about the API (for RC4_40):
+     * https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     * 
+     */
+    
+    
+    EVP_CIPHER_CTX *ctx;
+    
+    ctx = EVP_CIPHER_CTX_new();
+    
+    if(ctx == NULL) {
+        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
+    }
+    
+    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
+    
+    /*
+     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     * 
+     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
+     * The operation performed depends on the value of the enc parameter.
+     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
+     * (the actual value of 'enc' being supplied in a previous call).
+     * 
+     */
+    
+    return_code = EVP_CipherInit_ex(ctx, EVP_rc4_40(), NULL, keyToUse, NULL, 0);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
+    }
+    
+    //int EVP_CIPHER_CTX_set_key_length(EVP_CIPHER_CTX *x, int keylen);
+    return_code = EVP_CIPHER_CTX_set_key_length(ctx, KEY_SIZE_RC4_40);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_CIPHER_CTX_set_key_length() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "KEY SIZE after update: " << EVP_CIPHER_CTX_key_length(ctx) << std::endl;
+    }
+    
+    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
+    
+    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    
+    LOG_DEBUG << "DECRYPTED RC4_40 DATA: " << decryptedContent << " KEY TO USE: " << keyToUse << std::endl;
     
     return decryptedData;
 }
@@ -393,7 +476,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
-    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << std::endl;
+    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << " KEY TO USE: " << keyToUse << " KEY: " << key << std::endl;
     
     return decryptedData;
 }
