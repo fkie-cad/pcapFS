@@ -311,12 +311,14 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
         case pcpp::SSL_SYM_RC4_64:
             //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_ERROR << "unsupported operation" << std::endl;
             return decryptRc4(padding, length, data, key);
             
             
         case pcpp::SSL_SYM_RC4_56:
             //TODO: maybe the last 72 bytes have to be zero to have 128bit rc4
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_ERROR << "unsupported operation" << std::endl;
             return decryptRc4(padding, length, data, key);
             
             
@@ -328,7 +330,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return decryptRc4(padding, length, data, key);
+            return decrypt_RC4_128(padding, length, data, key);
             
             
         case pcpp::SSL_SYM_RC4_40:
@@ -339,6 +341,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */            
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_ERROR << "currently unsupported operation" << std::endl;
             return decrypt_RC4_40(padding, length, data, key);
             
             
@@ -516,6 +519,14 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
     unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     unsigned char *rc4_key = reinterpret_cast<unsigned char *>(key);
     
+    /*
+    for(int i=0; i<16;i++) {
+        if(i>= 16) {
+            rc4_key[i] = '\0';
+        }
+    }
+    */
+    
     printf("ciphertext:\n");
     BIO_dump_fp (stdout, (const char *)dataToDecrypt.data(), dataToDecrypt.size());
     
@@ -546,7 +557,6 @@ pcapfs::Bytes pcapfs::SslFile::decrypt_RC4_40(uint64_t padding, size_t length, c
     } else {
         LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
     }
-    
         
     //int EVP_CIPHER_CTX_set_key_length(EVP_CIPHER_CTX *x, int keylen);
     return_code = EVP_CIPHER_CTX_set_key_length(ctx, KEY_SIZE_RC4_40);
@@ -626,7 +636,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptRc4(uint64_t padding, size_t length, char 
     return decryptedData;
 }
 
-//TODO: not abstract enough to handle all ciphers
+//TODO: not abstract enough to handle all ciphers?
+//TODO: check if the key material is accessible for all ciphers and protocols.
 pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     size_t KEY_MATERIAL_SIZE = 128;
