@@ -40,6 +40,9 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             //TODO: offsets at which number?
+            LOG_ERROR << "reading from pcap id " << this->offsets.at(fragment).id;
+            LOG_ERROR << this->getProperty("srcIP") << ":" << this->getProperty("srcPort") << " -> " 
+            << this->getProperty("dstIP") << ":" << this->getProperty("dstPort");
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
