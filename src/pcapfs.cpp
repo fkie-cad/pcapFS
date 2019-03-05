@@ -41,7 +41,7 @@ int pcapfs::PcapFs::getattr(const char *path, struct stat *stbuf, struct fuse_fi
         }
     }
 
-        stbuf->st_blocks= static_cast<long>(ceil(static_cast<double>(stbuf->st_size) / 512));
+    stbuf->st_blocks = static_cast<long>(ceil(static_cast<double>(stbuf->st_size) / 512));
 
     return 0;
 }
