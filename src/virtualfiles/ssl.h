@@ -40,6 +40,8 @@ namespace pcapfs {
 
         static Bytes decrypt_RC4_128(uint64_t padding, size_t length, char *data, char *key);
         static Bytes decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key);
+        static Bytes decrypt_RC4_56(uint64_t padding, size_t length, char *data, char *key);
+        static Bytes decrypt_RC4_64(uint64_t padding, size_t length, char *data, char *key);
         static Bytes decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key);
         
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
