@@ -75,14 +75,14 @@ pcapfs::FilePtr pcapfs::Index::get(const pcapfs::index::IndexPosition &idxPositi
 
 
 uint64_t pcapfs::Index::getNextID(const std::string &type) {
-    return (counter[type]);
+    return counter[type];
 }
 
 
 std::vector<pcapfs::FilePtr> pcapfs::Index::getFiles() const {
     //TODO: Implement iterator for access
     std::vector<pcapfs::FilePtr> result;
-    for (auto &mapEntry: files) {
+    for (const auto &mapEntry: files) {
         result.push_back(mapEntry.second);
     }
     return result;
@@ -94,7 +94,7 @@ void pcapfs::Index::increaseID(const std::string &type) {
 }
 
 
-void pcapfs::Index::insert(pcapfs::FilePtr filePtr) {
+void pcapfs::Index::insert(const pcapfs::FilePtr &filePtr) {
     if (filePtr == nullptr) {
         return;
     }
@@ -113,22 +113,23 @@ void pcapfs::Index::insert(pcapfs::FilePtr filePtr) {
 }
 
 
-void pcapfs::Index::insert(std::vector<pcapfs::FilePtr> &ptrFiles) {
-    for (auto &ptrFile: ptrFiles) {
+void pcapfs::Index::insert(const std::vector<pcapfs::FilePtr> &ptrFiles) {
+    for (const auto &ptrFile: ptrFiles) {
         insert(ptrFile);
     }
 }
 
-void pcapfs::Index::insertPcaps(std::vector<pcapfs::FilePtr> &ptrFiles) {
-    for (auto &ptrFile: ptrFiles) {
+
+void pcapfs::Index::insertPcaps(const std::vector<pcapfs::FilePtr> &ptrFiles) {
+    for (const auto &ptrFile: ptrFiles) {
         storedPcaps.push_back(ptrFile);
         insert(ptrFile);
     }
 }
 
 
-void pcapfs::Index::insertKeyCandidates(std::vector<pcapfs::FilePtr> &files) {
-    for (auto &keyFile: files) {
+void pcapfs::Index::insertKeyCandidates(const std::vector<pcapfs::FilePtr> &files) {
+    for (const auto &keyFile: files) {
         keyCandidates[keyFile->getFiletype()].push_back(keyFile);
     }
 }
@@ -145,18 +146,17 @@ std::vector<pcapfs::FilePtr> pcapfs::Index::getCandidatesOfType(const std::strin
 
 
 void pcapfs::Index::write(const pcapfs::Path &path) {
-    for (auto &storedPcap : storedPcaps) {
+    for (const auto &storedPcap : storedPcaps) {
         boost::filesystem::path p(storedPcap->getFilename());
         storedPcap->setFilename(p.filename().string());
     }
-
     std::stringstream indexOutput;
     boost::archive::text_oarchive archive(indexOutput);
     IndexHeader header;
     archive << header;
     const uint64_t numberOfFiles = files.size();
     archive << numberOfFiles;
-    for (auto &file: files) {
+    for (const auto &file: files) {
         archive << file.first;
         file.second->serialize(archive);
     }
@@ -195,7 +195,7 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
     std::vector<FilePtr> pcapFilesFromIndex;
     std::string type;
     std::string indexFilename;
-    for (uint64_t i = 0; i < numberOfFiles; i++) {
+    for (uint64_t i = 0; i < numberOfFiles; ++i) {
         archive >> indexFilename;
         archive >> type;
         currentPtr = pcapfs::FileFactory::createFilePtr(type);
@@ -208,10 +208,11 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
     }
 }
 
+
 void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps) {
-    for (auto &storedPcap : storedPcaps) {
+    for (const auto &storedPcap : storedPcaps) {
         bool available = false;
-        for (auto &pcap : pcaps) {
+        for (const auto &pcap : pcaps) {
             boost::filesystem::path p(pcap->getFilename());
             if (p.filename() == storedPcap->getFilename()) {
                 if (pcap->getFilesizeRaw() == storedPcap->getFilesizeRaw()) {
@@ -225,11 +226,9 @@ void pcapfs::Index::assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps
                 }
             }
         }
-
         if (!available) {
             LOG_ERROR << "couldn't find pcap " << storedPcap->getFilename() << "!";
             throw pcapfs::IndexError("couldn't find pcap " + storedPcap->getFilename() + "!");
         }
     }
 }
-

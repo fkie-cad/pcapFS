@@ -26,17 +26,17 @@ namespace pcapfs {
     public:
         Index();
 
-        pcapfs::FilePtr get(const pcapfs::index::IndexPosition &) const;
+        pcapfs::FilePtr get(const pcapfs::index::IndexPosition &idxPosition) const;
 
         std::vector<pcapfs::FilePtr> getFiles() const;
 
-        void insert(pcapfs::FilePtr filePtr);
+        void insert(const pcapfs::FilePtr &filePtr);
 
-        void insert(std::vector<pcapfs::FilePtr> &files);
+        void insert(const std::vector<pcapfs::FilePtr> &files);
 
-        void insertPcaps(std::vector<pcapfs::FilePtr> &files);
+        void insertPcaps(const std::vector<pcapfs::FilePtr> &files);
 
-        void insertKeyCandidates(std::vector<pcapfs::FilePtr> &files);
+        void insertKeyCandidates(const std::vector<pcapfs::FilePtr> &files);
 
         void write(const Path &path);
 
