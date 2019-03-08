@@ -19,14 +19,14 @@ namespace pcapfs {
     typedef std::shared_ptr<File> FilePtr;
 
     namespace index {
-        typedef std::pair<std::string, uint64_t> indexPosition;
+        typedef std::pair<std::string, uint64_t> IndexPosition;
     }
 
     class Index {
     public:
         Index();
 
-        pcapfs::FilePtr get(const pcapfs::index::indexPosition &) const;
+        pcapfs::FilePtr get(const pcapfs::index::IndexPosition &) const;
 
         std::vector<pcapfs::FilePtr> getFiles() const;
 
@@ -35,7 +35,6 @@ namespace pcapfs {
         void insert(std::vector<pcapfs::FilePtr> &files);
 
         void insertPcaps(std::vector<pcapfs::FilePtr> &files);
-
 
         void insertKeyCandidates(std::vector<pcapfs::FilePtr> &files);
 

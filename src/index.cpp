@@ -63,7 +63,7 @@ namespace {
 pcapfs::Index::Index() : currentWorkingDirectory("") {}
 
 
-pcapfs::FilePtr pcapfs::Index::get(const pcapfs::index::indexPosition &idxPosition) const {
+pcapfs::FilePtr pcapfs::Index::get(const pcapfs::index::IndexPosition &idxPosition) const {
     try {
         return files.at(idxPosition.first + std::to_string(idxPosition.second));
     } catch (std::out_of_range &e) {
