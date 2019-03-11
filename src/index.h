@@ -48,8 +48,6 @@ namespace pcapfs {
 
         std::vector<pcapfs::FilePtr> getCandidatesOfType(const std::string &type) const;
 
-        uint64_t getNextID(const std::string &type);
-
         void assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps);
 
     private:
@@ -58,6 +56,8 @@ namespace pcapfs {
         std::unordered_map<std::string, uint64_t> counter;
         std::unordered_map<std::string, FilePtr> files;
         std::vector<pcapfs::FilePtr> storedPcaps;
+
+        uint64_t getNextID(const std::string &type);
 
         void increaseID(const std::string &type);
 
