@@ -34,6 +34,7 @@ namespace {
     public:
         std::string magicString{PCAPFS_INDEX_MAGIC_STRING};
         IndexVersion version{PCAPFS_INDEX_MAJOR_VERSION, PCAPFS_INDEX_MINOR_VERSION};
+        std::string pcapfsVersion{PCAPFS_VERSION};
 
         const std::string getIndexVersionString() const {
             return std::to_string(version.first) + "." + std::to_string(version.second);
@@ -43,6 +44,7 @@ namespace {
         void serialize(Archive &archive, const unsigned int) {
             archive & magicString;
             archive & version;
+            archive & pcapfsVersion;
         }
     };
 
