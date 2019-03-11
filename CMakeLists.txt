@@ -79,12 +79,14 @@ if (BUILD_TESTING)
     include(Catch)
     set(TEST_PCAP_PATH ${CMAKE_SOURCE_DIR}/tests/system/system-tests.pcap)
     set(UNIT_TEST_KEY_FILE_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/unit/keyfiles)
+    set(TEST_DATA_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/data)
     configure_file(${CMAKE_SOURCE_DIR}/tests/unit/constants.h.in ${CMAKE_SOURCE_DIR}/tests/unit/constants.h)
     add_executable(unittests
             ${PCAPFS_COMMON_SOURCES}
             tests/unit/main.cpp
             tests/unit/test-command-line-options.cpp
             tests/unit/test-utils.cpp
+            tests/unit/test-index.cpp
             )
     target_compile_features(unittests PRIVATE ${COMPILE_FEATURES})
     target_link_libraries(unittests PRIVATE ${PCAPFS_LINK_LIBRARIES} Catch2::Catch2)
