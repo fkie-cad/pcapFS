@@ -145,7 +145,7 @@ std::vector<pcapfs::FilePtr> pcapfs::Index::getCandidatesOfType(const std::strin
 }
 
 
-void pcapfs::Index::write(const pcapfs::Path &path) {
+void pcapfs::Index::write(const pcapfs::Path &path) const {
     for (const auto &storedPcap : storedPcaps) {
         boost::filesystem::path p(storedPcap->getFilename());
         storedPcap->setFilename(p.filename().string());

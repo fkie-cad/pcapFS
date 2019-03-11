@@ -38,7 +38,7 @@ namespace pcapfs {
 
         void insertKeyCandidates(const std::vector<pcapfs::FilePtr> &files);
 
-        void write(const Path &path);
+        void write(const Path &path) const;
 
         void read(const Path &path);
 
