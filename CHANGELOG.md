@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.3.0]
 ### Added
 - Add preference values for DNS MX records
