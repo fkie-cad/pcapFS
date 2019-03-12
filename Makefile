@@ -6,6 +6,7 @@ help:
 	@echo "Target can be one of the following:"
 	@echo "  build          Compile pcapFS."
 	@echo "  help           Show this message and exit."
+	@echo "  release        Merge dev into master and create a new release."
 	@echo "  systemtests    Run the system tests."
 	@echo "  tests          Run all tests."
 	@echo "  unittests      Run the unit tests."
@@ -39,4 +40,7 @@ build:
 		cmake -DBUILD_TESTING=on .. && \
 		make -j2
 
-.PHONY: build help systemtests tests unittests
+release: tests
+	@./scripts/github-release.sh
+
+.PHONY: build help release systemtests tests unittests
