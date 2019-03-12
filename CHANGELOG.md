@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Added
 - Add preference values for DNS MX records
+- Set the st_blocks attributes of the virtual files (Issue #10)
 
 ### Changed
 - Allow multiple key files (-k/--keys) on the command line
