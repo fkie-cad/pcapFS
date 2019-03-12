@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.1]
 ### Added
 - Add preference values for DNS MX records
 - Set the st_blocks attributes of the virtual files (Issue #10)
