@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+### Added
+- Add preference values for DNS MX records
+
+### Changed
+- Allow multiple key files (-k/--keys) on the command line
+
 ## [0.2.1] - 2019-02-25
 ### Fixed
 - Fix crash when the link layer protocol is not Ethernet (Issue #9)

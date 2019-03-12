@@ -79,6 +79,7 @@ int main(int argc, const char *argv[]) {
         return EXIT_SUCCESS;
     }
 
+    pcapfs::assertValidOptions(options);
     auto config = options.pcapfsOptions;
     pcapfs::logging::init(config.verbosity);
     pcapfs::File::setConfig(config);

@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -171,18 +172,6 @@ namespace {
     }
 
 
-    void assertValidOptions(const pcapfs::options::CommandLineOptions &opts) {
-        using pcapfs::ArgumentError;
-        if (opts.config.pcaps.empty()) {
-            throw ArgumentError("No PCAP file(s) provided.");
-        }
-        if (opts.config.mountpoint.empty() and !opts.config.noMount) {
-            throw ArgumentError(
-                    "No mount point provided. This is only valid in combination with the --no-mount option.");
-        }
-    }
-
-
     class CommandLineParser {
     public:
         CommandLineParser()
@@ -193,7 +182,7 @@ namespace {
                     ("help,h", "print this help and exit")
                     ("index,i", po::value<fs::path>(&(opts.config.indexFilePath)), "index file to use")
                     ("in-memory,m", "use an in-memory index")
-                    ("keys,k", po::value<fs::path>(), "path to a key file or a directory with key files")
+                    ("keys,k", po::value<std::vector<fs::path>>(), "path to a key file or a directory with key files")
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
                     ("no-mount,n", "only create an index file, don't mount the PCAP(s)")
@@ -254,7 +243,13 @@ namespace {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }
             if (vm.count("keys")) {
-                opts.config.keyFiles = pcapfs::utils::getFilesFromPath(vm["keys"].as<fs::path>(), "");
+                auto keyFilePaths = vm["keys"].as<std::vector<fs::path>>();
+                std::sort(keyFilePaths.begin(), keyFilePaths.end());
+                keyFilePaths.erase(std::unique(keyFilePaths.begin(), keyFilePaths.end()), keyFilePaths.end());
+                for (const auto &path : keyFilePaths) {
+                    const auto keyFiles = pcapfs::utils::getFilesFromPath(path, "");
+                    opts.config.keyFiles.insert(opts.config.keyFiles.end(), keyFiles.cbegin(), keyFiles.cend());
+                }
             }
 
             if (!opts.config.indexInMemory && opts.config.indexFilePath.empty()) {
@@ -276,7 +271,6 @@ namespace {
             opts.fuseArgs.add("-s");    //TODO: check if this really causes problems
             opts.fuseArgs.add(opts.config.mountpoint.string());
 
-            assertValidOptions(opts);
             return opts;
         };
 
@@ -299,6 +293,18 @@ namespace {
         pcapfs::options::CommandLineOptions opts;
     };
 
+}
+
+
+void pcapfs::options::PcapFsOptions::validate() const {
+    using pcapfs::ArgumentError;
+    if (pcaps.empty()) {
+        throw ArgumentError("No PCAP file(s) provided.");
+    }
+    if (mountpoint.empty() and !noMount) {
+        throw ArgumentError(
+                "No mount point provided. This is only valid in combination with the --no-mount option.");
+    }
 }
 
 
@@ -362,4 +368,9 @@ pcapfs::Configuration pcapfs::parseOptions(int argc, const char **argv) {
     config.showHelp = commandLineOptions.showHelp;
     config.showVersion = commandLineOptions.showVersion;
     return config;
+}
+
+
+void pcapfs::assertValidOptions(const pcapfs::Configuration &config) {
+    config.pcapfsOptions.validate();
 }

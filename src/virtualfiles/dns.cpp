@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 #include <pcapplusplus/Packet.h>
+#include <pcapplusplus/DnsResourceData.h>
 
 #include "../filefactory.h"
 #include "../logging.h"
@@ -50,6 +51,31 @@ namespace {
         }
     }
 
+    std::vector<nlohmann::json> parseDnsAnswersToJson(pcpp::DnsLayer &dnsLayer) {
+        //process answers in dns packet (for responses)
+        std::vector<nlohmann::json> answers = std::vector<nlohmann::json>();
+        pcpp::DnsResource *ans = dnsLayer.getFirstAnswer();
+
+        if (ans != nullptr) {
+            while (ans != nullptr) {
+                std::unordered_map<std::string, std::string> answerValues = {{"name",  ans->getName().c_str()},
+                                     {"data",  pcapfs::DnsFile::getDataAsString(ans)},
+                                     {"ttl",   std::to_string(ans->getTTL())},
+                                     {"type",  dnsTypeToString(ans->getDnsType())},
+                                     {"class", dnsClassToString(ans->getDnsClass())}};
+
+
+                if(ans->getDnsType() == pcpp::DNS_TYPE_MX){
+                    answerValues.insert({"preference", std::to_string(
+                            ans->getData()->castAs<pcpp::MxDnsResourceData>()->getMxData().preference)});
+                }
+                answers.emplace_back(answerValues);
+                ans = dnsLayer.getNextAnswer(ans);
+            }
+        }
+        return answers;
+    }
+
 
     std::string parseDnsToJson(pcapfs::Bytes data) {
         pcpp::Packet packet;
@@ -74,23 +100,8 @@ namespace {
         }
         //check if response
         if (newDnsLayer.getDnsHeader()->queryOrResponse) {
-            //process answers in dns packet (for responses)
-            pcpp::DnsResource *ans = newDnsLayer.getFirstAnswer();
-            if (ans == nullptr) {
-                output_json["Answers"] = std::vector<nlohmann::json>();
-            } else {
-                std::vector<nlohmann::json> answers;
-                while (ans != nullptr) {
-                    answers.push_back({{"name",  ans->getName()},
-                                       {"data",  pcapfs::DnsFile::getDataAsString(ans)},
-                                       {"ttl",   std::to_string(ans->getTTL())},
-                                       {"type",  dnsTypeToString(ans->getDnsType())},
-                                       {"class", dnsClassToString(ans->getDnsClass())}});
-                    ans = newDnsLayer.getNextAnswer(ans);
-                }
 
-                output_json["Answers"] = answers;
-            }
+            output_json["Answers"] = parseDnsAnswersToJson(newDnsLayer);
 
             //process authorities in dns packet (for responses)
             pcpp::DnsResource *auth = newDnsLayer.getFirstAuthority();
@@ -110,6 +121,7 @@ namespace {
         std::string output_string = output_json.dump(1, '\t');
         return output_string;
     }
+
 
 }
 
@@ -142,6 +154,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
         resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+
 
         if (filePtr->getProperty(prop::dstPort) == "53") {
             //TODO: add type of query to file name ?
@@ -182,11 +195,12 @@ size_t pcapfs::DnsFile::read(uint64_t startOffset, size_t length, const Index &i
 std::string pcapfs::DnsFile::getDataAsString(pcpp::DnsResource *resource) {
     if (resource->getDnsType() == pcpp::DNS_TYPE_A or resource->getDnsType() == pcpp::DNS_TYPE_AAAA) {
         return resource->getData()->toString();
+    } else if (resource->getDnsType() == pcpp::DNS_TYPE_MX) {
+        return resource->getData()->castAs<pcpp::MxDnsResourceData>()->getMxData().mailExchange.c_str();
     } else {
         return "";
     }
 }
-
 
 bool pcapfs::DnsFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory(FILE_TYPE_NAME, pcapfs::DnsFile::create, pcapfs::DnsFile::parse);

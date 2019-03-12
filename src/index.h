@@ -19,27 +19,26 @@ namespace pcapfs {
     typedef std::shared_ptr<File> FilePtr;
 
     namespace index {
-        typedef std::pair<std::string, uint64_t> indexPosition;
+        typedef std::pair<std::string, uint64_t> IndexPosition;
     }
 
     class Index {
     public:
         Index();
 
-        pcapfs::FilePtr get(const pcapfs::index::indexPosition &) const;
+        pcapfs::FilePtr get(const pcapfs::index::IndexPosition &idxPosition) const;
 
         std::vector<pcapfs::FilePtr> getFiles() const;
 
-        void insert(pcapfs::FilePtr filePtr);
+        void insert(const pcapfs::FilePtr &filePtr);
 
-        void insert(std::vector<pcapfs::FilePtr> &files);
+        void insert(const std::vector<pcapfs::FilePtr> &files);
 
-        void insertPcaps(std::vector<pcapfs::FilePtr> &files);
+        void insertPcaps(const std::vector<pcapfs::FilePtr> &files);
 
+        void insertKeyCandidates(const std::vector<pcapfs::FilePtr> &files);
 
-        void insertKeyCandidates(std::vector<pcapfs::FilePtr> &files);
-
-        void write(const Path &path);
+        void write(const Path &path) const;
 
         void read(const Path &path);
 
@@ -49,8 +48,6 @@ namespace pcapfs {
 
         std::vector<pcapfs::FilePtr> getCandidatesOfType(const std::string &type) const;
 
-        uint64_t getNextID(const std::string &type);
-
         void assertCorrectPcaps(const std::vector<pcapfs::FilePtr> &pcaps);
 
     private:
@@ -59,6 +56,8 @@ namespace pcapfs {
         std::unordered_map<std::string, uint64_t> counter;
         std::unordered_map<std::string, FilePtr> files;
         std::vector<pcapfs::FilePtr> storedPcaps;
+
+        uint64_t getNextID(const std::string &type);
 
         void increaseID(const std::string &type);
 
