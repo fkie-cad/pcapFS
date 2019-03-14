@@ -347,7 +347,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             
         case pcpp::SSL_SYM_AES_128_CBC:
             LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return decrypt_AES_128_CBC(padding, length, data, key);
+            return decrypt_AES_128_CBC(padding, length, data, key, key_material);
             
             
         default:
@@ -358,7 +358,31 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
 
 
 //AES testing stub
-pcapfs::Bytes pcapfs::SslFile::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key) {
+pcapfs::Bytes pcapfs::SslFile::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key, char *key_material) {
+    
+    /*
+     * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+     * 
+     * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+     */
+    
+    unsigned char client_write_MAC_key[20];
+    unsigned char server_write_MAC_key[20];
+    unsigned char client_write_key[16];
+    unsigned char server_write_key[16];
+    unsigned char client_write_IV[16];
+    unsigned char server_write_IV[16];
+    
+    /*
+     * Copy all bytes from the key material into our split key material.
+     */
+    
+    memcpy(client_write_MAC_key,    key_material,           20);
+    memcpy(server_write_MAC_key,    key_material+20,        20);
+    memcpy(client_write_key,        key_material+40,        16);
+    memcpy(server_write_key,        key_material+40+16,     16);
+    memcpy(client_write_IV,         key_material+40+32,     16);
+    memcpy(server_write_IV,         key_material+72+16,     16);
     
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
