@@ -242,7 +242,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     return resultVector;
 }
 
-//TODO: What does this function?
+//Returns the correct Master Secret out of a bunch of candidates
 pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, const Index &idx) {
 
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
@@ -274,7 +274,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
  * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
  * 
  */
-pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char *key) {
+pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char *key, char* key_material) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -935,10 +935,10 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                         idx.get({"sslkey", keyIDinIndex}));
                 if (isClientMessage(keyForFragment.at(fragment))) {
                     decrypted = decryptData(previousBytes[fragment], toDecrypt.size(), (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getClientWriteKey(16, 16).data());
+                                            (char *) keyPtr->getClientWriteKey(16, 16).data(), (char *) keyPtr->getKeyMaterial().data());
                 } else {
                     decrypted = decryptData(previousBytes[fragment], toDecrypt.size(), (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getServerWriteKey(16, 16).data());
+                                            (char *) keyPtr->getServerWriteKey(16, 16).data(), (char *) keyPtr->getKeyMaterial().data());
                 }
                 memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, toRead);
             } else {

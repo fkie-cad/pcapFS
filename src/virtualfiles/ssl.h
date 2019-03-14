@@ -34,7 +34,7 @@ namespace pcapfs {
         //ssl decrypt functions
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom);
 
-        Bytes decryptData(uint64_t padding, size_t length, char *data, char *key);
+        Bytes decryptData(uint64_t padding, size_t length, char* data, char* key, char* key_material);
 
         static Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *key);
 

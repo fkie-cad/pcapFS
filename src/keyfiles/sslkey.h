@@ -32,6 +32,8 @@ namespace pcapfs {
         Bytes getMasterSecret() { return masterSecret; };
 
         Bytes getClientRandom() { return clientRandom; };
+        
+        Bytes getKeyMaterial() { return keyMaterial; };
 
         size_t read(uint64_t, size_t, const Index &, char *) override { return 0; };
 
