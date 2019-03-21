@@ -16,7 +16,6 @@
 #include "../keyfiles/sslkey.h"
 #include "virtualfile.h"
 
-
 namespace pcapfs {
 
     class SslFile : public VirtualFile {
@@ -35,14 +34,6 @@ namespace pcapfs {
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom);
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key, char* key_material);
-
-        static Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *key);
-
-        static Bytes decrypt_RC4_128(uint64_t padding, size_t length, char *data, char *key);
-        static Bytes decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *key);
-        static Bytes decrypt_RC4_56(uint64_t padding, size_t length, char *data, char *key);
-        static Bytes decrypt_RC4_64(uint64_t padding, size_t length, char *data, char *key);
-        static Bytes decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key, char *key_material);
         
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
