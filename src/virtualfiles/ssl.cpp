@@ -351,6 +351,9 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             return Crypto::decrypt_AES_128_CBC(padding, length, data, key, key_material);
             
+        case pcpp::SSL_SYM_AES_256_CBC:
+            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return Crypto::decrypt_AES_256_CBC(padding, length, data, key, key_material);
             
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
@@ -360,6 +363,10 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
 
 //TODO: not abstract enough to handle all ciphers?
 //TODO: check if the key material is accessible for all ciphers and protocols.
+/*
+ * AES GCM mode has 40 byte key material - we will see if it still works.
+ * 
+ */
 pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     size_t KEY_MATERIAL_SIZE = 128;
@@ -389,6 +396,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         std::cerr << "Error5!" << std::endl;
     ERR_print_errors_fp(stderr);
 
+    EVP_PKEY_CTX_free(pctx);
+    
     return keyMaterial;
 }
 

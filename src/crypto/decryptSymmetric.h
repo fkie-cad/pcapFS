@@ -37,6 +37,7 @@ namespace pcapfs {
             static pcapfs::Bytes decrypt_RC4_56(uint64_t padding, size_t length, char *data, char *key);
             static pcapfs::Bytes decrypt_RC4_64(uint64_t padding, size_t length, char *data, char *key);
             static pcapfs::Bytes decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *key, char *key_material);
+            static pcapfs::Bytes decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, char *key, char *key_material);
         
     };
 
