@@ -22,29 +22,30 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
 
     // seek to start_offset
     while (position < startOffset) {
-        position += offsets[fragment].length;
+        position += offsets.at(fragment).length;
         fragment++;
     }
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
+        posInFragment = offsets.at(fragment).length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
     while (position < startOffset + length && fragment < offsets.size()) {
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        size_t toRead = std::min(this->offsets.at(fragment).length - posInFragment, length - (position - startOffset));
         //TODO: is start=0 really good for missing data?
-        if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (this->offsets.at(fragment).start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             //TODO: offsets at which number?
-            LOG_ERROR << "reading from pcap id " << this->offsets.at(fragment).id;
-            LOG_ERROR << this->getProperty("srcIP") << ":" << this->getProperty("srcPort") << " -> " 
+            LOG_ERROR << "reading from " << std::to_string(startOffset) << " and length " << std::to_string(length)
+            << " from pcap id " << this->offsets.at(fragment).id;
+            LOG_ERROR << this->getProperty("srcIP") << ":" << this->getProperty("srcPort") << " -> "
             << this->getProperty("dstIP") << ":" << this->getProperty("dstPort");
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-            filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+            filePtr->read(this->offsets.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
 
         // set run variables in case next fragment is needed
@@ -103,14 +104,12 @@ void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData
         tcpPointer = state->files[flowkey];
 
         tcpPointer->setFirstPacketNumber(state->currentOffset.frameNr);
-        //tcp_file->fileinformation.flags = 0;
         tcpPointer->setTimestamp(state->currentTimestamp);
         tcpPointer->setFilename("tcp" + std::to_string(state->nextUniqueId));
         tcpPointer->setIdInIndex(state->nextUniqueId);
         tcpPointer->setOffsetType("pcap"); //tcp files point directly into the pcap
         tcpPointer->setFilesizeRaw(tcpData.getDataLength());
         tcpPointer->setFiletype("tcp");
-        //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
         tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP->toString());
