@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
+FUSE_TAG='fuse-3.4.2'
 SAVED_PWD="$(pwd -P)"
 HERE=$(dirname $(readlink -e $0))
 source "${HERE}/install-helpers.sh"
@@ -17,8 +18,10 @@ if [ -z "${ninja}" ]; then
 fi
 set -e
 
-mkdir -p "${pkgdir}/build"
-cd "${pkgdir}/build" && rm -rf *
+cd "${pkgdir}"
+git checkout "tags/${FUSE_TAG}" -b "${FUSE_TAG}"
+mkdir -p 'build'
+cd 'build' && rm -rf *
 meson --prefix="${PREFIX}" ..
 ${ninja}
 sudo ${ninja} install
