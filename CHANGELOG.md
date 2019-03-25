@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.3.1]
 ### Fixed
 - Pin libfuse to release 3.4.2 until Fusepp catches up with master branch of libfuse (https://github.com/fkie-cad/pcapFS/issues/13)
