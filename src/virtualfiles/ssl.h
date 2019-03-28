@@ -33,7 +33,7 @@ namespace pcapfs {
         //ssl decrypt functions
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom);
 
-        Bytes decryptData(uint64_t padding, size_t length, char* data, char* key, char* key_material);
+        Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
         
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
@@ -43,6 +43,7 @@ namespace pcapfs {
 
     private:
         std::string cipherSuite;
+        pcpp::SSLVersion sslVersion;
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;

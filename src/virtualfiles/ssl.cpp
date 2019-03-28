@@ -47,6 +47,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     uint64_t clientEncryptedData = 0;
     uint64_t serverEncryptedData = 0;
     std::string cipherSuite = "";
+    pcpp::SSLVersion sslVersion;
     bool clientChangeCipherSpec = false;
     bool serverChangeCipherSpec = false;
 
@@ -99,6 +100,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         LOG_DEBUG << "chosen cipher suite: " << serverHelloMessage->getCipherSuite()->asString();
                         if (serverHelloMessage->getCipherSuite()) {
                             cipherSuite = serverHelloMessage->getCipherSuite()->asString();
+                            sslVersion = sslLayer->getRecordVersion();
+                            
                         } else {
                             cipherSuite = "UNKNOWN_CIPHER_SUITE";
                         }
@@ -182,6 +185,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     resultPtr->setOffsetType(filePtr->getFiletype());
                     resultPtr->setFiletype("ssl");
                     resultPtr->cipherSuite = cipherSuite;
+                    resultPtr->sslVersion = sslVersion;
                     resultPtr->setFilename("SSL");
                     resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
                     resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
@@ -205,7 +209,18 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 SimpleOffset soffset;
                 soffset.id = filePtr->getIdInIndex();
                 soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
-                soffset.length = encryptedDataLen - MAC_SIZE;
+                
+                /*
+                 * This is an important change:
+                 * We keep the hmac (and other stuff if there is any) now behind every message.
+                 * 
+                 * This is a workaround for determining padding sizes in AES CBC and will help in future
+                 * to detect whether if a packet is signed correctly or not
+                 * 
+                 */
+                //soffset.length = encryptedDataLen - MAC_SIZE;
+                soffset.length = encryptedDataLen;
+                
                 //if size is a mismatch => ssl packet is malformed
                 //TODO: Better detection of malformed ssl packets
                 if (soffset.length > sslLayer->getDataLen()) {
@@ -276,7 +291,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
  * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
  * 
  */
-pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char *key, char* key_material) {
+pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -287,6 +302,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
         case pcpp::SSL_SYM_RC4_128:
             /*
              * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
+             * Hint: Although this is correct in theory, in practive some of the ciphers are not supported by pcap++ nor openssl
              * 
              * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
              * [0x05]           RC4-SHA                     RSA             RC4             128         TLS_RSA_WITH_RC4_128_SHA
@@ -306,22 +322,22 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_RC4_128(padding, length, data, key);
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return Crypto::decrypt_RC4_128(padding, length, data, mac, key, iv);
             
         
         case pcpp::SSL_SYM_RC4_64:
             //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_64(padding, length, data, key);
+            return Crypto::decrypt_RC4_64(padding, length, data, mac, key, iv);
             
             
         case pcpp::SSL_SYM_RC4_56:
             //TODO: maybe the last 72 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_56(padding, length, data, key);
+            return Crypto::decrypt_RC4_56(padding, length, data, mac, key, iv);
             
             
         case pcpp::SSL_SYM_RC4_128_EXPORT40:
@@ -331,8 +347,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * 
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_RC4_128(padding, length, data, key);
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return Crypto::decrypt_RC4_128(padding, length, data, mac, key, iv);
             
             
         case pcpp::SSL_SYM_RC4_40:
@@ -342,18 +358,18 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * 
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */            
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "currently unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_40(padding, length, data, key);
+            return Crypto::decrypt_RC4_40(padding, length, data, mac, key, iv);
             
             
         case pcpp::SSL_SYM_AES_128_CBC:
-            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_AES_128_CBC(padding, length, data, key, key_material);
+            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return Crypto::decrypt_AES_128_CBC(padding, length, data, mac, key, iv);
             
         case pcpp::SSL_SYM_AES_256_CBC:
-            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_AES_256_CBC(padding, length, data, key, key_material);
+            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            return Crypto::decrypt_AES_256_CBC(padding, length, data, mac, key, iv);
             
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
@@ -375,6 +391,54 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      * Different Hashes: SSLv3/TLS (most versions) differ, SSLv2 obviously too.
      * They do not use always SHA256! This will be a problem at some point
      * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
+     * 
+     * 
+     * TLS 1.0 Page 11, 12, 13
+     * 
+     *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
+     *                                      P_SHA-1(S2, label + seed);
+     * 
+     * 
+     * 
+     * TLS 1.1 Page 13 and Page 14
+     * 
+     *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
+     *                                      P _SHA-1(S2, label + seed);
+     * 
+     * 
+     * TLS 1.2 
+     * 
+     * 
+     *  1.2.  Major Differences from TLS 1.1
+     * 
+     *  This document is a revision of th*e TLS 1.1 [TLS1.1] protocol which
+     *  contains improved flexibility, particularly for negotiation of
+     *  cryptographic algorithms.  The major changes are:
+     * 
+     *  -   The MD5/SHA-1 combination in the pseudorandom function (PRF) has
+     *      been replaced with cipher-suite-specified PRFs.  All cipher suites
+     *      in this document use P_SHA256.
+     * 
+     * 
+     * 
+     *       PRF(secret, label, seed) = P_<hash>(secret, label + seed)
+     * 
+     *       key_block = PRF(SecurityParameters.master_secret,
+     *                      " key expansion",                  *
+     *                      SecurityParameters.server_random +
+     *                      SecurityParameters.client_random);
+     * 
+     * 
+     * 
+     * 
+     * KEY MATERIAL (TLS 1.0/1.1/1.2):
+     * 
+     *          client_write_MAC_secret[SecurityParameters.hash_size]
+     *          server_write_MAC_secret[SecurityParameters.hash_size]
+     *          client_write_key[SecurityParameters.key_material_length]
+     *          server_write_key[SecurityParameters.key_material_length]
+     *          client_write_IV[SecurityParameters.IV_size]
+     *          server_write_IV[SecurityParameters.IV_size]
      * 
      */
     size_t KEY_MATERIAL_SIZE = 128;
@@ -411,7 +475,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 
 
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depens on mode of operation
+    //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
     size_t fragment = 0;
     size_t posInFragment = 0;
@@ -444,15 +508,15 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
-                //TODO: KEY_SIZE and MAC_SIZE in SSLKeyFile?!
+
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                         idx.get({"sslkey", keyIDinIndex}));
                 if (isClientMessage(keyForFragment.at(fragment))) {
-                    decrypted = decryptData(previousBytes[fragment], toDecrypt.size(), (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getClientWriteKey(16, 16).data(), (char *) keyPtr->getKeyMaterial().data());
-                } else {
-                    decrypted = decryptData(previousBytes[fragment], toDecrypt.size(), (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getServerWriteKey(16, 16).data(), (char *) keyPtr->getKeyMaterial().data());
+                    decrypted = decryptData(previousBytes[fragment],
+                                            toDecrypt.size(),
+                                            (char *) toDecrypt.data(),
+                                            (char *) keyPtr->getKeyMaterial().data(),
+                                            isClientMessage(keyForFragment.at(fragment)));
                 }
                 memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, toRead);
             } else {
