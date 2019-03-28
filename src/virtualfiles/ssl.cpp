@@ -20,8 +20,8 @@ namespace {
     size_t const CLIENT_RANDOM_SIZE = 32;
     size_t const SERVER_RANDOM_SIZE = 32;
     //MAC size may vary? AES_CBC should have 20 Bytes MAC 
-    size_t const MAC_SIZE = 16;
-    size_t const KEY_SIZE = 16;
+    //size_t const MAC_SIZE = 16;
+    //size_t const KEY_SIZE = 16;
 }
 
 
@@ -369,6 +369,14 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
  */
 pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
+    /*
+     * 
+     * Problems here will occur:
+     * Different Hashes: SSLv3/TLS (most versions) differ, SSLv2 obviously too.
+     * They do not use always SHA256! This will be a problem at some point
+     * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
+     * 
+     */
     size_t KEY_MATERIAL_SIZE = 128;
     size_t const LABEL_SIZE = 13;
     size_t const SERVER_RANDOM_SIZE = 32;
