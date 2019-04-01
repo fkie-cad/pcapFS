@@ -24,7 +24,7 @@
 #include "../logging.h"
 
 //AES testing stub
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
 
     int return_code, len, plaintext_len;
     
@@ -117,26 +117,8 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
         
-    unsigned char client_write_MAC_key[32];
-    unsigned char server_write_MAC_key[32];
-    unsigned char client_write_key[32];
-    unsigned char server_write_key[32];
-    unsigned char client_write_IV[16];
-    unsigned char server_write_IV[16];
-    
-    /*
-     * Copy all bytes from the key material into our split key material.
-     */
-    
-    memcpy(client_write_MAC_key,    key_material+0,         32);
-    memcpy(server_write_MAC_key,    key_material+32,        32);
-    memcpy(client_write_key,        key_material+64,        32);
-    memcpy(server_write_key,        key_material+96,        32);
-    memcpy(client_write_IV,         key_material+102,       16);
-    memcpy(server_write_IV,         key_material+128,       16);
-    
     
     int return_code, len, plaintext_len;
     
@@ -147,13 +129,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    
-    printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *)dataToDecrypt.data(), dataToDecrypt.size());
-    
-    printf("key_material:\n");
-    BIO_dump_fp (stdout, (const char *)key_material, 104);
-    
+        
     
     EVP_CIPHER_CTX *ctx;
     
@@ -175,7 +151,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
      */
     
     // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    return_code = EVP_CipherInit_ex(ctx, EVP_aes_256_cbc(), NULL, client_write_key, client_write_IV, 0);
+    return_code = EVP_CipherInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv, 0);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
@@ -184,7 +160,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     }
     
     //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, client_write_key, client_write_IV);
+    return_code = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
@@ -236,7 +212,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -339,7 +315,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -459,7 +435,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, ch
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -573,7 +549,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, ch
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_64(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_64(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption

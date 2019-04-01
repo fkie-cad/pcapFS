@@ -300,6 +300,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
          */
         
         case pcpp::SSL_SYM_RC4_128:
+        {
             /*
              * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
              * Hint: Although this is correct in theory, in practive some of the ciphers are not supported by pcap++ nor openssl
@@ -323,33 +324,165 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_RC4_128(padding, length, data, mac, key, iv);
+            
+            const int mac_size = 16;
+            const int key_size = 16;
+            const int iv_size = 16;
+            
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            unsigned char client_write_IV[iv_size];
+            unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_RC4_128(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_RC4_128(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                
+            }
+        }
+            
             
         
         case pcpp::SSL_SYM_RC4_64:
+        {
             //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_64(padding, length, data, mac, key, iv);
+            const int mac_size = 16;
+            const int key_size = 8;
+            //const int iv_size = 16;
+            
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            //unsigned char client_write_IV[iv_size];
+            //unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_RC4_64(padding, length, data, client_write_MAC_key, client_write_key, NULL);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_RC4_64(padding, length, data, server_write_MAC_key, server_write_key, NULL);
+                
+            }
+        }
             
             
         case pcpp::SSL_SYM_RC4_56:
-            //TODO: maybe the last 72 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+        {
+            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_56(padding, length, data, mac, key, iv);
+            const int mac_size = 16;
+            const int key_size = 7;
+            //const int iv_size = 16;
+            
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            //unsigned char client_write_IV[iv_size];
+            //unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_RC4_56(padding, length, data, client_write_MAC_key, client_write_key, NULL);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_RC4_56(padding, length, data, server_write_MAC_key, server_write_key, NULL);
+                
+            }
+        }
             
             
         case pcpp::SSL_SYM_RC4_128_EXPORT40:
-            /* 
-             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
-             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
-             * 
-             * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
-             */
+        {
+            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_RC4_128(padding, length, data, mac, key, iv);
+            LOG_ERROR << "unsupported operation" << std::endl;
+            const int mac_size = 16;
+            const int key_size = 5;
+            //const int iv_size = 16;
             
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            //unsigned char client_write_IV[iv_size];
+            //unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
+                
+            }
+        }          
             
         case pcpp::SSL_SYM_RC4_40:
             /* 
@@ -358,13 +491,47 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * 
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
              */            
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "currently unsupported operation" << std::endl;
-            return Crypto::decrypt_RC4_40(padding, length, data, mac, key, iv);
-            
+            {
+                //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
+                LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+                LOG_ERROR << "unsupported operation" << std::endl;
+                const int mac_size = 16;
+                const int key_size = 5;
+                //const int iv_size = 16;
+                
+                unsigned char client_write_MAC_key[mac_size];
+                unsigned char server_write_MAC_key[mac_size];
+                unsigned char client_write_key[key_size];
+                unsigned char server_write_key[key_size];
+                //unsigned char client_write_IV[iv_size];
+                //unsigned char server_write_IV[iv_size];
+                
+                memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+                memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+                memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+                memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+                //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+                //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+                
+                if(isClientMessage) {
+                    /*
+                     * This is a client message
+                     */
+                    
+                    return Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
+                    
+                } else {
+                    /*
+                     * This is a server message, so we use server key etc.
+                     */
+                    
+                    return Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
+                    
+                }
+            }               
             
         case pcpp::SSL_SYM_AES_128_CBC:
-            
+        {
             /*
              * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
              * 
@@ -389,16 +556,68 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             memcpy(client_write_IV,         key_material+40+32,     16);
             memcpy(server_write_IV,         key_material+72+16,     16);
             
-            if()
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_AES_128_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_AES_128_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                
+            }
             
-            
-            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_AES_128_CBC(padding, length, data, mac, key, iv);
+        }
             
         case pcpp::SSL_SYM_AES_256_CBC:
-            LOG_DEBUG << "Decrypting SSL_SYM_AES_128_CBC using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            return Crypto::decrypt_AES_256_CBC(padding, length, data, mac, key, iv);
+        {
+            /*
+             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+             * 
+             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+             */
             
+            const int mac_size = 16;
+            const int key_size = 32;
+            const int iv_size = 16;
+            
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            unsigned char client_write_IV[iv_size];
+            unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_AES_256_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_AES_256_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                
+            }
+            
+        }
+        
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
@@ -415,7 +634,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
-     * Problems here will occur:
+     * Problems will occur:
      * Different Hashes: SSLv3/TLS (most versions) differ, SSLv2 obviously too.
      * They do not use always SHA256! This will be a problem at some point
      * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
@@ -452,7 +671,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      *       PRF(secret, label, seed) = P_<hash>(secret, label + seed)
      * 
      *       key_block = PRF(SecurityParameters.master_secret,
-     *                      " key expansion",                  *
+     *                      " key expansion",                  
      *                      SecurityParameters.server_random +
      *                      SecurityParameters.client_random);
      * 
