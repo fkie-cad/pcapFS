@@ -36,6 +36,9 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
+    printf("ciphertext:\n");
+    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, padding + length);
+    
     EVP_CIPHER_CTX *ctx;
     
     ctx = EVP_CIPHER_CTX_new();
@@ -103,13 +106,13 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     
     memcpy(iv_before_plain, decryptedContent.data()+padding+plaintext_len+20, 16);
     
-    /*
+    
     printf("plaintext:\n");
     BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
 
     printf("cbc padding:\n");
     BIO_dump_fp (stdout, (const char *)iv_before_plain, 16);
-    */
+    
     LOG_DEBUG << "DECRYPTED AES DATA: " << decryptedContent << std::endl;
     
     EVP_CIPHER_CTX_cleanup(ctx);

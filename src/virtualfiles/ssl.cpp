@@ -30,7 +30,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
-    //TODO: other detection method?
+    //TODO: other detection method -> config file vs heuristic?
     if (filePtr->getProperty("dstPort") != "443") {
         return resultVector;
     }
@@ -99,6 +99,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         //TODO: Segfault in cipher suite?!
                         LOG_DEBUG << "chosen cipher suite: " << serverHelloMessage->getCipherSuite()->asString();
                         if (serverHelloMessage->getCipherSuite()) {
+                            
+                            /*
+                             * Those values are used for the decryption in decryptData() function
+                             */
+                            
                             cipherSuite = serverHelloMessage->getCipherSuite()->asString();
                             sslVersion = sslLayer->getRecordVersion();
                             
@@ -171,7 +176,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         if (!masterSecret.empty()) {
                             Bytes keyMaterial = createKeyMaterial((char *) masterSecret.data(),
                                                                   (char *) clientRandom.data(),
-                                                                  (char *) serverRandom.data());
+                                                                  (char *) serverRandom.data(),
+                                                                  sslVersion
+                                                                 );
 
                             //TODO: not good to add sslkey file directly into index!!!
                             std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(keyMaterial);
@@ -630,7 +637,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
  * AES GCM mode has 40 byte key material - we will see if it still works.
  * 
  */
-pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom) {
+pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
@@ -688,6 +695,40 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      *          server_write_IV[SecurityParameters.IV_size]
      * 
      */
+    
+    switch(sslVersion) {
+        case pcpp::SSLVersion::SSL2:
+        {
+            std::cout << "ssl2\n";
+        }
+        case pcpp::SSLVersion::SSL3:
+        {
+            std::cout << "ssl3\n";
+        }
+        case pcpp::SSLVersion::TLS1_0:
+        {
+            std::cout << "tls 1.0\n";
+        }
+        case pcpp::SSLVersion::TLS1_1:
+        {
+            std::cout << "tls 1.1\n";
+        }
+        case pcpp::SSLVersion::TLS1_2:
+        {
+            std::cout << "tls 1.2\n";
+        }
+        default:
+            std::cout << "error\n";
+    }
+    
+    
+    /*
+     * This is TLS 1.2
+     * 
+     * TODO: Build for ssl2,3,tls10,tls11
+     * 
+     */
+    
     size_t KEY_MATERIAL_SIZE = 128;
     size_t const LABEL_SIZE = 13;
     size_t const SERVER_RANDOM_SIZE = 32;
@@ -798,6 +839,16 @@ bool pcapfs::SslFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("ssl", pcapfs::SslFile::create, pcapfs::SslFile::parse);
 
 
+
+
+
+        
+/*
+ * 
+ * archive << sslVersion; ??
+ * 
+ */
+        
 void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
     VirtualFile::serialize(archive);
     archive << cipherSuite;

@@ -31,7 +31,7 @@ namespace pcapfs {
         static bool isClientMessage(uint64_t i);
 
         //ssl decrypt functions
-        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom);
+        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion);
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
         
