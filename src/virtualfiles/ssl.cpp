@@ -629,6 +629,9 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
         case pcpp::SSL_SYM_AES_128_GCM:
         {
             
+            printf("key_material:\n");
+            BIO_dump_fp (stdout, (const char *) key_material, 128);
+            
             unsigned char client_write_key[16];
             unsigned char server_write_key[16];
             unsigned char client_write_IV[4];
@@ -775,22 +778,27 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         case pcpp::SSLVersion::SSL2:
         {
             std::cout << "ssl2\n";
+            break;
         }
         case pcpp::SSLVersion::SSL3:
         {
             std::cout << "ssl3\n";
+            break;
         }
         case pcpp::SSLVersion::TLS1_0:
         {
             std::cout << "tls 1.0\n";
+            break;
         }
         case pcpp::SSLVersion::TLS1_1:
         {
             std::cout << "tls 1.1\n";
+            break;
         }
         case pcpp::SSLVersion::TLS1_2:
         {
             std::cout << "tls 1.2\n";
+            break;
         }
         default:
             std::cout << "error\n";

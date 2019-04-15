@@ -68,8 +68,18 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
         LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
     }
     
+    
+    /* Set IV length to 4 byte */
+    return_code = EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 4, NULL);
+    
+    if(return_code != 1) {
+        LOG_ERROR << "EVP_CIPHER_CTX_ctrl() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
+    } else {
+        LOG_DEBUG << "EVP_CIPHER_CTX_ctrl() returned: " << return_code << std::endl;
+    }
+    
     //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, key, iv);
+    return_code = EVP_DecryptInit_ex(ctx, NULL, NULL, key, iv);
     
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
@@ -98,21 +108,14 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
     }
     
     plaintext_len += len;
-    
-    char *iv_before_plain[16];
-    
-    //remove the padding
+        
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-    
-    memcpy(iv_before_plain, decryptedContent.data()+padding+plaintext_len+20, 16);
-    
+        
     
     printf("plaintext:\n");
     BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
     
-    printf("cbc padding:\n");
-    BIO_dump_fp (stdout, (const char *)iv_before_plain, 16);
     
     LOG_DEBUG << "DECRYPTED AES DATA: " << decryptedContent << std::endl;
     
