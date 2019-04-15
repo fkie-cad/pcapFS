@@ -45,7 +45,9 @@ namespace pcapfs {
             
             static pcapfs::Bytes decrypt_AES_128_CBC(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
             static pcapfs::Bytes decrypt_AES_256_CBC(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-        
+            static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
+            static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
+            
     };
 
 }

@@ -625,6 +625,81 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             
         }
         
+        
+        case pcpp::SSL_SYM_AES_128_GCM:
+        {
+            
+            unsigned char client_write_key[16];
+            unsigned char server_write_key[16];
+            unsigned char client_write_IV[4];
+            unsigned char server_write_IV[4];
+            
+            /*
+             * Copy all bytes from the key material into our split key material.
+             */
+            
+            memcpy(client_write_key,        key_material,           16);
+            memcpy(server_write_key,        key_material+16,        16);
+            memcpy(client_write_IV,         key_material+32,         4);
+            memcpy(server_write_IV,         key_material+36,         4);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
+                
+            }
+            
+        }
+        
+        case pcpp::SSL_SYM_AES_256_GCM:
+        {
+            
+            /*
+             * AES 256 has 256 bit keys, aka 32 byte
+             */
+            
+            unsigned char client_write_key[32];
+            unsigned char server_write_key[32];
+            unsigned char client_write_IV[4];
+            unsigned char server_write_IV[4];
+            
+            /*
+             * Copy all bytes from the key material into our split key material.
+             */
+            
+            memcpy(client_write_key,        key_material,           32);
+            memcpy(server_write_key,        key_material+32,        32);
+            memcpy(client_write_IV,         key_material+64,         4);
+            memcpy(server_write_IV,         key_material+68,         4);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                return Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                return Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
+                
+            }
+            
+        }
+        
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
