@@ -300,21 +300,17 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     }
     
     plaintext_len += len;
-    
-    char *iv_before_plain[16];
-    
+        
     //remove the padding
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
+    
+    decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
+    
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-    
-    memcpy(iv_before_plain, decryptedContent.data()+padding+plaintext_len+20, 16);
-    
-    
+        
     printf("plaintext:\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
-
-    printf("cbc padding:\n");
-    BIO_dump_fp (stdout, (const char *)iv_before_plain, 16);
+    //BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding - 20 - 1);
     
     LOG_DEBUG << "DECRYPTED AES DATA: " << decryptedContent << std::endl;
     

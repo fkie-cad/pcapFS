@@ -568,6 +568,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
                  * This is a client message
                  */
                 
+                LOG_DEBUG << "decrypt_AES_128_CBC called with a client packet" << std::endl;
                 return Crypto::decrypt_AES_128_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
                 
             } else {
@@ -575,6 +576,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
                  * This is a server message, so we use server key etc.
                  */
                 
+                LOG_DEBUG << "decrypt_AES_128_CBC called with a server packet" << std::endl;
                 return Crypto::decrypt_AES_128_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
                 
             }
@@ -851,6 +853,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
+    int counter = 0;
 
     // seek to start_offset
     while (position < startOffset) {
@@ -866,6 +869,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
     // start copying
     while (position < startOffset + length && fragment < offsets.size()) {
+        counter++;
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
         //TODO: is start=0 really good for missing data?
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
@@ -883,14 +887,37 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                         idx.get({"sslkey", keyIDinIndex}));
                 if (isClientMessage(keyForFragment.at(fragment))) {
+                    LOG_DEBUG << "CLIENT CLIENT CLIENT ? " + counter << std::endl;
                     decrypted = decryptData(previousBytes[fragment],
                                             toDecrypt.size(),
                                             (char *) toDecrypt.data(),
                                             (char *) keyPtr->getKeyMaterial().data(),
                                             isClientMessage(keyForFragment.at(fragment)));
+                    
+                    //
+                    // FIX AHEAD!
+                    //
+                    
+                } else {
+                    LOG_DEBUG << "ERROR ERROR ERROR ? " + counter << std::endl;
+                    
+                    
+                    decrypted = decryptData(previousBytes[fragment],
+                                            toDecrypt.size(),
+                                            (char *) toDecrypt.data(),
+                                            (char *) keyPtr->getKeyMaterial().data(),
+                                            isClientMessage(keyForFragment.at(fragment)));
+                    
                 }
-                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, toRead);
+                if(toRead != decrypted.size()) {
+                    LOG_ERROR << "[E] various errors ahead?" << std::endl;
+                    LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                }
+                LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                memset(buf + (position - startOffset), 0, toRead);
+                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
             } else {
+                LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
                 memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }
