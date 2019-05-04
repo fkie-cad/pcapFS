@@ -21,7 +21,8 @@ namespace pcapfs {
             Paths keyFiles;
             std::string sortby;
             std::string pcapSuffix;
-            logging::severity verbosity = logging::severity::warning;
+            //logging::severity verbosity = logging::severity::warning;
+            logging::severity verbosity = logging::severity::debug;
             bool rewrite = false;
             bool noMount = false;
             bool showMetadata = false;

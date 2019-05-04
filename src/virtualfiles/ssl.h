@@ -16,7 +16,6 @@
 #include "../keyfiles/sslkey.h"
 #include "virtualfile.h"
 
-
 namespace pcapfs {
 
     class SslFile : public VirtualFile {
@@ -32,12 +31,10 @@ namespace pcapfs {
         static bool isClientMessage(uint64_t i);
 
         //ssl decrypt functions
-        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom);
+        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion);
 
-        Bytes decryptData(uint64_t padding, size_t length, char *data, char *key);
-
-        static Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *key);
-
+        Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
+        
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;
@@ -46,6 +43,7 @@ namespace pcapfs {
 
     private:
         std::string cipherSuite;
+        pcpp::SSLVersion sslVersion;
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;

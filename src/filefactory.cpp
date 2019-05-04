@@ -21,7 +21,7 @@ bool pcapfs::FileFactory::registerAtFactory(const std::string &type, pcapfs::Fil
     if (it == getFactoryFileTypes().end()) {
         getFactoryFileTypes().insert({type, createMethod});
         // TODO: only emit this message in debug builds
-        //LOG_DEBUG << "registered file type: " << type;
+        LOG_DEBUG << "registered file type: " << type;
         return true;
     } else {
         return false;
@@ -36,7 +36,7 @@ pcapfs::FileFactory::registerAtFactory(const std::string &type, CreateMethod cre
         getFactoryFileTypes().insert({type, createMethod});
         getFactoryParseMethods().insert({type, parseMethod});
         // TODO: only emit this message in debug builds
-        //LOG_DEBUG << "registered file type: " << type;
+        LOG_DEBUG << "registered file type: " << type;
         return true;
     } else {
         return false;
