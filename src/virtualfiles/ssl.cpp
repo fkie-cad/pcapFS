@@ -779,22 +779,22 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     switch(sslVersion) {
         case pcpp::SSLVersion::SSL2:
         {
-            std::cout << "ssl2\n";
+            LOG_ERROR << "ssl2 is currently not supported\n";
             break;
         }
         case pcpp::SSLVersion::SSL3:
         {
-            std::cout << "ssl3\n";
+            LOG_ERROR << "ssl3 is currently not supported\n";
             break;
         }
         case pcpp::SSLVersion::TLS1_0:
         {
-            std::cout << "tls 1.0\n";
+            LOG_ERROR << "tls1 is currently not supported\n";
             break;
         }
         case pcpp::SSLVersion::TLS1_1:
         {
-            std::cout << "tls 1.1\n";
+            LOG_ERROR << "tls1_1 is currently not supported\n";
             break;
         }
         case pcpp::SSLVersion::TLS1_2:
@@ -947,11 +947,6 @@ bool pcapfs::SslFile::isClientMessage(uint64_t i) {
 
 bool pcapfs::SslFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("ssl", pcapfs::SslFile::create, pcapfs::SslFile::parse);
-
-
-
-
-
         
 /*
  * 
