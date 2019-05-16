@@ -727,6 +727,13 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
      * 
      * 
+     * SSLv3:
+     * 
+     * It is a bit longer, see this one:
+     * 
+     * https://tools.ietf.org/html/rfc6101#section-6.2.1
+     * 
+     * 
      * TLS 1.0 Page 11, 12, 13
      * 
      *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
@@ -776,6 +783,28 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      * 
      */
     
+    
+    /*
+     * The concrete openssl doc for this section:
+     * 
+     * https://www.openssl.org/docs/man1.1.0/man3/EVP_PKEY_CTX_set_tls1_prf_md.html
+     */
+    
+    size_t KEY_MATERIAL_SIZE = 128;
+    size_t const LABEL_SIZE = 13;
+    size_t const SERVER_RANDOM_SIZE = 32;
+    size_t const CLIENT_RANDOM_SIZE = 32;
+    char const LABEL[14] = "key expansion";
+    size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
+    Bytes seed(seedSize);
+    memcpy(&seed[0], LABEL, LABEL_SIZE);
+    memcpy(&seed[LABEL_SIZE], serverRandom, SERVER_RANDOM_SIZE);
+    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom, CLIENT_RANDOM_SIZE);
+    
+    Bytes keyMaterial(KEY_MATERIAL_SIZE);
+    EVP_PKEY_CTX *pctx;
+    
+    
     switch(sslVersion) {
         case pcpp::SSLVersion::SSL2:
         {
@@ -789,59 +818,70 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         }
         case pcpp::SSLVersion::TLS1_0:
         {
-            LOG_ERROR << "tls1 is currently not supported\n";
+            LOG_INFO << "tls 1.0 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+                std::cerr << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
+                std::cerr << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+                std::cerr << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+                std::cerr << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+                std::cerr << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
         case pcpp::SSLVersion::TLS1_1:
         {
-            LOG_ERROR << "tls1_1 is currently not supported\n";
+            LOG_INFO << "tls 1.1 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+                std::cerr << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
+                std::cerr << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+                std::cerr << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+                std::cerr << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+                std::cerr << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
         case pcpp::SSLVersion::TLS1_2:
         {
-            std::cout << "tls 1.2\n";
+            LOG_INFO << "tls 1.2 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+                std::cerr << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
+                std::cerr << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+                std::cerr << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+                std::cerr << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+                std::cerr << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
         default:
-            std::cout << "error\n";
+            LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << sslVersion << std::endl;
     }
-    
-    
-    /*
-     * This is TLS 1.2
-     * 
-     * TODO: Build for ssl2,3,tls10,tls11
-     * 
-     */
-    
-    size_t KEY_MATERIAL_SIZE = 128;
-    size_t const LABEL_SIZE = 13;
-    size_t const SERVER_RANDOM_SIZE = 32;
-    size_t const CLIENT_RANDOM_SIZE = 32;
-    char const LABEL[14] = "key expansion";
-
-    size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
-    Bytes seed(seedSize);
-    memcpy(&seed[0], LABEL, LABEL_SIZE);
-    memcpy(&seed[LABEL_SIZE], serverRandom, SERVER_RANDOM_SIZE);
-    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom, CLIENT_RANDOM_SIZE);
-
-    Bytes keyMaterial(KEY_MATERIAL_SIZE);
-    EVP_PKEY_CTX *pctx;
-    pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
-    if (EVP_PKEY_derive_init(pctx) <= 0)
-        std::cerr << "Error1!" << std::endl;
-    if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
-        std::cerr << "Error2!" << std::endl;
-    if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
-        std::cerr << "Error3!" << std::endl;
-    if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-        std::cerr << "Error4!" << std::endl;
-    if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-        std::cerr << "Error5!" << std::endl;
-    ERR_print_errors_fp(stderr);
-
-    EVP_PKEY_CTX_free(pctx);
     
     return keyMaterial;
 }
