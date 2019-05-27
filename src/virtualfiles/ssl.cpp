@@ -371,7 +371,6 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
         
         case pcpp::SSL_SYM_RC4_64:
         {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
             LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
             const int mac_size = 16;
@@ -412,8 +411,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
             
         case pcpp::SSL_SYM_RC4_56:
         {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
+            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
             LOG_ERROR << "unsupported operation" << std::endl;
             const int mac_size = 16;
             const int key_size = 7;
@@ -497,9 +495,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
              * 
              * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
-             */            
+             */
             {
-                //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
                 LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
                 LOG_ERROR << "unsupported operation" << std::endl;
                 const int mac_size = 16;
@@ -535,7 +532,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
                     return Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
                     
                 }
-            }               
+            }
             
         case pcpp::SSL_SYM_AES_128_CBC:
         {
