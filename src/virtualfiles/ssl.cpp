@@ -47,7 +47,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     uint64_t clientEncryptedData = 0;
     uint64_t serverEncryptedData = 0;
     std::string cipherSuite = "";
-    pcpp::SSLVersion sslVersion = pcpp::SSLVersion::SSL2;
+    pcpp::SSLVersion sslVersion = pcpp::SSLVersion::SSL2; // init with a predefined value.
     bool clientChangeCipherSpec = false;
     bool serverChangeCipherSpec = false;
 
@@ -109,6 +109,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                             
                         } else {
                             cipherSuite = "UNKNOWN_CIPHER_SUITE";
+                            
+                            /*
+                             * TODO: handle this exception properly
+                             * 
+                             */
+                            throw "unsupported cipher detected";
                         }
                         processedSSLHandshake = true;
                         LOG_DEBUG << "handshake completed";
