@@ -47,7 +47,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     uint64_t clientEncryptedData = 0;
     uint64_t serverEncryptedData = 0;
     std::string cipherSuite = "";
-    pcpp::SSLVersion sslVersion;
+    pcpp::SSLVersion sslVersion = pcpp::SSLVersion::SSL2;
     bool clientChangeCipherSpec = false;
     bool serverChangeCipherSpec = false;
 

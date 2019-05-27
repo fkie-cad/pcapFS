@@ -634,9 +634,9 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
                                                   size_t length) {
     char nameValueSeperator = ':';
     map.clear();
-    size_t fieldSize;
-    size_t fieldNameSize;
-    size_t fieldValueSize;
+    size_t fieldSize = 0;
+    size_t fieldNameSize = 0;
+    size_t fieldValueSize = 0;
     size_t offsetInHeader = 0;
     bool isEndOfHeader = false;
     char *fieldData = (char *) (data.data() + startOffset);
