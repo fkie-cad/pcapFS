@@ -228,18 +228,29 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t lengt
 
 pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
 
+    LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
+    
+    
     int return_code, len, plaintext_len;
     
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
     
+    //Bytes decryptedData(length-padding);
+    //Bytes dataToDecrypt(length-padding);
+    
+    
+    
     dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
+    //dataToDecrypt.insert(dataToDecrypt.end(), data + padding, data + length - padding);
+    
     LOG_DEBUG << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
     printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, padding + length);
+    //BIO_dump_fp (stdout, (const char *) dataToDecryptPtr + padding, length - padding);
+    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, dataToDecrypt.size());
     
     EVP_CIPHER_CTX *ctx;
     
@@ -301,17 +312,18 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     plaintext_len += len;
         
     //remove the padding
-    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
+    //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
     
-    decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
+    //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
         
     printf("plaintext:\n");
     //BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
+    printf("\n\n");
     BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding - 20 - 1);
     
-    LOG_DEBUG << "DECRYPTED AES DATA: " << decryptedContent << std::endl;
     
     EVP_CIPHER_CTX_cleanup(ctx);
     

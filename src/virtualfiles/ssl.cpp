@@ -322,6 +322,16 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
          * RC4 in SSL/TLS implemented cipher suites are decrypted here:
          */
         
+        
+        /*
+         * Important note for export keys:
+         * 
+         * https://tools.ietf.org/html/rfc2246#section-6.3.1
+         * 
+         * they use the PRF for the IV!
+         * 
+         * 
+         */
         case pcpp::SSL_SYM_RC4_128:
         {
             /*
@@ -840,6 +850,15 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     
     
     switch(sslVersion) {
+        
+        /*
+         * https://tools.ietf.org/html/rfc2246
+         * 
+         * 
+         * 
+         * 
+         */
+        
         case pcpp::SSLVersion::SSL2:
         {
             LOG_ERROR << "ssl2 is currently not supported\n";
@@ -917,6 +936,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
             LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << sslVersion << std::endl;
     }
     
+    LOG_INFO << "Key Material Size: " << KEY_MATERIAL_SIZE << std::endl;
+    
     return keyMaterial;
 }
 
@@ -961,19 +982,16 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                         idx.get({"sslkey", keyIDinIndex}));
                 if (isClientMessage(keyForFragment.at(fragment))) {
-                    LOG_DEBUG << "CLIENT CLIENT CLIENT ? " + counter << std::endl;
+                    
+                    //padding ( previousBytes[fragment] )   just file based offsets?
+                    
                     decrypted = decryptData(previousBytes[fragment],
                                             toDecrypt.size(),
                                             (char *) toDecrypt.data(),
                                             (char *) keyPtr->getKeyMaterial().data(),
                                             isClientMessage(keyForFragment.at(fragment)));
                     
-                    //
-                    // FIX AHEAD!
-                    //
-                    
                 } else {
-                    LOG_DEBUG << "ERROR ERROR ERROR ? " + counter << std::endl;
                     
                     
                     decrypted = decryptData(previousBytes[fragment],
@@ -984,7 +1002,6 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                     
                 }
                 if(toRead != decrypted.size()) {
-                    LOG_ERROR << "[E] various errors ahead?" << std::endl;
                     LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
                 }
                 LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
