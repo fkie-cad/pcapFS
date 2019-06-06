@@ -111,7 +111,6 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
         
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-        
     
     printf("plaintext:\n");
     BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
