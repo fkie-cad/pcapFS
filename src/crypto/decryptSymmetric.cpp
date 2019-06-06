@@ -230,6 +230,12 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
 
     LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
     
+    printf("mac:\n");
+    BIO_dump_fp (stdout, (const char *) mac, 20);
+    printf("key:\n");
+    BIO_dump_fp (stdout, (const char *) key, 16);
+    printf("iv:\n");
+    BIO_dump_fp (stdout, (const char *) iv, 16);
     
     int return_code, len, plaintext_len;
     

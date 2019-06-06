@@ -981,7 +981,12 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                         idx.get({"sslkey", keyIDinIndex}));
+                
+                
+                
                 if (isClientMessage(keyForFragment.at(fragment))) {
+                    
+                    LOG_INFO << "detected CLIENT message\n";
                     
                     //padding ( previousBytes[fragment] )   just file based offsets?
                     
@@ -993,6 +998,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                     
                 } else {
                     
+                    LOG_INFO << "detected SERVER message\n";
                     
                     decrypted = decryptData(previousBytes[fragment],
                                             toDecrypt.size(),
