@@ -309,6 +309,16 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
     switch (cipherSuite->getSymKeyAlg()) {
         
         /*
+         * TODO: maybe redesign since some ciphers need different call to PRF:
+         * 
+         * AES GCM:
+         * keys = PRF(master_secret, "key expansion", server_random + client_random, 40)
+         * 
+         * and the PRF might even differ (SHA256 vs SHA384):
+         * https://tools.ietf.org/html/rfc5246#section-5
+         */
+        
+        /*
          * RC4 in SSL/TLS implemented cipher suites are decrypted here:
          */
         
@@ -633,6 +643,27 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
         
         case pcpp::SSL_SYM_AES_128_GCM:
         {
+            /*
+             * AES GCM is a bit more difficult than i.e. CBC:
+             * 
+             * AAD is the additional key material:
+             * 
+             * 
+             * https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
+             * https://crypto.stackexchange.com/questions/59697/tls-1-2-cipher-suites-with-aes-gcm-what-data-if-any-is-passed-to-the-aes-gcm
+             * https://tools.ietf.org/html/rfc5246#section-6.2.3.3
+             * 
+             * AES GCM needs a more complex key material derivation:
+             * 
+             *       TLSCompressed.fragment = AEAD-Decrypt(write_key, nonce,
+             *              AEADEncrypted,
+             *              additional_data)
+             * 
+             * Details for computing the nonce:
+             * https://tools.ietf.org/html/rfc5116#section-3.2.1
+             * 
+             * 
+             */
             
             printf("key_material:\n");
             BIO_dump_fp (stdout, (const char *) key_material, 128);
