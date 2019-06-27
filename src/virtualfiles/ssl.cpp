@@ -942,6 +942,82 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 }
 
 
+/*
+ * TODO: 
+ * 
+ * READ FUNCTION:
+ *The current read function currently tries to encrypt traffic at a certain position.
+ * We wanted to implement an abstract way to ask for decrypted data at a certain position
+ * WITHOUT decrypting everything every time.
+ * 
+ * This seems not to be possible at this point.
+ * 
+ * Idea: We need a mapping which does the following:
+ * 
+ * +----------+----------+----------
+ * |          |          |
+ * |   AAAA   |   BBBB   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * If someone asks now for block 2 (BBBB), then we should return such a structure:
+ * 
+ * +----------+----------+---------------
+ * |          |          |
+ * |   0000   |   BBBB   |   0000....
+ * |          |          |
+ * +----------+----------+---------------
+ * 
+ * Many ciphers require a complete decryption of such a track.
+ * This leads to, depending on the length of the track, a very inefficient implementation.
+ * 
+ * But since this is required for many ciphers such as CBC or GCM cipher modes, we need to
+ * decrypt a certain amount of blocks, either up to the requested block or other, etc.
+ * This is a topic highly depending on the cipher and the cipher mode used in the TLS application data.
+ * 
+ * Improvement goals:
+ * 
+ * ### Build a function which decrypts all of the blocks from the beginning.
+ * ### Build a handler function which wraps the plaintext to text for the user, meaning: "remove" the MAC.
+ * ### Build a wrapper which handles specific requests to single blocks in the chain (using certain offsets).
+ * 
+ * 
+ * 
+ * CHALLENGES:
+ * 
+ * ### plaintext offset calculation depends i.e. on the size of the authentication digests, we need another abstraction layer:
+ * 
+ * 
+ * ciphertext (symbolic AAAA and BBBB, think about garbage looking bytes):
+ * +----------+----------+----------
+ * |          |          |
+ * |   AAAA   |   BBBB   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * 
+ * plaintext (derived from decryption, has a lot of stuff like message authentication digests):
+ * +----------+----------+----------
+ * |      | M |      | M |
+ * |   AA | A |   BB | A |   ...
+ * |      | C |      | C |
+ * +----------+----------+----------
+ * 
+ * 
+ * real text, readable by the user, either MAC checked or not:
+ * +----------+----------+----------
+ * |          |          |
+ * |   abcd   |   efgh   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * Concrete: If the user requests the block 2 containing the BBBB ciphertext, we want to provide efgh to the user.
+ * We still have to decrypt the complete TLS application data stream.
+ * 
+ * 
+ * 
+ */
+
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
@@ -966,7 +1042,11 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     while (position < startOffset + length && fragment < offsets.size()) {
         counter++;
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        
         //TODO: is start=0 really good for missing data?
+        
+        // -> missing data should probably be handled in an exception?
+        
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             LOG_DEBUG << "filling data";
