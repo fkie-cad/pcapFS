@@ -1121,6 +1121,137 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 }
 
+/*
+ * Implementing the new functions for a new abstraction layer:
+ */
+
+
+/*
+ * pcapfs::SslFile::getFullCipherText
+ * 
+ * The function gets the full TLS application layer stream into a vector.
+ * Each element in the vector represents one decrypted packet, containing a alternating stream of the packets from client and server.
+ * Concrete: iterate over all fragments, return the cipher text blocks and the keymaterial.
+ * 
+ * TODO: New datatype for the vector, a datatype holding:
+ *          - pcapfs::Bytes object
+ *          - key material bytes
+ *          - cipher type, ssl version
+ */
+std::vector<pcapfs::Bytes> pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx) {
+    //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
+    //TODO: split read into readStreamcipher, readCFB, readCBC...
+    size_t fragment = 0;
+    size_t posInFragment = 0;
+    size_t position = 0;
+    int counter = 0;
+    
+    // seek to start_offset
+    while (position < startOffset) {
+        position += offsets[fragment].length;
+        fragment++;
+    }
+    
+    if (position > startOffset) {
+        fragment--;
+        posInFragment = offsets[fragment].length - (position - startOffset);
+        position = static_cast<size_t>(startOffset);
+    }
+    
+    // start copying
+    while (position < startOffset + length && fragment < offsets.size()) {
+        counter++;
+        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        
+        //TODO: is start=0 really good for missing data?
+        
+        // -> missing data should probably be handled in an exception?
+        
+        if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+            // TCP missing data
+            LOG_DEBUG << "filling data";
+            memset(buf + (position - startOffset), 0, toRead);
+        } else {
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
+            pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
+            filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
+            
+            if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+                pcapfs::Bytes decrypted;
+                
+                std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
+                    idx.get({"sslkey", keyIDinIndex}));
+                
+                
+                
+                if (isClientMessage(keyForFragment.at(fragment))) {
+                    
+                    LOG_INFO << "detected CLIENT message\n";
+                    
+                    //padding ( previousBytes[fragment] )   just file based offsets?
+                    
+                    decrypted = decryptData(previousBytes[fragment],
+                                            toDecrypt.size(),
+                                            (char *) toDecrypt.data(),
+                                            (char *) keyPtr->getKeyMaterial().data(),
+                                            isClientMessage(keyForFragment.at(fragment)));
+                    
+                } else {
+                    
+                    LOG_INFO << "detected SERVER message\n";
+                    
+                    decrypted = decryptData(previousBytes[fragment],
+                                            toDecrypt.size(),
+                                            (char *) toDecrypt.data(),
+                                            (char *) keyPtr->getKeyMaterial().data(),
+                                            isClientMessage(keyForFragment.at(fragment)));
+                    
+                }
+                if(toRead != decrypted.size()) {
+                    LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                }
+                LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                memset(buf + (position - startOffset), 0, toRead);
+                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
+            } else {
+                LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
+                memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
+            }
+        }
+        
+        // set run variables in case next fragment is needed
+        position += toRead;
+        fragment++;
+        posInFragment = 0;
+    }
+    
+    if (startOffset + length < filesizeRaw) {
+        return length;
+    } else {
+        return filesizeRaw - startOffset;
+    }
+}
+
+/*
+ * pcapfs::SslFile::decryptCiphertextToPlaintext
+ * 
+ * Encrypt the vector of bytes using the key material provided via every frame of the vector.
+ * returns a vector of plaintext plus information such as if mac, alignment, padding is correct.
+ * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
+ */
+
+/*
+ * pcapfs::SslFile::getEncryptedBlocksFromPlaintext
+ * 
+ * The function gets the encrypted chunks from the plaintext, "removing" the mac, padding, etc.
+ */
+
+/*
+ * pcapfs::SslFile::getEncryptedSingleBlock
+ * 
+ * The function returns one block of the full plaintext accessing the full vector of encrypted blocks.
+ */
+
 
 bool pcapfs::SslFile::isClientMessage(uint64_t i) {
     if (i % 2 == 0) {
@@ -1135,7 +1266,8 @@ bool pcapfs::SslFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("ssl", pcapfs::SslFile::create, pcapfs::SslFile::parse);
         
 /*
- * 
+ * TODO:
+ * Is it a good idea to add sslVersion to the archive?
  * archive << sslVersion; ??
  * 
  */
