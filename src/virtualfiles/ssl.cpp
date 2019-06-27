@@ -945,7 +945,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 /*
  * TODO: 
  * 
- * READ FUNCTION:
+ * CURRENT READ FUNCTION:
  *The current read function currently tries to encrypt traffic at a certain position.
  * We wanted to implement an abstract way to ask for decrypted data at a certain position
  * WITHOUT decrypting everything every time.
@@ -1013,6 +1013,15 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * 
  * Concrete: If the user requests the block 2 containing the BBBB ciphertext, we want to provide efgh to the user.
  * We still have to decrypt the complete TLS application data stream.
+ * 
+ * 
+ * 
+ * FUTURE GOALS:
+ * 
+ * ### Cache the decrypted streams to prevent the decryption of the complete stream in requests which loop through
+ *     all fields of a stream, refer inside a single stream or many recurring requests to a certain pool of
+ *     TLS application data streams.
+ * 
  * 
  * 
  * 
