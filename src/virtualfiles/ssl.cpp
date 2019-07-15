@@ -13,6 +13,7 @@
 #include "../filefactory.h"
 #include "../logging.h"
 #include "../crypto/decryptSymmetric.h"
+#include "../crypto/cipherTextElement.h"
 
 
 namespace {
@@ -1027,6 +1028,9 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * 
  */
 
+/*
+ * DEPRECATED:
+ */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
@@ -1136,27 +1140,19 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * TODO: New datatype for the vector, a datatype holding:
  *          - pcapfs::Bytes object
  *          - key material bytes
- *          - cipher type, ssl version
+ *          - cipher type, ssl version, server or client (?)
+ * 
+ * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
+ * 
  */
-std::vector<pcapfs::Bytes> pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx) {
+pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
+    int startOffset = 0;
     int counter = 0;
-    
-    // seek to start_offset
-    while (position < startOffset) {
-        position += offsets[fragment].length;
-        fragment++;
-    }
-    
-    if (position > startOffset) {
-        fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
-        position = static_cast<size_t>(startOffset);
-    }
     
     // start copying
     while (position < startOffset + length && fragment < offsets.size()) {
@@ -1164,17 +1160,13 @@ std::vector<pcapfs::Bytes> pcapfs::SslFile::getFullCipherText(uint64_t startOffs
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
         
         //TODO: is start=0 really good for missing data?
-        
         // -> missing data should probably be handled in an exception?
         
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
-            LOG_DEBUG << "filling data";
-            memset(buf + (position - startOffset), 0, toRead);
+            LOG_DEBUG << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set" << std::endl;
         } else {
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
-            filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
@@ -1182,40 +1174,23 @@ std::vector<pcapfs::Bytes> pcapfs::SslFile::getFullCipherText(uint64_t startOffs
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                     idx.get({"sslkey", keyIDinIndex}));
                 
+                // Delete them in the vector which was provided!
+                // In case you want to increase performaance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
+                CipherTextElement *cte = new CipherTextElement();
                 
+                cte->cipherSuite = this->cipherSuite;
+                cte->sslVersion = this->sslVersion;
                 
-                if (isClientMessage(keyForFragment.at(fragment))) {
-                    
-                    LOG_INFO << "detected CLIENT message\n";
-                    
-                    //padding ( previousBytes[fragment] )   just file based offsets?
-                    
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
-                    
-                } else {
-                    
-                    LOG_INFO << "detected SERVER message\n";
-                    
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
-                    
-                }
-                if(toRead != decrypted.size()) {
-                    LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                }
-                LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                memset(buf + (position - startOffset), 0, toRead);
-                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
+                cte->cipherBlock.insert( cte->cipherBlock.end() ,  toDecrypt.begin()  ,  toDecrypt.end());
+                cte->length = toRead;
+                cte->keyMaterial.insert( cte->keyMaterial.end()  ,  keyPtr->getKeyMaterial().begin()   ,  keyPtr->getKeyMaterial().end());
+                cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
+                
+                outputCipherTextVector->push_back(cte);
+                
             } else {
                 LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
-                memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
+                //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }
         
