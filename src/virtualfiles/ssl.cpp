@@ -1145,7 +1145,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
     size_t fragment = 0;
