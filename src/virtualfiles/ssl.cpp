@@ -12,8 +12,8 @@
 
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../crypto/decryptSymmetric.h"
-#include "../crypto/cipherTextElement.h"
+#include <../../src/crypto/decryptSymmetric.h>
+#include <../../src/crypto/cipherTextElement.h>
 
 
 namespace {

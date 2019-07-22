@@ -15,6 +15,7 @@
 #include "../file.h"
 #include "../keyfiles/sslkey.h"
 #include "virtualfile.h"
+#include "../crypto/cipherTextElement.h"
 
 namespace pcapfs {
 
@@ -26,6 +27,9 @@ namespace pcapfs {
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
+        size_t getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector);
+        
+        
         int calculateProcessedSize(const Index &idx);
 
         static bool isClientMessage(uint64_t i);
