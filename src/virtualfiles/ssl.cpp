@@ -14,6 +14,7 @@
 #include "../logging.h"
 #include <../../src/crypto/decryptSymmetric.h>
 #include <../../src/crypto/cipherTextElement.h>
+#include <../../src/crypto/plainTextElement.h>
 
 
 namespace {
@@ -1214,6 +1215,53 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
  * returns a vector of plaintext plus information such as if mac, alignment, padding is correct.
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  */
+size_t pcapfs::SslFile::decryptCiphertextToPlaintext(std::vector<CipherTextElement*> *cipherTextVector, std::vector<PlainTextElement*> *outputPlainTextVector) {
+    size_t fragment = 0;
+    size_t posInFragment = 0;
+    size_t position = 0;
+    int counter = 0;
+    
+    
+    for (size_t i=0; i<cipherTextVector->size(); i++) {
+        pcapfs::Bytes decrypted;
+        counter++;
+        
+        /*
+         * This approach currently requires that we hold ciphertext and plaintext in memory. No file-based indexes are supported at this point.
+         */
+        
+        CipherTextElement *element = cipherTextVector->at(i);
+        PlainTextElement *output = new PlainTextElement();
+        
+        if (element->isClientBlock) {            
+            LOG_INFO << "detected CLIENT message\n";
+//            decrypted = decryptData(previousBytes[fragment],
+              decrypted = decryptData(0,
+                                                            element->cipherBlock.size(),
+                                    (char *) element->cipherBlock.data(),
+                                    (char *) element->keyMaterial.data(),
+                                    true);
+
+        } else {
+            LOG_INFO << "detected SERVER message\n";
+//            decrypted = decryptData(previousBytes[fragment],
+              decrypted = decryptData(0,
+                                    element->cipherBlock.size(),
+                                    (char *) element->cipherBlock.data(),
+                                    (char *) element->keyMaterial.data(),
+                                    false);
+        }
+    
+        output->isClientBlock = element->isClientBlock;
+        output->cipherSuite = element->cipherSuite;
+        output->length = output->plaintextBlock.size();
+        output->sslVersion = element->sslVersion;
+        
+        outputPlainTextVector->push_back(output);
+    }    
+    return counter;
+}
+
 
 /*
  * pcapfs::SslFile::getEncryptedBlocksFromPlaintext
