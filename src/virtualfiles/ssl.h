@@ -39,6 +39,8 @@ namespace pcapfs {
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion);
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
+        //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
+        void decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output);
         
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
