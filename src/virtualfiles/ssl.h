@@ -40,8 +40,8 @@ namespace pcapfs {
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
-        void decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output);
-        
+        void decryptDataNew(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output);
+            
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;

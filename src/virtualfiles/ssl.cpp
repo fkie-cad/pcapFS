@@ -306,6 +306,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
  * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
  * 
  */
+
 pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
@@ -757,6 +758,8 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
     return Bytes();
 }
 
+
+
 //TODO: not abstract enough to handle all ciphers?
 //TODO: check if the key material is accessible for all ciphers and protocols.
 /*
@@ -770,7 +773,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
 
 
 
-void pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output) {
+void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -847,372 +850,16 @@ void pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, c
                  * This is a client message
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
-        }
-        
-        
-        
-        case pcpp::SSL_SYM_RC4_64:
-        {
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 8;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_64(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_64(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }
-        
-        
-        case pcpp::SSL_SYM_RC4_56:
-        {
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_56 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 7;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_56(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_56(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }
-        
-        
-        case pcpp::SSL_SYM_RC4_128_EXPORT40:
-        {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 5;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }          
-        
-        case pcpp::SSL_SYM_RC4_40:
-            /* 
-             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
-             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
-             * 
-             * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
-             */
-            {
-                LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-                LOG_ERROR << "unsupported operation" << std::endl;
-                const int mac_size = 16;
-                const int key_size = 5;
-                //const int iv_size = 16;
-                
-                unsigned char client_write_MAC_key[mac_size];
-                unsigned char server_write_MAC_key[mac_size];
-                unsigned char client_write_key[key_size];
-                unsigned char server_write_key[key_size];
-                //unsigned char client_write_IV[iv_size];
-                //unsigned char server_write_IV[iv_size];
-                
-                memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-                memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-                memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-                memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-                //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-                //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-                
-                if(isClientMessage) {
-                    /*
-                     * This is a client message
-                     */
-                    
-                    pcapfs::Bytes plainText = Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                    
-                } else {
-                    /*
-                     * This is a server message, so we use server key etc.
-                     */
-                    
-                    pcapfs::Bytes plainText = Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                    
-                }
-            }
-            
-        case pcpp::SSL_SYM_AES_128_CBC:
-        {
-            /*
-             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
-             * 
-             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
-             */
-            
-            unsigned char client_write_MAC_key[20];
-            unsigned char server_write_MAC_key[20];
-            unsigned char client_write_key[16];
-            unsigned char server_write_key[16];
-            unsigned char client_write_IV[16];
-            unsigned char server_write_IV[16];
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_MAC_key,    key_material,           20);
-            memcpy(server_write_MAC_key,    key_material+20,        20);
-            memcpy(client_write_key,        key_material+40,        16);
-            memcpy(server_write_key,        key_material+40+16,     16);
-            memcpy(client_write_IV,         key_material+40+32,     16);
-            memcpy(server_write_IV,         key_material+72+16,     16);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_CBC called with a client packet" << std::endl;
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_128_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_CBC called with a server packet" << std::endl;
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_128_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
-                
-            }
-            
-        }
-        
-        case pcpp::SSL_SYM_AES_256_CBC:
-        {
-            /*
-             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
-             * 
-             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
-             */
-            
-            const int mac_size = 16;
-            const int key_size = 32;
-            const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            unsigned char client_write_IV[iv_size];
-            unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_256_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_256_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
-                
-            }
-            
-        }
-        
-        
-        case pcpp::SSL_SYM_AES_128_GCM:
-        {
-            /*
-             * AES GCM is a bit more difficult than i.e. CBC:
-             * 
-             * AAD is the additional key material:
-             * 
-             * 
-             * https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
-             * https://crypto.stackexchange.com/questions/59697/tls-1-2-cipher-suites-with-aes-gcm-what-data-if-any-is-passed-to-the-aes-gcm
-             * https://tools.ietf.org/html/rfc5246#section-6.2.3.3
-             * 
-             * AES GCM needs a more complex key material derivation:
-             * 
-             *       TLSCompressed.fragment = AEAD-Decrypt(write_key, nonce,
-             *              AEADEncrypted,
-             *              additional_data)
-             * 
-             * Details for computing the nonce:
-             * https://tools.ietf.org/html/rfc5116#section-3.2.1
-             * 
-             * 
-             */
-            
-            printf("key_material:\n");
-            BIO_dump_fp (stdout, (const char *) key_material, 128);
-            
-            unsigned char client_write_key[16];
-            unsigned char server_write_key[16];
-            unsigned char client_write_IV[4];
-            unsigned char server_write_IV[4];
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_key,        key_material,           16);
-            memcpy(server_write_key,        key_material+16,        16);
-            memcpy(client_write_IV,         key_material+32,         4);
-            memcpy(server_write_IV,         key_material+36,         4);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
-                
-            }
-            
-        }
-        
-        case pcpp::SSL_SYM_AES_256_GCM:
-        {
-            
-            /*
-             * AES 256 has 256 bit keys, aka 32 byte
-             */
-            
-            unsigned char client_write_key[32];
-            unsigned char server_write_key[32];
-            unsigned char client_write_IV[4];
-            unsigned char server_write_IV[4];
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_key,        key_material,           32);
-            memcpy(server_write_key,        key_material+32,        32);
-            memcpy(client_write_IV,         key_material+64,         4);
-            memcpy(server_write_IV,         key_material+68,         4);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
-                
-            }
-            
         }
         
         default:
@@ -1549,7 +1196,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                                             toDecrypt.size(),
                                             (char *) toDecrypt.data(),
                                             (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
+                                            isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
                     
                 } else {
                     
@@ -1559,7 +1206,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                                             toDecrypt.size(),
                                             (char *) toDecrypt.data(),
                                             (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
+                                            isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
                     
                 }
                 if(toRead != decrypted.size()) {
@@ -1682,7 +1329,6 @@ size_t pcapfs::SslFile::decryptCiphertextToPlaintext(std::vector<CipherTextEleme
     
     
     for (size_t i=0; i<cipherTextVector->size(); i++) {
-        pcapfs::Bytes decrypted;
         counter++;
         
         /*
@@ -1696,13 +1342,12 @@ size_t pcapfs::SslFile::decryptCiphertextToPlaintext(std::vector<CipherTextEleme
 /*
  * Padding ( previousBytes[fragment] ) should be always zero now since we rebuild the char byte list into vectors of blocks
  */
-              decrypted = decryptData(0,
-                                    element->cipherBlock.size(),
-                                    (char *) element->cipherBlock.data(),
-                                    (char *) element->keyMaterial.data(),
-                                    element->isClientBlock,
-                                    output
-                                     );
+              decryptDataNew(0,
+                          element->cipherBlock.size(),
+                          (char *) element->cipherBlock.data(),
+                          (char *) element->keyMaterial.data(),
+                          element->isClientBlock,
+                          output);
         
         output->isClientBlock = element->isClientBlock;
         output->cipherSuite = element->cipherSuite;

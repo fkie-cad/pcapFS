@@ -24,148 +24,8 @@
 #include "../logging.h"
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128_NEW(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
-    
-    /*
-     * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
-     * 
-     * This is basically the key idea when using symmetric decryption in openssl
-     * 
-     * And this manpage contains additional information about the API:
-     * https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     * 
-     */
-    
-    int return_code;
-    
-    int len;
-    int plaintext_len;
-    
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
-    dataToDecrypt.insert(dataToDecrypt.end(), data, data + length);
-    LOG_DEBUG << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: " << dataToDecrypt.size();
-    
-    //decrypt data using keys and RC4
-    unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    unsigned char *rc4_key = reinterpret_cast<unsigned char *>(key);
-    
-    printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *)dataToDecrypt.data(), dataToDecrypt.size());
-    
-    EVP_CIPHER_CTX *ctx;
-    
-    ctx = EVP_CIPHER_CTX_new();
-    
-    if(ctx == NULL) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
-    }
-    
-    
-    /*
-     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     * 
-     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
-     * The operation performed depends on the value of the enc parameter.
-     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
-     * (the actual value of 'enc' being supplied in a previous call).
-     * 
-     */
-    
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    return_code = EVP_CipherInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL, 0);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-        LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
-    }
-    
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-        LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
-    }
-    
-    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-        LOG_DEBUG << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len = len;
-    
-    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len += len;
-    
-    //remove the padding
-    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
-    
-    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-    
-    printf("plaintext:\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
-    
-    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << " KEY TO USE: " << rc4_key << std::endl;
-    
-    EVP_CIPHER_CTX_cleanup(ctx);
-    
-    return decryptedData;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //TODO:
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     int return_code, len, plaintext_len;
     
@@ -264,7 +124,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
 }
 
 //TODO:
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     
     int return_code, len, plaintext_len;
@@ -363,7 +223,10 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t lengt
 
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+
+
+
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
 
     LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
     
@@ -473,7 +336,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
         
     
     int return_code, len, plaintext_len;
@@ -568,7 +431,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -671,7 +534,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -791,7 +654,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_40(uint64_t padding, size_t length, ch
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -905,7 +768,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_56(uint64_t padding, size_t length, ch
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_64(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_64(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
