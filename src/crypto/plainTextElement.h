@@ -1,6 +1,11 @@
 #ifndef PLAINTEXTELEMENT_H
 #define PLAINTEXTELEMENT_H
 
+#include <string>
+#include "../commontypes.h"
+#include <pcapplusplus/Packet.h>
+#include <pcapplusplus/SSLHandshake.h>
+
 /**
  * @todo write docs
  */

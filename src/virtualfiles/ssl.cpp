@@ -1140,14 +1140,123 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 /*
  * DEPRECATED:
  */
+// size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+//     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
+//     //TODO: split read into readStreamcipher, readCFB, readCBC...
+//     size_t fragment = 0;
+//     size_t posInFragment = 0;
+//     size_t position = 0;
+//     int counter = 0;
+// 
+//     // seek to start_offset
+//     while (position < startOffset) {
+//         position += offsets[fragment].length;
+//         fragment++;
+//     }
+// 
+//     if (position > startOffset) {
+//         fragment--;
+//         posInFragment = offsets[fragment].length - (position - startOffset);
+//         position = static_cast<size_t>(startOffset);
+//     }
+// 
+//     // start copying
+//     while (position < startOffset + length && fragment < offsets.size()) {
+//         counter++;
+//         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+//         
+//         //TODO: is start=0 really good for missing data?
+//         
+//         // -> missing data should probably be handled in an exception?
+//         
+//         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+//             // TCP missing data
+//             LOG_DEBUG << "filling data";
+//             memset(buf + (position - startOffset), 0, toRead);
+//         } else {
+//             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
+//             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
+//             filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
+// 
+//             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+//                 pcapfs::Bytes decrypted;
+// 
+//                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
+//                         idx.get({"sslkey", keyIDinIndex}));
+//                 
+//                 
+//                 
+//                 if (isClientMessage(keyForFragment.at(fragment))) {
+//                     
+//                     LOG_INFO << "detected CLIENT message\n";
+//                     
+//                     //padding ( previousBytes[fragment] )   just file based offsets?
+//                     
+//                     decrypted = decryptData(previousBytes[fragment],
+//                                             toDecrypt.size(),
+//                                             (char *) toDecrypt.data(),
+//                                             (char *) keyPtr->getKeyMaterial().data(),
+//                                             isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
+//                     
+//                 } else {
+//                     
+//                     LOG_INFO << "detected SERVER message\n";
+//                     
+//                     decrypted = decryptData(previousBytes[fragment],
+//                                             toDecrypt.size(),
+//                                             (char *) toDecrypt.data(),
+//                                             (char *) keyPtr->getKeyMaterial().data(),
+//                                             isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
+//                     
+//                 }
+//                 if(toRead != decrypted.size()) {
+//                     LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+//                 }
+//                 LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+//                 memset(buf + (position - startOffset), 0, toRead);
+//                 memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
+//             } else {
+//                 LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
+//                 memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
+//             }
+//         }
+// 
+//         // set run variables in case next fragment is needed
+//         position += toRead;
+//         fragment++;
+//         posInFragment = 0;
+//     }
+// 
+//     if (startOffset + length < filesizeRaw) {
+//         return length;
+//     } else {
+//         return filesizeRaw - startOffset;
+//     }
+// }
+
+/*
+ * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
+ */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
-    //TODO: split read into readStreamcipher, readCFB, readCBC...
+    //We ignore startOffset.
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
     int counter = 0;
-
+    
+    std::cout << "\nREAD is called\n" << std::endl;
+    
+    std::vector<CipherTextElement*> *cipherTextVector = new std::vector<CipherTextElement*>;
+    
+    getFullCipherText(length, idx, cipherTextVector);
+    
+    for(int i=0; i< cipherTextVector->size(); i++) {
+        
+        CipherTextElement *elem = cipherTextVector->at(i);
+        
+        elem->printMe();
+    }
+    
     // seek to start_offset
     while (position < startOffset) {
         position += offsets[fragment].length;
@@ -1177,12 +1286,12 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
             filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
-
+            
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
-
+                
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
-                        idx.get({"sslkey", keyIDinIndex}));
+                    idx.get({"sslkey", keyIDinIndex}));
                 
                 
                 
@@ -1220,23 +1329,21 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                 memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }
-
+        
         // set run variables in case next fragment is needed
         position += toRead;
         fragment++;
         posInFragment = 0;
     }
-
+    
+    std::cout << "\nREAD FUNCTION LEFT\n" << std::endl;
+    
     if (startOffset + length < filesizeRaw) {
         return length;
     } else {
         return filesizeRaw - startOffset;
     }
 }
-
-/*
- * Implementing the new functions for a new abstraction layer:
- */
 
 
 /*
@@ -1275,7 +1382,18 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
             // TCP missing data
             LOG_DEBUG << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set" << std::endl;
         } else {
+            
+            /*
+             * Read the bytes from the packets of the file (using the file pointer):
+             * After this step, toDecrypt is filled with bytes.
+             */
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
+            filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
+            
+            
+            
+            std::cout << this->offsets.at(fragment).length << std::endl;
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;

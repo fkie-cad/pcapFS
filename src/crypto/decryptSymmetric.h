@@ -32,8 +32,6 @@ namespace pcapfs {
             //deprecated
             static pcapfs::Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv);
             
-            
-            
             //will be deprecated
             
             /*
@@ -51,12 +49,6 @@ namespace pcapfs {
             static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
             static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
       
-            
-            
-            
-            
-            
-            
             //new stuff:
             static pcapfs::Bytes decrypt_RC4_128_NEW(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
     };

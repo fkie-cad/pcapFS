@@ -1,9 +1,10 @@
-#include "../commontypes.h"
-#include <pcapplusplus/SSLLayer.h>
 
 #ifndef CIPHERTEXTELEMENT_H
 #define CIPHERTEXTELEMENT_H
 
+#include "../commontypes.h"
+#include <pcapplusplus/SSLLayer.h>
+#include <string>
 /**
  * @todo write docs
  */
@@ -17,6 +18,8 @@ public:
     bool isClientBlock;
     pcapfs::Bytes cipherBlock;
     pcapfs::Bytes keyMaterial;
+    
+    void printMe(void);
 };
 
 #endif // CIPHERTEXTELEMENT_H
