@@ -1246,6 +1246,10 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     
     std::cout << "\nREAD is called\n" << std::endl;
     
+    /*
+     * TODO:
+     * Think about --> delete
+     */
     std::vector<CipherTextElement*> *cipherTextVector = new std::vector<CipherTextElement*>;
     
     getFullCipherText(length, idx, cipherTextVector);
@@ -1294,6 +1298,14 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                     idx.get({"sslkey", keyIDinIndex}));
                 
                 
+                
+                /*
+                 * TODO:
+                 * 
+                 * Change decryption function to the new file and structure and remove if/elfe, it is not useful here.
+                 * We want to supply a pointer to a valid plainTextElement and stop returning plaintext but modifying the supplied object
+                 * 
+                 */
                 
                 if (isClientMessage(keyForFragment.at(fragment))) {
                     
