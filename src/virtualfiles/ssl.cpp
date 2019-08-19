@@ -10,6 +10,8 @@
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
 
+#include <boost/shared_ptr.hpp>
+
 #include "../filefactory.h"
 #include "../logging.h"
 #include <../../src/crypto/decryptSymmetric.h>
@@ -773,7 +775,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
 
 
 
-void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output) {
+void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -824,9 +826,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *data
              * [0xc016]         AECDH-RC4-SHA               ECDH            RC4             128         TLS_ECDH_anon_WITH_RC4_128_SHA
              * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
-             */
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            
+             */            
             const int mac_size = 16;
             const int key_size = 16;
             const int iv_size = 16;
@@ -850,17 +850,69 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *data
                  * This is a client message
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV, output);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV, output);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
+            
+            /*
+             * End of Switch SSL_SYM_RC4_128
+             */
+            break;
         }
+        
+        case pcpp::SSL_SYM_AES_128_CBC:
+        {
+            /*
+             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+             * 
+             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+             */
+            
+            unsigned char client_write_MAC_key[20];
+            unsigned char server_write_MAC_key[20];
+            unsigned char client_write_key[16];
+            unsigned char server_write_key[16];
+            unsigned char client_write_IV[16];
+            unsigned char server_write_IV[16];
+            
+            /*
+             * Copy all bytes from the key material into our split key material.
+             */
+            
+            memcpy(client_write_MAC_key,    key_material,           20);
+            memcpy(server_write_MAC_key,    key_material+20,        20);
+            memcpy(client_write_key,        key_material+40,        16);
+            memcpy(server_write_key,        key_material+40+16,     16);
+            memcpy(client_write_IV,         key_material+40+32,     16);
+            memcpy(server_write_IV,         key_material+72+16,     16);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                
+            }
+            break;
+        }
+        
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
@@ -1238,117 +1290,27 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
  */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    //We ignore startOffset.
-    size_t fragment = 0;
-    size_t posInFragment = 0;
-    size_t position = 0;
-    int counter = 0;
     
-    std::cout << "\nREAD is called\n" << std::endl;
-    
-    /*
-     * TODO:
-     * Think about --> delete
-     */
-    std::vector<CipherTextElement*> *cipherTextVector = new std::vector<CipherTextElement*>;
+    boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> cipherTextVector( new std::vector< boost::shared_ptr<CipherTextElement>>() );
+    boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>>   plainTextVector( new std::vector< boost::shared_ptr<PlainTextElement>>() );
     
     getFullCipherText(length, idx, cipherTextVector);
     
-    for(int i=0; i< cipherTextVector->size(); i++) {
+    for(size_t i=0; i< cipherTextVector->size(); i++) {
         
-        CipherTextElement *elem = cipherTextVector->at(i);
+        CipherTextElement *elem = cipherTextVector.get()->at(i).get();
         
         elem->printMe();
     }
     
-    // seek to start_offset
-    while (position < startOffset) {
-        position += offsets[fragment].length;
-        fragment++;
-    }
-
-    if (position > startOffset) {
-        fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
-        position = static_cast<size_t>(startOffset);
-    }
-
-    // start copying
-    while (position < startOffset + length && fragment < offsets.size()) {
-        counter++;
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
-        
-        //TODO: is start=0 really good for missing data?
-        
-        // -> missing data should probably be handled in an exception?
-        
-        if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
-            // TCP missing data
-            LOG_DEBUG << "filling data";
-            memset(buf + (position - startOffset), 0, toRead);
-        } else {
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-            pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
-            filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
-            
-            if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
-                pcapfs::Bytes decrypted;
-                
-                std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
-                    idx.get({"sslkey", keyIDinIndex}));
-                
-                
-                
-                /*
-                 * TODO:
-                 * 
-                 * Change decryption function to the new file and structure and remove if/elfe, it is not useful here.
-                 * We want to supply a pointer to a valid plainTextElement and stop returning plaintext but modifying the supplied object
-                 * 
-                 */
-                
-                if (isClientMessage(keyForFragment.at(fragment))) {
-                    
-                    LOG_INFO << "detected CLIENT message\n";
-                    
-                    //padding ( previousBytes[fragment] )   just file based offsets?
-                    
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
-                    
-                } else {
-                    
-                    LOG_INFO << "detected SERVER message\n";
-                    
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment))); //remove NULL when done
-                    
-                }
-                if(toRead != decrypted.size()) {
-                    LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                }
-                LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                memset(buf + (position - startOffset), 0, toRead);
-                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
-            } else {
-                LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
-                memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
-            }
-        }
-        
-        // set run variables in case next fragment is needed
-        position += toRead;
-        fragment++;
-        posInFragment = 0;
-    }
+    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
     
-    std::cout << "\nREAD FUNCTION LEFT\n" << std::endl;
+    for(size_t i=0; i< plainTextVector->size(); i++) {
+        
+        PlainTextElement *elem = plainTextVector.get()->at(i).get();
+        
+        elem->printMe();
+    }
     
     if (startOffset + length < filesizeRaw) {
         return length;
@@ -1373,7 +1335,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
     size_t fragment = 0;
@@ -1382,8 +1344,13 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
     int startOffset = 0;
     int counter = 0;
     
+    std::cout << "getFullCipherText is called\n";
+    
     // start copying
     while (position < startOffset + length && fragment < offsets.size()) {
+        
+        std::cout << "Read iteration number: " << counter << std::endl;
+        
         counter++;
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
         
@@ -1415,18 +1382,17 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
                 
                 // Delete them in the vector which was provided!
                 // In case you want to increase performaance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
-                CipherTextElement *cte = new CipherTextElement();
                 
+                boost::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+                                
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
-                
-                cte->cipherBlock.insert( cte->cipherBlock.end() ,  toDecrypt.begin()  ,  toDecrypt.end());
+                cte->cipherBlock = toDecrypt;
                 cte->length = toRead;
-                cte->keyMaterial.insert( cte->keyMaterial.end()  ,  keyPtr->getKeyMaterial().begin()   ,  keyPtr->getKeyMaterial().end());
+                cte->keyMaterial.end() ;
+                cte->keyMaterial = keyPtr->getKeyMaterial();
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
-                
                 outputCipherTextVector->push_back(cte);
-                
             } else {
                 LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
                 //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
@@ -1438,6 +1404,8 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
         fragment++;
         posInFragment = 0;
     }
+    
+    std::cout << "READ IS DONE\n";
     
     if (startOffset + length < filesizeRaw) {
         return length;
@@ -1454,7 +1422,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  * 
  */
-size_t pcapfs::SslFile::decryptCiphertextToPlaintext(std::vector<CipherTextElement*> *cipherTextVector, std::vector<PlainTextElement*> *outputPlainTextVector) {
+size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &cipherTextVector, boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> outputPlainTextVector) {
     int counter = 0;
     
     
@@ -1463,29 +1431,25 @@ size_t pcapfs::SslFile::decryptCiphertextToPlaintext(std::vector<CipherTextEleme
         
         /*
          * This approach currently requires that we hold ciphertext and plaintext in memory. No file-based indexes are supported at this point.
+         * refactor to shared_ptr?
          */
         
-        CipherTextElement *element = cipherTextVector->at(i);
-        PlainTextElement *output = new PlainTextElement();
-   
+        CipherTextElement *element = cipherTextVector.get()->at(i).get();
+        boost::shared_ptr<PlainTextElement> output( new PlainTextElement());
         
-/*
- * Padding ( previousBytes[fragment] ) should be always zero now since we rebuild the char byte list into vectors of blocks
- */
-              decryptDataNew(0,
-                          element->cipherBlock.size(),
-                          (char *) element->cipherBlock.data(),
-                          (char *) element->keyMaterial.data(),
-                          element->isClientBlock,
-                          output);
+        decryptDataNew(0,
+                        element->cipherBlock.size(),
+                        (unsigned char *) element->cipherBlock.data(),
+                        (char *) element->keyMaterial.data(),
+                        element->isClientBlock,
+                        output.get());
         
         output->isClientBlock = element->isClientBlock;
         output->cipherSuite = element->cipherSuite;
-        output->plainTextLength = output->plaintextBlock.size();
         output->sslVersion = element->sslVersion;
         
         outputPlainTextVector->push_back(output);
-    }    
+    }
     return counter;
 }
 

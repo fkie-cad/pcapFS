@@ -10,6 +10,7 @@
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
+#include <boost/shared_ptr.hpp>
 #include <pcapplusplus/SSLLayer.h>
 
 #include "../file.h"
@@ -28,8 +29,8 @@ namespace pcapfs {
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        size_t getFullCipherText(size_t length, const Index &idx, std::vector<CipherTextElement*> *outputCipherTextVector);
-        size_t decryptCiphertextToPlaintext(std::vector<CipherTextElement*> *cipherTextVector, std::vector<PlainTextElement*> *outputPlainTextVector);
+        size_t getFullCipherText(size_t length, const Index &idx, const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &outputCipherTextVector);
+        size_t decryptCiphertextVecToPlaintextVec(const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &cipherTextVector, boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> outputPlainTextVector);
         
         int calculateProcessedSize(const Index &idx);
 
@@ -40,7 +41,7 @@ namespace pcapfs {
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
-        void decryptDataNew(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage, PlainTextElement* output);
+        void decryptDataNew(uint64_t padding, size_t length, unsigned char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output);
             
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 

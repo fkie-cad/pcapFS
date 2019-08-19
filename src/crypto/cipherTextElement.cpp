@@ -9,7 +9,7 @@ void CipherTextElement::printMe(void) {
     
     std::cout << "CIPHER BLOCK SIZE: " << cipherBlock.size() << std::endl;
     
-    for(int j=0; j<cipherBlock.size(); j++) {
+    for(size_t j=0; j<cipherBlock.size(); j++) {
         if(j%16==0) printf("\n");
         printf("%x ", (int) cipherBlock.at(j));
     }
