@@ -11,7 +11,7 @@ void CipherTextElement::printMe(void) {
     
     for(size_t j=0; j<cipherBlock.size(); j++) {
         if(j%16==0) printf("\n");
-        printf("%x ", (int) cipherBlock.at(j));
+        printf("%02x ", (int) cipherBlock.at(j));
     }
     std::cout  << std::endl;
     

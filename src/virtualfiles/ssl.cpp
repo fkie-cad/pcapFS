@@ -912,6 +912,102 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
             }
             break;
         }
+
+        case pcpp::SSL_SYM_AES_256_CBC:
+        {
+            /*
+             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+             * 
+             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+             */
+            
+            const int mac_size = 16;
+            const int key_size = 32;
+            const int iv_size = 16;
+            
+            unsigned char client_write_MAC_key[mac_size];
+            unsigned char server_write_MAC_key[mac_size];
+            unsigned char client_write_key[key_size];
+            unsigned char server_write_key[key_size];
+            unsigned char client_write_IV[iv_size];
+            unsigned char server_write_IV[iv_size];
+            
+            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
+            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
+            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
+            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
+            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
+            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                
+            }
+            break;
+        }
+        
+        case pcpp::SSL_SYM_AES_128_GCM:
+        {
+            /*
+             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+             * 
+             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+             */
+            
+            unsigned char client_write_key[16];
+            unsigned char server_write_key[16];
+            unsigned char client_write_IV[4];
+            unsigned char server_write_IV[4];
+            
+            
+            /*
+             * Copy all bytes from the key material into our split key material.
+             */
+            
+            memcpy(client_write_key,        key_material+0,         16);
+            memcpy(server_write_key,        key_material+16,        16);
+            memcpy(client_write_IV,         key_material+32,         4);
+            memcpy(server_write_IV,         key_material+32+4,       4);
+            
+            
+            //static for testing
+            unsigned char public_nonce[12] = {0xd1 ,0xc9 ,0xc3 ,0x3f ,0x9d ,0x30 ,0x2f ,0x94 ,0x47 ,0xe2 ,0x1b ,0x9d};
+            
+            //static for testing
+            unsigned char aad[13] = {0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x01 ,0x17 ,0x03 ,0x03 ,0x00 ,0x18};
+            
+            if(isClientMessage) {
+                /*
+                 * This is a client message
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM_NEW(padding, length, cipherText, client_write_key, client_write_IV, aad, output);
+                
+            } else {
+                /*
+                 * This is a server message, so we use server key etc.
+                 */
+                
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM_NEW(padding, length, cipherText, server_write_key, server_write_IV, aad, output);
+                
+            }
+            break;
+        }
         
         
         default:

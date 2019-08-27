@@ -11,7 +11,7 @@ void PlainTextElement::printMe(void) {
     
     for(size_t j=0; j<plaintextBlock.size(); j++) {
         if(j%16==0) printf("\n");
-        printf("%x ", (int) plaintextBlock.at(j));
+        printf("%02x ", (int) plaintextBlock.at(j));
     }
     std::cout  << std::endl;
 }
