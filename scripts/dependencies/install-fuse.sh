@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -eu
 
-FUSE_TAG='fuse-3.4.2'
 SAVED_PWD="$(pwd -P)"
 HERE=$(dirname $(readlink -e $0))
 source "${HERE}/install-helpers.sh"
@@ -19,7 +18,6 @@ fi
 set -e
 
 cd "${pkgdir}"
-git checkout "tags/${FUSE_TAG}" -b "${FUSE_TAG}"
 mkdir -p 'build'
 cd 'build' && rm -rf *
 meson --prefix="${PREFIX}" ..
