@@ -76,7 +76,7 @@ int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
     throw std::runtime_error("packet not ipv4 nor ipv6");
 }
 
-void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData, void *userCookie) {
+void pcapfs::TcpFile::messageReadycallback(int side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
     //File_Offsets* tcp_file = (*files)[pair(tcpData.getConnectionData().flowKey, side)];
 
@@ -283,7 +283,7 @@ pcapfs::TcpFile::TCPContent::TCPContent(const TCPContent &other) {
     }
 }
 
-pcapfs::TcpFile::TCPContent::TCPContent(uint8_t *copy_from, size_t datalen) {
+pcapfs::TcpFile::TCPContent::TCPContent(const uint8_t *copy_from, size_t datalen) {
     this->datalen = datalen;
     if (copy_from != nullptr) {
         data = new uint8_t[datalen];

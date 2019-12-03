@@ -37,7 +37,7 @@ namespace pcapfs {
         public:
             TCPContent(const TCPContent &other);
 
-            TCPContent(uint8_t *copy_from, size_t datalen);
+            TCPContent(const uint8_t *copy_from, size_t datalen);
 
             ~TCPContent();
 
@@ -71,7 +71,7 @@ namespace pcapfs {
             sideMap currentSide;
         };
 
-        static void messageReadycallback(int side, pcpp::TcpStreamData tcpData, void *userCookie);
+        static void messageReadycallback(int side, const pcpp::TcpStreamData &tcpData, void *userCookie);
     };
 
 }
