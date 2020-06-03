@@ -26,28 +26,50 @@
 
 
 namespace pcapfs {
-    
+
     class Crypto {
-        public:
-            //deprecated
-            static pcapfs::Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv);
-            
-            
-            /*
-             * 
-             * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
-             * 
-             */
-            static pcapfs::Bytes decrypt_RC4_128(       uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_RC4_40(        uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_RC4_56(        uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_RC4_64(        uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            
-            static pcapfs::Bytes decrypt_AES_128_CBC(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_AES_256_CBC(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key, unsigned char *iv);
-            
+    public:
+        //deprecated
+        static pcapfs::Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv);
+
+
+        /*
+         *
+         * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
+         *
+         */
+        static pcapfs::Bytes
+        decrypt_RC4_128(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                        unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_RC4_40(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                       unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_RC4_56(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                       unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_RC4_64(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                       unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                            unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                            unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_AES_128_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                            unsigned char *iv);
+
+        static pcapfs::Bytes
+        decrypt_AES_256_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
+                            unsigned char *iv);
+
     };
 
 }
