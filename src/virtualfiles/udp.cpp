@@ -1,10 +1,12 @@
 #include "udp.h"
 
 #include <arpa/inet.h>
+
 #include <pcapplusplus/IPv4Layer.h>
 #include <pcapplusplus/IPv6Layer.h>
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/PcapFileDevice.h>
+#include <pcapplusplus/ProtocolType.h>
 #include <pcapplusplus/TcpLayer.h>
 #include <pcapplusplus/UdpLayer.h>
 
@@ -107,7 +109,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
             pcapPosition += pcapPtr->getPacketHeaderLen();
 
-            if (parsedPacket.isPacketOfType(ProtocolType::UDP) && parsedPacket.isPacketOfType(IP)) {
+            if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(IP)) {
                 std::shared_ptr<pcapfs::UdpFile> udpPointer;
 
                 //LOG_ERROR << "Found UDP packet, packet number: " << i;
@@ -115,7 +117,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                 state.currentOffset.start = pcapPosition;
                 Layer *l = parsedPacket.getFirstLayer();//->getDataLen();
                 state.currentOffset.start += l->getHeaderLen();
-                while (l->getProtocol() != ProtocolType::UDP) {
+                while (l->getProtocol() != pcpp::UDP) {
                     l = l->getNextLayer();
                     state.currentOffset.start += l->getHeaderLen();
                 }

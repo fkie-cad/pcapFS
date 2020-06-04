@@ -1,9 +1,8 @@
 #ifndef PCAPFS_UTILS_H
 #define PCAPFS_UTILS_H
 
+#include <ctime>
 #include <string>
-
-#include <sys/time.h>
 
 #include "commontypes.h"
 
@@ -15,7 +14,7 @@ namespace pcapfs {
 
         Bytes hexStringToBytes(const std::string &str);
 
-        TimePoint convertTimeValToTimePoint(const timeval &tv);
+        TimePoint convertTimeValToTimePoint(const timespec &tv);
     }
 }
 
