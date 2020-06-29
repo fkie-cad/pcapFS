@@ -76,7 +76,7 @@ int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
     throw std::runtime_error("packet not ipv4 nor ipv6");
 }
 
-void pcapfs::TcpFile::messageReadycallback(int side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
+void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
     //File_Offsets* tcp_file = (*files)[pair(tcpData.getConnectionData().flowKey, side)];
 
@@ -96,7 +96,7 @@ void pcapfs::TcpFile::messageReadycallback(int side, const pcpp::TcpStreamData &
         }*/
 
         state->files.emplace(flowkey, std::make_shared<pcapfs::TcpFile>());
-        state->currentSide.insert(std::pair<uint32_t, int>(flowkey, side));
+        state->currentSide.insert(std::pair<uint32_t, signed char>(flowkey, side));
         tcpPointer = state->files[flowkey];
 
         tcpPointer->setFirstPacketNumber(state->currentOffset.frameNr);
@@ -110,8 +110,8 @@ void pcapfs::TcpFile::messageReadycallback(int side, const pcpp::TcpStreamData &
         //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
-        tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP->toString());
-        tcpPointer->setProperty("dstIP", tcpData.getConnectionData().dstIP->toString());
+        tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP.toString());
+        tcpPointer->setProperty("dstIP", tcpData.getConnectionData().dstIP.toString());
         tcpPointer->setProperty("srcPort", std::to_string(tcpData.getConnectionData().srcPort));
         tcpPointer->setProperty("dstPort", std::to_string(tcpData.getConnectionData().dstPort));
         tcpPointer->setProperty("protocol", "tcp");
@@ -185,6 +185,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
 
     TCPIndexerState state;
     pcpp::TcpReassembly reassembly(&messageReadycallback, &state);
+
     PcapPtr pcapPtr;
 
     int icmpPackets = 0;

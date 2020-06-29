@@ -71,7 +71,7 @@ namespace pcapfs {
             sideMap currentSide;
         };
 
-        static void messageReadycallback(int side, const pcpp::TcpStreamData &tcpData, void *userCookie);
+        static void messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie);
     };
 
 }
