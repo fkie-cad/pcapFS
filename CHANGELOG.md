@@ -1,11 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.3.1]
+### Fixed
+- Pin libfuse to release 3.4.2 until Fusepp catches up with master branch of libfuse (https://github.com/fkie-cad/pcapFS/issues/13)
+
+## [0.3.0]
 ### Added
 - Add preference values for DNS MX records
+- Set the st_blocks attributes of the virtual files (https://github.com/fkie-cad/pcapFS/issues/10)
 
 ### Changed
 - Allow multiple key files (-k/--keys) on the command line
+
+## [0.2.1] - 2019-02-25
+### Fixed
+- Fix crash when the link layer protocol is not Ethernet (Issue #9)
 
 ## [0.2.0] - 2018-12-13
 ### Added

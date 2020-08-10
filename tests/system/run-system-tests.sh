@@ -19,6 +19,7 @@ set -e
 
 if [[ -z "${virtualenv}" ]]; then
     echo 'virtualenv is required to run this script.' >&2
+    exit 1
 fi
 
 if [[ ! -d "${venv}" ]]; then

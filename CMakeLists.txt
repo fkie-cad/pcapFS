@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
-project(pcapFS VERSION 0.2.0 LANGUAGES CXX)
+project(pcapFS VERSION 0.3.1 LANGUAGES CXX)
 set(PCAPFS_INDEX_VERSION_MAJOR 0)
-set(PCAPFS_INDEX_VERSION_MINOR 2)
+set(PCAPFS_INDEX_VERSION_MINOR 3)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules/)
 list(APPEND CMAKE_PREFIX_PATH ${CMAKE_SOURCE_DIR}/dependencies/)
@@ -83,11 +83,14 @@ if (BUILD_TESTING)
     include(Catch)
     set(TEST_PCAP_PATH ${CMAKE_SOURCE_DIR}/tests/system/system-tests.pcap)
     set(UNIT_TEST_KEY_FILE_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/unit/keyfiles)
+    set(TEST_DATA_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/data)
     configure_file(${CMAKE_SOURCE_DIR}/tests/unit/constants.h.in ${CMAKE_SOURCE_DIR}/tests/unit/constants.h)
     add_executable(unittests
             ${PCAPFS_COMMON_SOURCES}
             tests/unit/main.cpp
             tests/unit/test-command-line-options.cpp
+            tests/unit/test-utils.cpp
+            tests/unit/test-index.cpp
             )
     target_compile_features(unittests PRIVATE ${COMPILE_FEATURES})
     target_link_libraries(unittests PRIVATE ${PCAPFS_LINK_LIBRARIES} Catch2::Catch2)

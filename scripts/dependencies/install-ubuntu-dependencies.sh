@@ -24,8 +24,8 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     while sudo fuser /var/lib/apt/lists/lock; do
         sleep 1
     done
-    sudo apt-get update
-    sudo apt-get install -y ${common_pkgs}
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${common_pkgs}
     if [[ "${release}" = '14.04' ]]; then
         PYTHON_VERSION='3.6'
         sudo add-apt-repository -y ppa:deadsnakes/ppa
@@ -49,12 +49,12 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     elif [[ "${release}" = '16.04' ]]; then
         sudo apt-get install -y \
                     ${boost_pkgs} \
-                    ninja-build \
                     python3-pip
-        pip3 install --upgrade \
+        LC_ALL='C' pip3 install --upgrade \
             cmake \
-            meson
-    elif [[ "${release}" = '18.04' || "${release}" = 'kali-rolling' ]]; then
+            meson \
+	    ninja
+    elif [[ "${release}" = '18.04' || "${release}" = '20.04' || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
         sudo apt-get install -y \
                     ${boost_pkgs} \
                     cmake \

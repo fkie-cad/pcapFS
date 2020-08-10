@@ -57,18 +57,26 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 }
 
-int pcapfs::TcpFile::calcIpPayload(pcpp::Packet p) {
+int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
     if (p.isPacketOfType(pcpp::IPv4)) {
         pcpp::IPv4Layer *ip = p.getLayerOfType<pcpp::IPv4Layer>();
+        if (ip == nullptr) {
+            LOG_ERROR << p.toString();
+            throw std::runtime_error("nullptr for ipv4 packet");
+        }
         return ntohs(ip->getIPv4Header()->totalLength) - (int) ip->getHeaderLen();
     } else if (p.isPacketOfType(pcpp::IPv6)) {
         pcpp::IPv6Layer *ip = p.getLayerOfType<pcpp::IPv6Layer>();
+        if (ip == nullptr) {
+            LOG_ERROR << p.toString();
+            throw std::runtime_error("nullptr for ipv6 packet");
+        }
         return ntohs(ip->getIPv6Header()->payloadLength);
     }
-    throw "Packet not IPv4 nor IPv6!";
+    throw std::runtime_error("packet not ipv4 nor ipv6");
 }
 
-void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData, void *userCookie) {
+void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
     //File_Offsets* tcp_file = (*files)[pair(tcpData.getConnectionData().flowKey, side)];
 
@@ -88,7 +96,7 @@ void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData
         }*/
 
         state->files.emplace(flowkey, std::make_shared<pcapfs::TcpFile>());
-        state->currentSide.insert(std::pair<uint32_t, int>(flowkey, side));
+        state->currentSide.insert(std::pair<uint32_t, signed char>(flowkey, side));
         tcpPointer = state->files[flowkey];
 
         tcpPointer->setFirstPacketNumber(state->currentOffset.frameNr);
@@ -102,8 +110,8 @@ void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData
         //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
-        tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP->toString());
-        tcpPointer->setProperty("dstIP", tcpData.getConnectionData().dstIP->toString());
+        tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP.toString());
+        tcpPointer->setProperty("dstIP", tcpData.getConnectionData().dstIP.toString());
         tcpPointer->setProperty("srcPort", std::to_string(tcpData.getConnectionData().srcPort));
         tcpPointer->setProperty("dstPort", std::to_string(tcpData.getConnectionData().dstPort));
         tcpPointer->setProperty("protocol", "tcp");
@@ -118,7 +126,8 @@ void pcapfs::TcpFile::messageReadycallback(int side, pcpp::TcpStreamData tcpData
     if (state->currentSide[flowkey] != side) {
         //curent filesize (without tcp data) equals the offset in tcp stream where break occured
         state->currentSide[flowkey] = side;
-        tcpPointer->connectionBreaks.emplace_back(tcpPointer->getFilesizeRaw() - tcpData.getDataLength(), state->currentTimestamp);
+        tcpPointer->connectionBreaks.emplace_back(tcpPointer->getFilesizeRaw() - tcpData.getDataLength(),
+                                                  state->currentTimestamp);
 
     }
 
@@ -176,6 +185,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
 
     TCPIndexerState state;
     pcpp::TcpReassembly reassembly(&messageReadycallback, &state);
+
     PcapPtr pcapPtr;
 
     int icmpPackets = 0;
@@ -192,7 +202,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
 
         for (size_t i = 1; reader->getNextPacket(rawPacket); i++) {
 
-            pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket);
+            pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket, pcpp::TCP);
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
             state.currentOffset.frameNr = i;
 
@@ -274,7 +284,7 @@ pcapfs::TcpFile::TCPContent::TCPContent(const TCPContent &other) {
     }
 }
 
-pcapfs::TcpFile::TCPContent::TCPContent(uint8_t *copy_from, size_t datalen) {
+pcapfs::TcpFile::TCPContent::TCPContent(const uint8_t *copy_from, size_t datalen) {
     this->datalen = datalen;
     if (copy_from != nullptr) {
         data = new uint8_t[datalen];

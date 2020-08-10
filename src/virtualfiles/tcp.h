@@ -24,7 +24,7 @@ namespace pcapfs {
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
         //methods and classes used for tcp reassembly
-        static int calcIpPayload(pcpp::Packet p);
+        static int calcIpPayload(pcpp::Packet &p);
 
     protected:
         static bool registeredAtFactory;
@@ -37,7 +37,7 @@ namespace pcapfs {
         public:
             TCPContent(const TCPContent &other);
 
-            TCPContent(uint8_t *copy_from, size_t datalen);
+            TCPContent(const uint8_t *copy_from, size_t datalen);
 
             ~TCPContent();
 
@@ -71,7 +71,7 @@ namespace pcapfs {
             sideMap currentSide;
         };
 
-        static void messageReadycallback(int side, pcpp::TcpStreamData tcpData, void *userCookie);
+        static void messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie);
     };
 
 }

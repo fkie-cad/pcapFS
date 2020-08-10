@@ -17,8 +17,9 @@ if [ -z "${ninja}" ]; then
 fi
 set -e
 
-mkdir -p "${pkgdir}/build"
-cd "${pkgdir}/build" && rm -rf *
+cd "${pkgdir}"
+mkdir -p 'build'
+cd 'build' && rm -rf *
 meson --prefix="${PREFIX}" ..
 ${ninja}
 sudo ${ninja} install

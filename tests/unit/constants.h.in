@@ -7,6 +7,7 @@ namespace pcapfs {
 
         static const char *TEST_PCAP_PATH = "@TEST_PCAP_PATH@";
         static const char *KEY_FILE_DIRECTORY = "@UNIT_TEST_KEY_FILE_DIRECTORY@";
+        static const char *TEST_DATA_DIRECTORY = "@TEST_DATA_DIRECTORY@";
 
     }
 }

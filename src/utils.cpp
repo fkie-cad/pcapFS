@@ -55,7 +55,7 @@ pcapfs::Bytes pcapfs::utils::hexStringToBytes(const std::string &str) {
 }
 
 
-pcapfs::TimePoint pcapfs::utils::convertTimeValToTimePoint(const timeval &tv) {
-    const auto d = std::chrono::seconds{tv.tv_sec} + std::chrono::microseconds{tv.tv_usec};
+pcapfs::TimePoint pcapfs::utils::convertTimeValToTimePoint(const timespec &tv) {
+    const auto d = std::chrono::seconds{tv.tv_sec} + std::chrono::nanoseconds{tv.tv_nsec};
     return TimePoint(d);
 }
