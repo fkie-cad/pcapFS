@@ -754,7 +754,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * TODO: 
  * 
  * CURRENT READ FUNCTION:
- *The current read function currently tries to encrypt traffic at a certain position.
+ * 
+ * The current read function currently tries to encrypt traffic at a certain position.
  * We wanted to implement an abstract way to ask for decrypted data at a certain position
  * WITHOUT decrypting everything every time.
  * 
@@ -938,7 +939,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     
     boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> cipherTextVector( new std::vector< boost::shared_ptr<CipherTextElement>>() );
-    boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>>   plainTextVector( new std::vector< boost::shared_ptr<PlainTextElement>>() );
+    boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> plainTextVector( new std::vector< boost::shared_ptr<PlainTextElement>>() );
     
     getFullCipherText(length, idx, cipherTextVector);
     
