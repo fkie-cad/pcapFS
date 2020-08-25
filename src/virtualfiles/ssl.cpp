@@ -19,6 +19,8 @@
 #include <../../src/crypto/plainTextElement.h>
 
 
+//TODO: remove all boost:shared_pointers and replace them with the std ones.
+
 namespace {
     //TODO: variable size get them in static functions?
     size_t const CLIENT_RANDOM_SIZE = 32;
@@ -932,15 +934,15 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
                     idx.get({"sslkey", keyIDinIndex}));
                 
                 // Delete them in the vector which was provided!
-                // In case you want to increase performaance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
+                // In case you want to increase performance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
                 
                 boost::shared_ptr<CipherTextElement> cte( new CipherTextElement());
-                                
+
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
                 cte->cipherBlock = toDecrypt;
                 cte->length = toRead;
-                cte->keyMaterial.end() ;
+                cte->keyMaterial.end();
                 cte->keyMaterial = keyPtr->getKeyMaterial();
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
                 outputCipherTextVector->push_back(cte);
