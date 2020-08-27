@@ -24,7 +24,7 @@
 #include "../logging.h"
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128_NEW(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -131,7 +131,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128_NEW(uint64_t padding, size_t lengt
     return output->plaintextBlock;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC_NEW(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
     
@@ -234,7 +234,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC_NEW(uint64_t padding, size_t l
     return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC_NEW(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
     
     LOG_DEBUG << "entering decrypt_AES_256_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
     
@@ -338,7 +338,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC_NEW(uint64_t padding, size_t l
 }
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM_NEW(uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
     
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);
@@ -485,7 +485,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM_NEW(uint64_t padding, size_t l
 }
 
 //See https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM_NEW(uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
+pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
 
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);

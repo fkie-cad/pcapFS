@@ -402,14 +402,14 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  * This is a client message
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
             
@@ -451,7 +451,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
@@ -459,7 +459,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
             break;
@@ -497,7 +497,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
@@ -505,7 +505,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC_NEW(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
             break;
@@ -547,7 +547,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM_NEW(padding, length, cipherText, client_write_key, client_write_IV, aad, output);
+                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, client_write_key, client_write_IV, aad, output);
                 
             } else {
                 /*
@@ -555,7 +555,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, unsigned c
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM_NEW(padding, length, cipherText, server_write_key, server_write_IV, aad, output);
+                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, server_write_key, server_write_IV, aad, output);
                 
             }
             break;
