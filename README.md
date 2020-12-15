@@ -45,6 +45,16 @@ $ cmake ..
 $ make
 ```
 
+If you also want to run the tests, you have to install [Catch2](https://github.com/catchorg/Catch2). We also have a [script](scripts/dependencies/install-catch2.sh) for this.
+```
+$ ./scripts/dependencies/install-all-dependencies.sh   #optional, if you don't want to install everything yourself (use at your own risk)
+$ ./scripts/dependencies/install-catch2.sh             #optional, if you don't want to install everything yourself (use at your own risk)
+$ mkdir build
+$ cd build
+$ cmake -DBUILD_TESTING=on ..
+$ make
+```
+
 # Using pcapFS
 
 ## Mounting Network Data
