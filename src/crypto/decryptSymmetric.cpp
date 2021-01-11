@@ -44,7 +44,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, u
     const int key_size = 16;
     const int iv_size = 0;
     
-    int return_code = 0;    
+    int return_code = 0;
     int len = 0;
     int plaintext_len = 0;
     
