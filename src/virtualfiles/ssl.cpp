@@ -799,11 +799,11 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         }
         case pcpp::SSLVersion::TLS1_2:
         {
-            std::cout << "tls 1.2\n";
+        	LOG_ERROR << "tls 1.2\n";
             break;
         }
         default:
-            std::cout << "error\n";
+        	LOG_ERROR << "error\n";
     }
     
     
@@ -830,15 +830,15 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     EVP_PKEY_CTX *pctx;
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
     if (EVP_PKEY_derive_init(pctx) <= 0)
-        std::cerr << "Error1!" << std::endl;
+    	LOG_ERROR << "Error1!" << std::endl;
     if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
-        std::cerr << "Error2!" << std::endl;
+    	LOG_ERROR << "Error2!" << std::endl;
     if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
-        std::cerr << "Error3!" << std::endl;
+    	LOG_ERROR << "Error3!" << std::endl;
     if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-        std::cerr << "Error4!" << std::endl;
+    	LOG_ERROR << "Error4!" << std::endl;
     if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-        std::cerr << "Error5!" << std::endl;
+    	LOG_ERROR << "Error5!" << std::endl;
     ERR_print_errors_fp(stderr);
 
     EVP_PKEY_CTX_free(pctx);
@@ -911,9 +911,9 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
                 }
                 if(toRead != decrypted.size()) {
                     LOG_ERROR << "[E] various errors ahead?" << std::endl;
-                    LOG_DEBUG << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                    LOG_ERROR << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
                 }
-                LOG_DEBUG << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
+                LOG_ERROR << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
                 memset(buf + (position - startOffset), 0, toRead);
                 memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
             } else {
