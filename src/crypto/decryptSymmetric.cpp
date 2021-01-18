@@ -38,7 +38,6 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
      * 
      */
 
-
     printf("------------------------------------------------------------------------------------------------\n");
 
     if(isClientMessage) {
@@ -48,12 +47,13 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     }
     
     printf("------------------------------------------------------------------------------------------------\n");
-    printf("padding: %li\n", padding);
+    printf("padding bytes: %li\n", padding);
+    printf("length: %li\n", length);
     printf("mac_key:\n");
     BIO_dump_fp (stdout, (const char *)mac, 16);
     printf("key:\n");
     BIO_dump_fp (stdout, (const char *)key, 16);
-    printf("ciphertext:\n");
+    printf("ciphertext without padding:\n");
     BIO_dump_fp (stdout, (const char *)ciphertext, length);
     printf("------------------------------------------------------------------------------------------------\n");
 
@@ -133,6 +133,9 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
 
     plaintext_len = len;
 
+    LOG_DEBUG << "plaintext_len after decrypt_update decryption: " << plaintext_len << std::endl;
+
+
     //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
     return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
 
@@ -145,15 +148,16 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
 
     plaintext_len += len;
 
+    LOG_DEBUG << "plaintext_len after decrypt_final decryption: " << plaintext_len << std::endl;
+
     //remove the padding
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
 
-    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
 
     printf("plaintext:\n");
-    BIO_dump_fp(stdout, (const char *) decryptedData.data() + padding, plaintext_len - padding);
+    BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
-    LOG_DEBUG << "DECRYPTED RC4 DATA: " << decryptedContent << " KEY TO USE: " << rc4_key << std::endl;
 
     EVP_CIPHER_CTX_cleanup(ctx);
 

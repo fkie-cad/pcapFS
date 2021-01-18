@@ -379,9 +379,6 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
              * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */            
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128, length: " << length << ", padding: " << padding << std::endl;
-
-            BIO_dump_fp (stdout, (const char *)key_material, 128);
 
             const int mac_size = 16;
             const int key_size = 16;
@@ -990,8 +987,6 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
         CipherTextElement *element = cipherTextVector.get()->at(i).get();
         boost::shared_ptr<PlainTextElement> output( new PlainTextElement());
         
-        LOG_DEBUG << "printMe before decryption:" << std::endl;
-        output->printMe();
 
         /*
          * Padding is removed we don't need it anymore.
@@ -1009,9 +1004,6 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
         
         outputPlainTextVector->push_back(output);
 
-        LOG_DEBUG << "printMe before decryption:" << std::endl;
-
-        output->printMe();
     }
     return counter;
 }
