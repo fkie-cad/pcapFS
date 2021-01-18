@@ -1,19 +1,19 @@
 #include "cipherTextElement.h"
 #include <iostream>
 #include <cstdio>
+#include "../logging.h"
 
-void CipherTextElement::printMe(void) {
-    std::cout  << std::endl;
+void pcapfs::CipherTextElement::printMe(void) {
     
-    std::cout << (isClientBlock ? "CLIENT" : "SERVER") << std::endl;
+	LOG_INFO << (isClientBlock ? "CLIENT" : "SERVER") << std::endl;
     
-    std::cout << "CIPHER BLOCK SIZE: " << cipherBlock.size() << std::endl;
+	LOG_INFO << "CIPHER BLOCK SIZE: " << cipherBlock.size() << std::endl;
     
     for(size_t j=0; j<cipherBlock.size(); j++) {
         if(j%16==0) printf("\n");
         printf("%02x ", (int) cipherBlock.at(j));
     }
-    std::cout  << std::endl;
+    LOG_INFO  << std::endl;
     
     
 }

@@ -11,19 +11,22 @@
 /**
  * @todo write docs
  */
-class PlainTextElement
-{
-public:
-    pcapfs::Bytes plaintextBlock;
-    pcapfs::Bytes hmac;
-    pcapfs::Bytes padding;
-    
-    bool isClientBlock;
-    
-    pcpp::SSLVersion sslVersion;
-    std::string cipherSuite;
-    
-    void printMe(void);
-};
+namespace pcapfs {
 
+	class PlainTextElement
+	{
+	public:
+		pcapfs::Bytes plaintextBlock;
+		pcapfs::Bytes hmac;
+		pcapfs::Bytes padding;
+
+		bool isClientBlock;
+
+		pcpp::SSLVersion sslVersion;
+		std::string cipherSuite;
+
+		void printMe(void);
+	};
+
+}
 #endif // PLAINTEXTELEMENT_H

@@ -8,18 +8,22 @@
 /**
  * @todo write docs
  */
-class CipherTextElement
-{
-public:
-    std::string cipherSuite;
-    pcpp::SSLVersion sslVersion;
-    int length;
-    
-    bool isClientBlock;
-    pcapfs::Bytes cipherBlock;
-    pcapfs::Bytes keyMaterial;
-    
-    void printMe(void);
-};
+namespace pcapfs {
 
+	class CipherTextElement
+	{
+	public:
+		std::string cipherSuite;
+		pcpp::SSLVersion sslVersion;
+		int length;
+		int padding;
+
+		bool isClientBlock;
+		pcapfs::Bytes cipherBlock;
+		pcapfs::Bytes keyMaterial;
+
+		void printMe(void);
+	};
+
+}
 #endif // CIPHERTEXTELEMENT_H

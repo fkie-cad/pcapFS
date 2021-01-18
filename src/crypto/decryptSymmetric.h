@@ -41,13 +41,14 @@ namespace pcapfs {
             
             
             //new stuff:
-            static pcapfs::Bytes decrypt_RC4_128(       uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
-            static pcapfs::Bytes decrypt_AES_128_CBC(   uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
-            static pcapfs::Bytes decrypt_AES_256_CBC(   uint64_t padding, size_t length, unsigned char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_RC4_128(       uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, bool isClientMessage, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_128_CBC(   uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_256_CBC(   uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
+
             
             // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)
-            static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
-            static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length,  unsigned char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
             
     };
 

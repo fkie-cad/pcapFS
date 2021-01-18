@@ -1,17 +1,20 @@
 #include "plainTextElement.h"
+#include <fstream>
 #include <iostream>
+#include <string>
 #include <cstdio>
+#include "../logging.h"
 
-void PlainTextElement::printMe(void) {
-    std::cout  << std::endl;
+
+void pcapfs::PlainTextElement::printMe(void) {
     
-    std::cout << (isClientBlock ? "CLIENT" : "SERVER") << std::endl;
+	LOG_INFO << (isClientBlock ? "CLIENT" : "SERVER") << std::endl;
     
-    std::cout << "PLAIN TEXT BLOCK SIZE: " << plaintextBlock.size() << std::endl;
+	LOG_INFO << "PLAIN TEXT BLOCK SIZE: " << plaintextBlock.size() << std::endl;
     
     for(size_t j=0; j<plaintextBlock.size(); j++) {
         if(j%16==0) printf("\n");
         printf("%02x ", (int) plaintextBlock.at(j));
     }
-    std::cout  << std::endl;
+    LOG_INFO  << std::endl;
 }
