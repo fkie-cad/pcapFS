@@ -18,7 +18,7 @@ namespace pcapfs {
 	public:
 		pcapfs::Bytes plaintextBlock;
 		pcapfs::Bytes hmac;
-		pcapfs::Bytes padding;
+		int padding;
 
 		bool isClientBlock;
 

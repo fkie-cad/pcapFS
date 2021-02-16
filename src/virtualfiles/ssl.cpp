@@ -856,13 +856,42 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
     
+    int offset = 0;
+
+    LOG_DEBUG << "entering file writer..." << std::endl;
+
+    std::vector<Bytes> result;
+
     for(size_t i=0; i< plainTextVector->size(); i++) {
         
         PlainTextElement *elem = plainTextVector.get()->at(i).get();
         
         elem->printMe();
+
+        Bytes plaintext = elem->plaintextBlock;
+
+        result.push_back(elem->plaintextBlock);
+
+        LOG_DEBUG << "current plaintext: " << std::endl << plaintext.data() << std::endl;
+        LOG_DEBUG << "startOffset: "<< startOffset << " plaintext-size: " << plaintext.size() << " current " << i+1 << "/" << plainTextVector->size() << " elements. " << std::endl;
+
+        memset(buf + offset, 0, plaintext.size());
+        memcpy(buf + offset, plaintext.data() + startOffset, plaintext.size());
+
+        BIO_dump_fp(stdout, (const char *) buf, offset + plaintext.size());
+
+        offset += plaintext.size();
+
     }
     
+    printf("\n\nLAST TEST - this should be in the buffer and therefore in the file:\n");
+    BIO_dump_fp(stdout, (const char *) buf, offset);
+    memset(buf, 0, result.size());
+    memcpy(buf, (const char*) result.data(), result.size());
+
+    LOG_DEBUG << "file writer done!" << std::endl;
+
+
     if (startOffset + length < filesizeRaw) {
         return length;
     } else {
@@ -935,6 +964,15 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
                 // In case you want to increase performance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
                 
                 boost::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+                /*
+                 * previousBytes:
+                 * Decrypt e.g. RC4 at certain position.
+                 *
+                 * SO:
+                 *
+                 * previousBytes = ciphertext before current ciphertext element.
+                 *
+                 */
                 cte->padding = previousBytes[fragment];
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
@@ -991,6 +1029,9 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
         /*
          * Padding is removed we don't need it anymore.
          */
+
+
+
         decryptDataNew(element->padding,
                         element->cipherBlock.size(),
                         (char *) element->cipherBlock.data(),
@@ -998,6 +1039,7 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
                         element->isClientBlock,
                         output.get());
         
+        output->padding = element->padding;
         output->isClientBlock = element->isClientBlock;
         output->cipherSuite = element->cipherSuite;
         output->sslVersion = element->sslVersion;

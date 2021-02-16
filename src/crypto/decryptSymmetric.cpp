@@ -24,6 +24,9 @@
 #include "../logging.h"
 
 
+#include "SSLCustom.h"
+
+
 pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *, bool isClientMessage, PlainTextElement *output) {
     
     LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
@@ -37,6 +40,8 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
      * https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
      * 
      */
+
+    printf("HMAC SHA256: %i\n", ssl::mac_size::HMAC_SHA256);
 
     printf("------------------------------------------------------------------------------------------------\n");
 
@@ -158,6 +163,13 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     printf("plaintext:\n");
     BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
+    Bytes hmac_value(decryptedData);
+    hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
+    output->hmac = hmac_value;
+
+    Bytes plaintext(decryptedData);
+    plaintext.erase(plaintext.begin() + plaintext.size() - 16, plaintext.begin() + plaintext.size());
+    output->plaintextBlock = plaintext;
 
     EVP_CIPHER_CTX_cleanup(ctx);
 
