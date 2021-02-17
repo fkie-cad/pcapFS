@@ -861,8 +861,10 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     LOG_DEBUG << "entering file writer..." << std::endl;
 
     std::vector<Bytes> result;
+    Bytes write_me_to_file;
 
-    for(size_t i=0; i< plainTextVector->size(); i++) {
+
+    for(size_t i=0; i<plainTextVector->size(); i++) {
         
         PlainTextElement *elem = plainTextVector.get()->at(i).get();
         
@@ -884,10 +886,16 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
     }
     
+	write_me_to_file.push_back(0);
+    for(size_t i=0; i<result.size(); i++) {
+    	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+    }
+
+
     printf("\n\nLAST TEST - this should be in the buffer and therefore in the file:\n");
+    memset(buf, 0, write_me_to_file.size());
+    memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
     BIO_dump_fp(stdout, (const char *) buf, offset);
-    memset(buf, 0, result.size());
-    memcpy(buf, (const char*) result.data(), result.size());
 
     LOG_DEBUG << "file writer done!" << std::endl;
 
