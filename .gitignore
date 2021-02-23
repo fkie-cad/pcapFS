@@ -2,6 +2,7 @@
 /.vagrant/
 /3rdparty/
 /bin/
+/downloads/
 /build/
 /obj/
 /cmake-build-*/
