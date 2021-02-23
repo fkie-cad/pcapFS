@@ -5,7 +5,7 @@ SAVED_PWD="$(pwd -P)"
 HERE=$(dirname $(readlink -e $0))
 source "${HERE}/install-helpers.sh"
 
-BOOST_MINOR_VERSION='69'
+BOOST_MINOR_VERSION='74'
 BOOST_VERSION="1_${BOOST_MINOR_VERSION}_0"
 
 URL="https://dl.bintray.com/boostorg/release/1.${BOOST_MINOR_VERSION}.0/source/boost_${BOOST_VERSION}.tar.bz2"
