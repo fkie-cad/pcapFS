@@ -4,9 +4,9 @@ set -u
 here="$(dirname $(readlink -e $0))"
 venv="${here}/venv"
 virtualenv="$(which virtualenv)"
-python='python3.6'
+python='python3.8'
 
-if ! (which pcapfs > /dev/null 2>&1); then
+if ! (type pcapfs > /dev/null 2>&1); then
     echo "[NOTE] pcapfs is not in your PATH. Adding default build directory (PROJECT_ROOT/build)." >&2
     PATH="${here}/../../build/:${PATH}"
 fi
