@@ -27,3 +27,10 @@ platform-tests-*.results
 .kdev4/
 pcapFS.kdev4
 
+
+.autotools
+.cproject
+.pmd
+.project
+.settings/
+
