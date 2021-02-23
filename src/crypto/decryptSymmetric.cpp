@@ -24,8 +24,6 @@
 #include "../logging.h"
 
 
-#include "SSLCustom.h"
-
 
 pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *, bool isClientMessage, PlainTextElement *output) {
     
@@ -41,7 +39,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
      * 
      */
 
-    printf("HMAC SHA256: %i\n", ssl::mac_size::HMAC_SHA256);
+    printf("HMAC SHA256: %i\n", pcpp::SSLHashingAlgorithm::SSL_HASH_SHA256);
 
     printf("------------------------------------------------------------------------------------------------\n");
 
