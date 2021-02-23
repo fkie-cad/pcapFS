@@ -23,6 +23,9 @@ namespace pcapfs {
 
     class SslFile : public VirtualFile {
     public:
+
+    	SslFile();
+
         static FilePtr create() { return std::make_shared<SslFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
@@ -37,7 +40,7 @@ namespace pcapfs {
         static bool isClientMessage(uint64_t i);
 
         //ssl decrypt functions
-        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion);
+        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion);
 
         Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
@@ -51,7 +54,7 @@ namespace pcapfs {
 
     private:
         std::string cipherSuite;
-        pcpp::SSLVersion sslVersion;
+        uint16_t sslVersion;
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;

@@ -30,6 +30,8 @@ namespace {
     //size_t const KEY_SIZE = 16;
 }
 
+//Constructor
+pcapfs::SslFile::SslFile() {};
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
     Bytes data = filePtr->getBuffer();
@@ -175,7 +177,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
                 pcpp::SSLApplicationDataLayer *applicationDataLayer =
                         dynamic_cast<pcpp::SSLApplicationDataLayer *>(sslLayer);
-                uint64_t encryptedDataLen = applicationDataLayer->getEncrpytedDataLen();
+                uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
                 uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
                 //create ssl application file
@@ -189,7 +191,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                             Bytes keyMaterial = createKeyMaterial((char *) masterSecret.data(),
                                                                   (char *) clientRandom.data(),
                                                                   (char *) serverRandom.data(),
-                                                                  sslVersion
+                                                                  sslVersion.asUInt()
                                                                  );
 
                             //TODO: not good to add sslkey file directly into index!!!
@@ -204,7 +206,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     resultPtr->setOffsetType(filePtr->getFiletype());
                     resultPtr->setFiletype("ssl");
                     resultPtr->cipherSuite = cipherSuite;
-                    resultPtr->sslVersion = sslVersion;
+                    resultPtr->sslVersion = sslVersion.asUInt();
                     resultPtr->setFilename("SSL");
                     resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
                     resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
@@ -569,7 +571,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
 
 
 
-pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion) {
+pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
@@ -740,8 +742,13 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
             
             break;
         }
+        case pcpp::SSLVersion::TLS1_3:
+        {
+        	LOG_INFO << "TLS 1.3 detected, currently not supported!" << std::endl;
+        }
         default:
-            LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << sslVersion << std::endl;
+        	pcpp::SSLVersion version(sslVersion);
+            LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << version.toString() << std::endl;
     }
     
     LOG_INFO << "Key Material Size: " << KEY_MATERIAL_SIZE << std::endl;

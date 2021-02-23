@@ -7,6 +7,7 @@
 #include <pcapplusplus/SSLHandshake.h>
 #include <pcapplusplus/SSLLayer.h>
 #include <string>
+#include <iostream>
 
 /**
  * @todo write docs
@@ -22,7 +23,7 @@ namespace pcapfs {
 
 		bool isClientBlock;
 
-		pcpp::SSLVersion sslVersion;
+		uint16_t sslVersion;
 		std::string cipherSuite;
 
 		void printMe(void);

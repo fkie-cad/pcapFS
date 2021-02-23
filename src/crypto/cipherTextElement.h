@@ -5,6 +5,7 @@
 #include "../commontypes.h"
 #include <pcapplusplus/SSLLayer.h>
 #include <string>
+#include <iostream>
 /**
  * @todo write docs
  */
@@ -14,7 +15,7 @@ namespace pcapfs {
 	{
 	public:
 		std::string cipherSuite;
-		pcpp::SSLVersion sslVersion;
+		uint16_t sslVersion;
 		int length;
 		int padding;
 
