@@ -875,32 +875,30 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         
         PlainTextElement *elem = plainTextVector.get()->at(i).get();
         
-        elem->printMe();
-
-        Bytes plaintext = elem->plaintextBlock;
+        //elem->printMe();
 
         result.push_back(elem->plaintextBlock);
 
-        LOG_DEBUG << "current plaintext: " << std::endl << plaintext.data() << std::endl;
-        LOG_DEBUG << "startOffset: "<< startOffset << " plaintext-size: " << plaintext.size() << " current " << i+1 << "/" << plainTextVector->size() << " elements. " << std::endl;
+        //LOG_DEBUG << "current plaintext: " << std::endl << plaintext.data() << std::endl;
+        //LOG_DEBUG << "startOffset: "<< startOffset << " plaintext-size: " << plaintext.size() << " current " << i+1 << "/" << plainTextVector->size() << " elements. " << std::endl;
 
-        memset(buf + offset, 0, plaintext.size());
-        memcpy(buf + offset, plaintext.data() + startOffset, plaintext.size());
+        //memset(buf + offset, 0, plaintext.size());
+        //memcpy(buf + offset, plaintext.data() + startOffset, plaintext.size());
 
-        BIO_dump_fp(stdout, (const char *) buf, offset + plaintext.size());
+        //BIO_dump_fp(stdout, (const char *) buf, offset + plaintext.size());
 
-        offset += plaintext.size();
+        offset += elem->plaintextBlock.size();
 
     }
     
-	write_me_to_file.push_back(0);
+	//write_me_to_file.push_back(0);
     for(size_t i=0; i<result.size(); i++) {
     	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
     }
 
 
-    printf("\n\nLAST TEST - this should be in the buffer and therefore in the file:\n");
-    memset(buf, 0, write_me_to_file.size());
+    LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
+    memset(buf, 0, write_me_to_file.size() + 1);
     memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
     BIO_dump_fp(stdout, (const char *) buf, offset);
 

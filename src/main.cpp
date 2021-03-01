@@ -29,6 +29,12 @@
 namespace fs = boost::filesystem;
 
 
+/*
+ * This function is entered for all *filesToProcess* candidates and to handle the new *newFiles*
+ * which occur after this function *getNextVirtualFile* detects new candidates.
+ * This happens e.g. when SSL Files are first parsed as TCP files and then as HTTP content files
+ * after the decryption stage. It happens that the functions are called twice or in theory even more often.
+ */
 std::pair<std::vector<pcapfs::FilePtr>, std::vector<pcapfs::FilePtr>>
 getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx) {
     std::vector<pcapfs::FilePtr> filesToProcess;
@@ -100,6 +106,20 @@ int main(int argc, const char *argv[]) {
 
     //TODO: needs to check the index file here as well, if it matches the pcaps
 
+
+    /*
+     * Here we process all content from the pcaps:
+     *
+     * TCP and UDP files are created and added to the index.
+     * Then all files are added to *filesToProcess*.
+     * *newfiles* will contain new virtual files we get from processing.
+     *
+     * std::tie is used to unpack the returned tuple from *getNextVirtualFile*,
+     * *std::pair* is returned. Then we have new files added to the index.
+     * This is done *UNTIL* new files is empty, whcih means it is possible that
+     * functions are called more than one time.
+     *
+     */
     if (!fs::is_regular_file(config.indexFilePath) ||
         (fs::is_regular_file(config.indexFilePath) && (fs::is_empty(config.indexFilePath) || config.rewrite))) {
         LOG_TRACE << "Creating index";
@@ -111,10 +131,20 @@ int main(int argc, const char *argv[]) {
         index.insert(udpFiles);
         std::vector<pcapfs::FilePtr> filesToProcess = index.getFiles();
         std::vector<pcapfs::FilePtr> newFiles;
+
+        LOG_TRACE << "We have " << filesToProcess.size() << " new files in *filesToProcess*";
+
+        int counter = 0;
+
         do {
+            counter++;
             std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);
             index.insert(newFiles);
+            LOG_TRACE << "PROGRESS: <newfiles|filesToProcess> <" << newFiles.size() << "|"
+            		<< filesToProcess.size() << ">";
         } while (!newFiles.empty());
+
+        LOG_TRACE << "We had " << counter << " runs!";
 
         if (!config.indexInMemory) {
             index.write(config.indexFilePath);
@@ -132,6 +162,10 @@ int main(int argc, const char *argv[]) {
 
     }
 
+
+    /*
+     * The actual filesystem part is happening here:
+     */
     if (config.noMount) {
         LOG_INFO << "Exiting because no-mount option was given";
         return EXIT_SUCCESS;

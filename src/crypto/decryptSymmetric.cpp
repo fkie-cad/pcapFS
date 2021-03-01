@@ -39,6 +39,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
      * 
      */
 
+    /*
     printf("HMAC SHA256: %i\n", pcpp::SSLHashingAlgorithm::SSL_HASH_SHA256);
 
     printf("------------------------------------------------------------------------------------------------\n");
@@ -59,7 +60,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     printf("ciphertext without padding:\n");
     BIO_dump_fp (stdout, (const char *)ciphertext, length);
     printf("------------------------------------------------------------------------------------------------\n");
-
+	*/
 
 
     int return_code = 0;
