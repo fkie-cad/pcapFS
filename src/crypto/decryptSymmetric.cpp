@@ -27,7 +27,7 @@
 
 pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *, bool isClientMessage, PlainTextElement *output) {
     
-    LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
+	LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
 
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -71,7 +71,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     Bytes decryptedData(padding + length);
     Bytes dataToDecrypt(padding);
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-    LOG_DEBUG << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: "
+    LOG_TRACE << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: "
               << dataToDecrypt.size();
 
     //decrypt data using keys and RC4
@@ -112,7 +112,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
         LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code
                   << std::endl;
     } else {
-        LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
+    	LOG_TRACE << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
     }
 
     //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
@@ -122,10 +122,8 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code
                   << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
+    	LOG_TRACE << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
     }
-
-    LOG_ERROR << "dataToDecrypt.size() " << dataToDecrypt.size() << std::endl;
 
     // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
     return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
@@ -134,13 +132,10 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
         LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code
                   << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
+    	LOG_TRACE << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
     }
 
     plaintext_len = len;
-
-    LOG_DEBUG << "plaintext_len after decrypt_update decryption: " << plaintext_len << std::endl;
-
 
     //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
     return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
@@ -149,7 +144,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
         LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code
                   << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
+    	LOG_TRACE << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
     }
 
     plaintext_len += len;
@@ -227,7 +222,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     if(return_code != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
-        LOG_DEBUG << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
+    	LOG_TRACE << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
     }
     
     //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
@@ -236,7 +231,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
+    	LOG_TRACE << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
     }
     
     // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
@@ -245,7 +240,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
+    	LOG_TRACE << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
     }
     
     plaintext_len = len;
@@ -256,7 +251,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     if(return_code != 1) {
         LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
     } else {
-        LOG_DEBUG << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
+    	LOG_TRACE << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
     }
     
     plaintext_len += len;

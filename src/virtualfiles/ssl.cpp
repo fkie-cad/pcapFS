@@ -60,8 +60,8 @@ std::string pcapfs::SslFile::toString() {
 	ret.append(std::to_string(keyIDinIndex));
 	ret.append("\n");
 
-	ret.append("previousBytes: ");
 
+	ret.append("previousBytes: ");
 	std::string prev_bytes;
 
 	for(int i=0; i<previousBytes.size(); i++) {
@@ -72,6 +72,8 @@ std::string pcapfs::SslFile::toString() {
 	ret.append(prev_bytes);
 	ret.append("\n");
 
+
+	ret.append("keyForFragment: ");
 	std::string keys;
 
 	for(int i=0; i<keyForFragment.size(); i++) {
@@ -323,8 +325,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 offsetInLogicalFragment += completeSSLLen;
 
-                LOG_TRACE << "Full SSL File afterwards:\n" << resultPtr->toString();
-
+                LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
             }
 
             LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
@@ -918,7 +919,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         
         CipherTextElement *elem = cipherTextVector.get()->at(i).get();
         
-        elem->printMe();
+        //elem->printMe();
     }
     
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
@@ -935,7 +936,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         
         PlainTextElement *elem = plainTextVector.get()->at(i).get();
         
-        //elem->printMe();
+        elem->printMe();
 
         result.push_back(elem->plaintextBlock);
 
@@ -957,10 +958,10 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 
 
-    LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
+    //LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
     memset(buf, 0, write_me_to_file.size() + 1);
     memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
-    BIO_dump_fp(stdout, (const char *) buf, offset);
+    //BIO_dump_fp(stdout, (const char *) buf, offset);
 
     LOG_DEBUG << "file writer done!" << std::endl;
 
@@ -1012,7 +1013,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
         
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
-            LOG_DEBUG << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
+            LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
             
             /*
@@ -1025,7 +1026,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
             
             
             
-            LOG_DEBUG << this->offsets.at(fragment).length << std::endl;
+            LOG_DEBUG << "offset at fragement " << fragment << "has following length: " << this->offsets.at(fragment).length << std::endl;
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
