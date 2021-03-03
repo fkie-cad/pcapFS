@@ -132,24 +132,27 @@ int main(int argc, const char *argv[]) {
         std::vector<pcapfs::FilePtr> filesToProcess = index.getFiles();
         std::vector<pcapfs::FilePtr> newFiles;
 
-        LOG_TRACE << "We have " << filesToProcess.size() << " new files in *filesToProcess*";
-
         int counter = 0;
+
+        LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+        		<< filesToProcess.size() << ">";
 
         do {
             counter++;
             std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);
             index.insert(newFiles);
-            LOG_TRACE << "PROGRESS: <newfiles|filesToProcess> <" << newFiles.size() << "|"
+            LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
             		<< filesToProcess.size() << ">";
         } while (!newFiles.empty());
 
-        LOG_TRACE << "We had " << counter << " runs!";
+        LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+        		<< filesToProcess.size() << ">";
 
         if (!config.indexInMemory) {
             index.write(config.indexFilePath);
             LOG_INFO << "Wrote index to file " << config.indexFilePath.string();
         }
+
     } else {
         LOG_INFO << "Reading from index file " << config.indexFilePath.string();
         try {
