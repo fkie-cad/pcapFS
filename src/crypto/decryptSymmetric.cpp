@@ -78,11 +78,13 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     unsigned char *rc4_key = reinterpret_cast<unsigned char *>(key);
 
+    /*
     printf("key:\n");
     BIO_dump_fp(stdout, (const char *) rc4_key, 16);
 
     printf("ciphertext:\n");
     BIO_dump_fp(stdout, (const char *) dataToDecrypt.data(), dataToDecrypt.size());
+     */
 
     EVP_CIPHER_CTX *ctx;
 
@@ -159,8 +161,8 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
 
     //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
 
-    printf("plaintext:\n");
-    BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
+    //printf("plaintext:\n");
+    //BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
     Bytes hmac_value(decryptedData);
     hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);

@@ -30,6 +30,61 @@ namespace {
     //size_t const KEY_SIZE = 16;
 }
 
+std::string pcapfs::SslFile::toString() {
+	/*
+	 *  std::string cipherSuite;
+        uint16_t sslVersion;
+        static bool registeredAtFactory;
+        uint64_t keyIDinIndex;
+        std::vector<uint64_t> previousBytes;
+        std::vector<uint64_t> keyForFragment;
+	 *
+	 */
+
+	std::string ret;
+	ret.append("SslFile object content:\n");
+
+	ret.append("ciphersuite: ");
+	ret.append(cipherSuite);
+
+	ret.append("sslVersion: ");
+	pcpp::SSLVersion v = sslVersion;
+	ret.append(v.toString());
+	ret.append("\n");
+
+	ret.append("registeredAtFactory: ");
+	ret.append(std::to_string(registeredAtFactory));
+	ret.append("\n");
+
+	ret.append("keyIDinIndex: ");
+	ret.append(std::to_string(keyIDinIndex));
+	ret.append("\n");
+
+	ret.append("previousBytes: ");
+
+	std::string prev_bytes;
+
+	for(int i=0; i<previousBytes.size(); i++) {
+		prev_bytes.append(std::to_string(previousBytes.at(i)));
+		prev_bytes.append(" ");
+	}
+
+	ret.append(prev_bytes);
+	ret.append("\n");
+
+	std::string keys;
+
+	for(int i=0; i<keyForFragment.size(); i++) {
+		keys.append(std::to_string(keyForFragment.at(i)));
+		keys.append(" ");
+	}
+
+	ret.append(keys);
+	ret.append("\n");
+
+	return ret;
+}
+
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
@@ -62,6 +117,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     std::shared_ptr<SslFile> resultPtr = nullptr;
 
     //Step 3: process all logical breaks in underlying virtual file
+    //TODO: How many files? One?
     for (unsigned int i = 0; i < numElements; ++i) {
         LOG_DEBUG << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
@@ -180,6 +236,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
                 uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
+
                 //create ssl application file
                 //TODO: does client always send first?
                 if (resultPtr == nullptr) {
@@ -265,6 +322,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
 
                 offsetInLogicalFragment += completeSSLLen;
+
+                LOG_TRACE << "Full SSL File afterwards:\n" << resultPtr->toString();
+
             }
 
             LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
@@ -942,7 +1002,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
     // start copying
     while (position < startOffset + length && fragment < offsets.size()) {
         
-    	LOG_DEBUG << "Read iteration number: " << counter << std::endl;
+    	LOG_DEBUG << "Read iteration number: " << counter << " fragment: " << fragment;
         
         counter++;
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
@@ -952,7 +1012,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
         
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
-            LOG_DEBUG << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set" << std::endl;
+            LOG_DEBUG << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
             
             /*
@@ -996,7 +1056,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
                 outputCipherTextVector->push_back(cte);
             } else {
-                LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
+                LOG_ERROR << "NO KEYS FOUND FOR " << counter;
                 //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }

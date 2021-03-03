@@ -52,6 +52,8 @@ namespace pcapfs {
 
         void deserialize(boost::archive::text_iarchive &archive) override;
 
+        std::string toString();
+
     private:
         std::string cipherSuite;
         uint16_t sslVersion;
