@@ -308,7 +308,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
                 resultPtr->offsets.push_back(soffset);
                 //TODO: processedsize should be set
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - 16);
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
