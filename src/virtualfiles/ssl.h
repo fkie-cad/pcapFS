@@ -32,8 +32,8 @@ namespace pcapfs {
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        size_t getFullCipherText(size_t length, const Index &idx, const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &outputCipherTextVector);
-        size_t decryptCiphertextVecToPlaintextVec(const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &cipherTextVector, boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> outputPlainTextVector);
+        size_t getFullCipherText(size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
+        size_t decryptCiphertextVecToPlaintextVec(const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
         
         int calculateProcessedSize(const Index &idx);
 

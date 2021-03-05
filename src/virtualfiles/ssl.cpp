@@ -910,16 +910,16 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     
-    boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> cipherTextVector( new std::vector< boost::shared_ptr<CipherTextElement>>() );
-    boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> plainTextVector( new std::vector< boost::shared_ptr<PlainTextElement>>() );
+    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
     
     getFullCipherText(length, idx, cipherTextVector);
     
-    for(size_t i=0; i< cipherTextVector->size(); i++) {
+    for(size_t i=0; i< cipherTextVector.size(); i++) {
         
-        CipherTextElement *elem = cipherTextVector.get()->at(i).get();
+        CipherTextElement *elem = cipherTextVector.at(i).get();
         
-        //elem->printMe();
+        elem->printMe();
     }
     
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
@@ -932,9 +932,9 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     Bytes write_me_to_file;
 
 
-    for(size_t i=0; i<plainTextVector->size(); i++) {
+    for(size_t i=0; i<plainTextVector.size(); i++) {
         
-        PlainTextElement *elem = plainTextVector.get()->at(i).get();
+        PlainTextElement *elem = plainTextVector.at(i).get();
         
         elem->printMe();
 
@@ -989,7 +989,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
     size_t fragment = 0;
@@ -1037,7 +1037,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
                 // Delete them in the vector which was provided!
                 // In case you want to increase performance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
                 
-                boost::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+                std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
                 /*
                  * previousBytes:
                  * Decrypt e.g. RC4 at certain position.
@@ -1055,7 +1055,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
                 cte->keyMaterial.end();
                 cte->keyMaterial = keyPtr->getKeyMaterial();
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
-                outputCipherTextVector->push_back(cte);
+                outputCipherTextVector.push_back(cte);
             } else {
                 LOG_ERROR << "NO KEYS FOUND FOR " << counter;
                 //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
@@ -1085,10 +1085,10 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, const
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  * 
  */
-size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_ptr< std::vector< boost::shared_ptr<CipherTextElement>>> &cipherTextVector, boost::shared_ptr< std::vector< boost::shared_ptr<PlainTextElement>>> outputPlainTextVector) {
+size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector) {
     int counter = 0;
     
-    for (size_t i=0; i<cipherTextVector->size(); i++) {
+    for (size_t i=0; i<cipherTextVector.size(); i++) {
         counter++;
         
         /*
@@ -1096,8 +1096,8 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
          * refactor to shared_ptr?
          */
         
-        CipherTextElement *element = cipherTextVector.get()->at(i).get();
-        boost::shared_ptr<PlainTextElement> output( new PlainTextElement());
+        CipherTextElement *element = cipherTextVector.at(i).get();
+        std::shared_ptr<PlainTextElement> output( new PlainTextElement());
         
 
         /*
@@ -1118,7 +1118,7 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const boost::shared_p
         output->cipherSuite = element->cipherSuite;
         output->sslVersion = element->sslVersion;
         
-        outputPlainTextVector->push_back(output);
+        outputPlainTextVector.push_back(output);
 
     }
     return counter;
