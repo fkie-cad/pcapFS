@@ -207,7 +207,15 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
 
+            /*
+             * Segfault comes here...
+             *
+             *
+             */
+
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+
+            LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
 
             //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
@@ -292,6 +300,11 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
     Bytes data;
     data.resize(filesizeRaw);
 
+    LOG_TRACE << "before read: ";
+    LOG_TRACE << "calculateProcessedSize called, data: " << (char *) data.data();
+    LOG_TRACE << "calculateProcessedSize size: " << data.size();
+    LOG_TRACE << "calculateProcessedSize filesizeRaw: " << filesizeRaw;
+
     if (flags.test(pcapfs::flags::CHUNKED)) {
         int chunkedSize = readChunked(0, filesizeRaw, idx, (char *) data.data());
         if (chunkedSize == 0) {
@@ -302,7 +315,14 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
         readRaw(0, filesizeRaw, idx, (char *) data.data());
     }
 
+    LOG_TRACE << "after read: ";
     LOG_TRACE << "calculateProcessedSize called, data: " << (char *) data.data();
+    LOG_TRACE << "calculateProcessedSize size: " << data.size();
+    LOG_TRACE << "calculateProcessedSize filesizeRaw: " << filesizeRaw;
+
+    /*
+     * Flag for mac size could be inserted here
+     */
 
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
         namespace bio = boost::iostreams;

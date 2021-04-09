@@ -28,7 +28,6 @@
 
 namespace fs = boost::filesystem;
 
-
 /*
  * This function is entered for all *filesToProcess* candidates and to handle the new *newFiles*
  * which occur after this function *getNextVirtualFile* detects new candidates.
@@ -48,6 +47,9 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
             if (file->getFiletype() != it.first) {
+            	/*
+            	 * Debug helpers for this construct here is necessary
+            	 */
                 newPtr = it.second(file, idx);
                 if (!newPtr.empty()) {
                     file->flags.set(pcapfs::flags::PARSED);
@@ -69,6 +71,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
 
 
 int main(int argc, const char *argv[]) {
+
     pcapfs::Configuration options;
     try {
         options = pcapfs::parseOptions(argc, argv);

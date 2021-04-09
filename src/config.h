@@ -10,6 +10,9 @@
 
 
 namespace pcapfs {
+
+	extern int debug_counter;
+
     namespace options {
 
         struct PcapFsOptions {

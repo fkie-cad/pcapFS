@@ -21,6 +21,9 @@
 
 //TODO: remove all boost:shared_pointers and replace them with the std ones.
 
+int pcapfs::debug_counter = 0;
+
+
 namespace {
     //TODO: variable size get them in static functions?
     size_t const CLIENT_RANDOM_SIZE = 32;
@@ -912,8 +915,16 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
+
+    //Init vectors
+    for(auto& c : cipherTextVector) {
+    	c = std::make_shared<CipherTextElement>();
+    }
+    for(auto& p : plainTextVector) {
+		p = std::make_shared<PlainTextElement>();
+	}
     
-    getFullCipherText(length, idx, cipherTextVector);
+    getFullCipherText(startOffset, length, idx, cipherTextVector);
     
     for(size_t i=0; i< cipherTextVector.size(); i++) {
         
@@ -952,11 +963,21 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
     }
     
+    LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+
 	//write_me_to_file.push_back(0);
     for(size_t i=0; i<result.size(); i++) {
     	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
     }
 
+
+    /*
+     * Is this written multiple times into memory?
+     * Last action before crash?
+     */
+
+    pcapfs::debug_counter++;
+    LOG_DEBUG << "debug_counter: " << pcapfs::debug_counter << " buf address: " << static_cast<void*>(buf);
 
     //LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
     memset(buf, 0, write_me_to_file.size() + 1);
@@ -964,7 +985,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     //BIO_dump_fp(stdout, (const char *) buf, offset);
 
     LOG_DEBUG << "file writer done!" << std::endl;
-
+    LOG_DEBUG << "offset: " << offset << " startOffset: " << startOffset << " length: " << length;
 
     if (startOffset + length < filesizeRaw) {
         return length;
@@ -989,13 +1010,18 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
+	/*TODO:
+	 * Data is always completely returned, startOffset should always be zero. length is the full length.
+	 * These are no request parameters as in an API design, these parameters are necessary to
+	 *
+	 */
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
-    int startOffset = 0;
+    //int startOffset = 0;
     int counter = 0;
     
     LOG_DEBUG << "getFullCipherText is called\n";
@@ -1026,7 +1052,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
             
             
             
-            LOG_DEBUG << "offset at fragement " << fragment << "has following length: " << this->offsets.at(fragment).length << std::endl;
+            LOG_DEBUG << "offset at fragement " << fragment << " has following length: " << this->offsets.at(fragment).length << std::endl;
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
@@ -1085,7 +1111,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t length, const Index &idx, std::
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  * 
  */
-size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector) {
+size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec( std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector) {
     int counter = 0;
     
     for (size_t i=0; i<cipherTextVector.size(); i++) {

@@ -21,7 +21,7 @@ namespace pcapfs {
     	/*
     	 * TODO:
     	 * Maybe we should change this signature.
-    	 * char *buf should be a vecotr or Bytes type. The read function itself should convert it to vector.data().
+    	 * char *buf should be a vector or Bytes type. The read function itself should convert it to vector.data().
     	 * Then we do not run into the length issue anymore like with the HMAC size in SslFile read().
     	 */
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override = 0;

@@ -14,14 +14,14 @@ namespace pcapfs {
 	class CipherTextElement
 	{
 	public:
-		std::string cipherSuite;
-		uint16_t sslVersion;
-		int length;
-		int padding;
+		std::string cipherSuite = "";
+		uint16_t sslVersion = 0;
+		int length = 0;
+		int padding = 0;
 
 		bool isClientBlock;
-		pcapfs::Bytes cipherBlock;
-		pcapfs::Bytes keyMaterial;
+		Bytes cipherBlock;
+		Bytes keyMaterial;
 
 		void printMe(void);
 	};
