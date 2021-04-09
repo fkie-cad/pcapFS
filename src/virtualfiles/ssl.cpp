@@ -980,16 +980,27 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     LOG_DEBUG << "debug_counter: " << pcapfs::debug_counter << " buf address: " << static_cast<void*>(buf);
 
     //LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
-    memset(buf, 0, write_me_to_file.size() + 1);
-    memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
+
+    /*
+     * Change     memset(buf, 0, write_me_to_file.size() + 1);
+     *
+     * zu     	memset(buf, 0, length);
+     * nur schreiben: start bis start + length
+     *     		memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
+     *
+     */
+    memset(buf, 0, length);
+    memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
     //BIO_dump_fp(stdout, (const char *) buf, offset);
 
     LOG_DEBUG << "file writer done!" << std::endl;
     LOG_DEBUG << "offset: " << offset << " startOffset: " << startOffset << " length: " << length;
 
     if (startOffset + length < filesizeRaw) {
+    	//read till length is ended
         return length;
     } else {
+    	// read till file end
         return filesizeRaw - startOffset;
     }
 }
@@ -1027,6 +1038,11 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     LOG_DEBUG << "getFullCipherText is called\n";
     
     // start copying
+
+    /*
+     * Iterate with for loop over all fragements:
+     * startOffset and length are irrelevant
+     */
     while (position < startOffset + length && fragment < offsets.size()) {
         
     	LOG_DEBUG << "Read iteration number: " << counter << " fragment: " << fragment;
