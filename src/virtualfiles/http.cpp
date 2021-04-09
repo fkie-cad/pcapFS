@@ -300,11 +300,6 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
     Bytes data;
     data.resize(filesizeRaw);
 
-    LOG_TRACE << "before read: ";
-    LOG_TRACE << "calculateProcessedSize called, data: " << (char *) data.data();
-    LOG_TRACE << "calculateProcessedSize size: " << data.size();
-    LOG_TRACE << "calculateProcessedSize filesizeRaw: " << filesizeRaw;
-
     if (flags.test(pcapfs::flags::CHUNKED)) {
         int chunkedSize = readChunked(0, filesizeRaw, idx, (char *) data.data());
         if (chunkedSize == 0) {
@@ -314,11 +309,6 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
     } else {
         readRaw(0, filesizeRaw, idx, (char *) data.data());
     }
-
-    LOG_TRACE << "after read: ";
-    LOG_TRACE << "calculateProcessedSize called, data: " << (char *) data.data();
-    LOG_TRACE << "calculateProcessedSize size: " << data.size();
-    LOG_TRACE << "calculateProcessedSize filesizeRaw: " << filesizeRaw;
 
     /*
      * Flag for mac size could be inserted here

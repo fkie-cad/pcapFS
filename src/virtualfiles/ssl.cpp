@@ -21,8 +21,6 @@
 
 //TODO: remove all boost:shared_pointers and replace them with the std ones.
 
-int pcapfs::debug_counter = 0;
-
 
 namespace {
     //TODO: variable size get them in static functions?
@@ -311,6 +309,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
                 resultPtr->offsets.push_back(soffset);
                 //TODO: processedsize should be set
+
+                /*
+                 * Here we need to fix MAC
+                 */
+
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - 16);
 
                 LOG_DEBUG << "found server app data";
@@ -916,7 +919,9 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
-    //Init vectors
+    /*
+     * Init for the vectors with regular shared pointers
+     */
     for(auto& c : cipherTextVector) {
     	c = std::make_shared<CipherTextElement>();
     }
@@ -937,7 +942,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     
     int offset = 0;
 
-    LOG_DEBUG << "entering file writer..." << std::endl;
+    LOG_TRACE << "entering file writer..." << std::endl;
 
     std::vector<Bytes> result;
     Bytes write_me_to_file;
@@ -971,30 +976,11 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 
 
-    /*
-     * Is this written multiple times into memory?
-     * Last action before crash?
-     */
-
-    pcapfs::debug_counter++;
-    LOG_DEBUG << "debug_counter: " << pcapfs::debug_counter << " buf address: " << static_cast<void*>(buf);
-
-    //LOG_DEBUG << "\n\nLAST TEST - this should be in the buffer and therefore in the file:\n";
-
-    /*
-     * Change     memset(buf, 0, write_me_to_file.size() + 1);
-     *
-     * zu     	memset(buf, 0, length);
-     * nur schreiben: start bis start + length
-     *     		memcpy(buf, (const char*) write_me_to_file.data(), write_me_to_file.size());
-     *
-     */
     memset(buf, 0, length);
     memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
-    //BIO_dump_fp(stdout, (const char *) buf, offset);
 
-    LOG_DEBUG << "file writer done!" << std::endl;
-    LOG_DEBUG << "offset: " << offset << " startOffset: " << startOffset << " length: " << length;
+    LOG_TRACE << "file writer done!" << std::endl;
+    LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset << " length: " << length;
 
     if (startOffset + length < filesizeRaw) {
     	//read till length is ended
