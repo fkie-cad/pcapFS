@@ -39,6 +39,8 @@ set(PCAPFS_COMMON_SOURCES
         src/capturefiles/pcap.cpp
         src/capturefiles/pcapng.cpp
         src/crypto/decryptSymmetric.cpp
+        src/crypto/cipherTextElement.cpp
+        src/crypto/plainTextElement.cpp
         src/keyfiles/sslkey.cpp
         src/keyfiles/xorkey.cpp
         src/virtualfiles/virtualfile.cpp
@@ -69,7 +71,7 @@ set(PCAPFS_LINK_LIBRARIES
 set(COMPILE_FEATURES cxx_std_14)
 
 add_executable(pcapfs src/main.cpp ${PCAPFS_COMMON_SOURCES})
-target_compile_options(pcapfs PRIVATE -Wall -Wextra)
+target_compile_options(pcapfs PRIVATE -Wall -Wextra -g3 -pedantic)
 target_compile_features(pcapfs PRIVATE ${COMPILE_FEATURES})
 target_link_libraries(pcapfs PRIVATE ${PCAPFS_LINK_LIBRARIES})
 

@@ -14,6 +14,10 @@
 #include "../logging.h"
 
 
+/*
+ * HTTP Parsing function.
+ * Is always called for a file that is classified as HTTP.
+ */
 std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
@@ -26,6 +30,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     bool prevWasRequest = false;
     size_t numElements = filePtr->connectionBreaks.size();
 
+    LOG_TRACE << "HTTP parser, number of elements (connection breaks): " << numElements;
+
     //for(auto &offsetWithTime : filePtr->connectionBreaks){
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
@@ -34,6 +40,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
+
+
 
         //TODO: add connection breaks here!
         SimpleOffset soffset;
@@ -70,13 +78,22 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             requestedUri = getRequestUri(data, offset, size);
             requestedFilename = requestedHost + requestedUri;
             requestedFilename = uriToFilename(requestedFilename);
+
+            LOG_TRACE << "requestedFilename: " << requestedFilename
+            		<< " - requestedHost: " << requestedHost
+        			<< " - requestedUri: " << requestedUri;
+
+            LOG_TRACE << "fileSizeRaw: " << soffsetHeader.length;
+
             resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+
             if (requestedFilename != "") {
                 resultHeaderPtr->setFilename(
                         requestMethodToString(getRequestMethod(data, offset, size)) + "-" + requestedFilename);
             } else {
                 resultHeaderPtr->setFilename(requestMethodToString(getRequestMethod(data, offset, size)));
             }
+
             resultHeaderPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
             resultHeaderPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
             resultHeaderPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
@@ -190,7 +207,15 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
 
+            /*
+             * Segfault comes here...
+             *
+             *
+             */
+
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+
+            LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
 
             //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
@@ -284,6 +309,10 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
     } else {
         readRaw(0, filesizeRaw, idx, (char *) data.data());
     }
+
+    /*
+     * Flag for mac size could be inserted here
+     */
 
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
         namespace bio = boost::iostreams;
@@ -634,9 +663,9 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
                                                   size_t length) {
     char nameValueSeperator = ':';
     map.clear();
-    size_t fieldSize;
-    size_t fieldNameSize;
-    size_t fieldValueSize;
+    size_t fieldSize = 0;
+    size_t fieldNameSize = 0;
+    size_t fieldValueSize = 0;
     size_t offsetInHeader = 0;
     bool isEndOfHeader = false;
     char *fieldData = (char *) (data.data() + startOffset);

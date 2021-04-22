@@ -23,53 +23,33 @@
 #include "../virtualfiles/ssl.h"
 #include "../filefactory.h"
 #include "../logging.h"
-
+#include "../crypto/plainTextElement.h"
 
 namespace pcapfs {
 
     class Crypto {
-    public:
-        //deprecated
-        static pcapfs::Bytes decryptRc4(uint64_t padding, size_t length, char *data, char *mac, char *key, char *iv);
+        public:
+            
+            
+                        
+            
+            /*
+             * 
+             * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
+             * 
+             */
+            
+            
+            //new stuff:
+            static pcapfs::Bytes decrypt_RC4_128(       uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, bool isClientMessage, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_128_CBC(   uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_256_CBC(   uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output);
 
-
-        /*
-         *
-         * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
-         *
-         */
-        static pcapfs::Bytes
-        decrypt_RC4_128(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                        unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_RC4_40(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                       unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_RC4_56(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                       unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_RC4_64(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                       unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_AES_128_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                            unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_AES_256_CBC(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                            unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_AES_128_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                            unsigned char *iv);
-
-        static pcapfs::Bytes
-        decrypt_AES_256_GCM(uint64_t padding, size_t length, char *data, unsigned char *mac, unsigned char *key,
-                            unsigned char *iv);
-
+            
+            // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)
+            static pcapfs::Bytes decrypt_AES_128_GCM(   uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
+            static pcapfs::Bytes decrypt_AES_256_GCM(   uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output);
+            
     };
 
 }

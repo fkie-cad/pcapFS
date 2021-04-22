@@ -10,9 +10,16 @@
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
 
+#include <boost/shared_ptr.hpp>
+
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../crypto/decryptSymmetric.h"
+#include <../../src/crypto/decryptSymmetric.h>
+#include <../../src/crypto/cipherTextElement.h>
+#include <../../src/crypto/plainTextElement.h>
+
+
+//TODO: remove all boost:shared_pointers and replace them with the std ones.
 
 
 namespace {
@@ -24,6 +31,65 @@ namespace {
     //size_t const KEY_SIZE = 16;
 }
 
+std::string pcapfs::SslFile::toString() {
+	/*
+	 *  std::string cipherSuite;
+        uint16_t sslVersion;
+        static bool registeredAtFactory;
+        uint64_t keyIDinIndex;
+        std::vector<uint64_t> previousBytes;
+        std::vector<uint64_t> keyForFragment;
+	 *
+	 */
+
+	std::string ret;
+	ret.append("SslFile object content:\n");
+
+	ret.append("ciphersuite: ");
+	ret.append(cipherSuite);
+
+	ret.append("sslVersion: ");
+	pcpp::SSLVersion v = sslVersion;
+	ret.append(v.toString());
+	ret.append("\n");
+
+	ret.append("registeredAtFactory: ");
+	ret.append(std::to_string(registeredAtFactory));
+	ret.append("\n");
+
+	ret.append("keyIDinIndex: ");
+	ret.append(std::to_string(keyIDinIndex));
+	ret.append("\n");
+
+
+	ret.append("previousBytes: ");
+	std::string prev_bytes;
+
+	for(int i=0; i<previousBytes.size(); i++) {
+		prev_bytes.append(std::to_string(previousBytes.at(i)));
+		prev_bytes.append(" ");
+	}
+
+	ret.append(prev_bytes);
+	ret.append("\n");
+
+
+	ret.append("keyForFragment: ");
+	std::string keys;
+
+	for(int i=0; i<keyForFragment.size(); i++) {
+		keys.append(std::to_string(keyForFragment.at(i)));
+		keys.append(" ");
+	}
+
+	ret.append(keys);
+	ret.append("\n");
+
+	return ret;
+}
+
+//Constructor
+pcapfs::SslFile::SslFile() {};
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
     Bytes data = filePtr->getBuffer();
@@ -47,13 +113,14 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     uint64_t clientEncryptedData = 0;
     uint64_t serverEncryptedData = 0;
     std::string cipherSuite = "";
-    pcpp::SSLVersion sslVersion;
+    pcpp::SSLVersion sslVersion = pcpp::SSLVersion::SSL2; // init with a predefined value.
     bool clientChangeCipherSpec = false;
     bool serverChangeCipherSpec = false;
 
     std::shared_ptr<SslFile> resultPtr = nullptr;
 
     //Step 3: process all logical breaks in underlying virtual file
+    //TODO: How many files? One?
     for (unsigned int i = 0; i < numElements; ++i) {
         LOG_DEBUG << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
@@ -109,6 +176,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                             
                         } else {
                             cipherSuite = "UNKNOWN_CIPHER_SUITE";
+                            
+                            /*
+                             * TODO: handle this exception properly
+                             * 
+                             */
+                            throw "unsupported cipher detected";
                         }
                         processedSSLHandshake = true;
                         LOG_DEBUG << "handshake completed";
@@ -163,9 +236,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
                 pcpp::SSLApplicationDataLayer *applicationDataLayer =
                         dynamic_cast<pcpp::SSLApplicationDataLayer *>(sslLayer);
-                uint64_t encryptedDataLen = applicationDataLayer->getEncrpytedDataLen();
+                uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
                 uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
+
                 //create ssl application file
                 //TODO: does client always send first?
                 if (resultPtr == nullptr) {
@@ -177,7 +251,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                             Bytes keyMaterial = createKeyMaterial((char *) masterSecret.data(),
                                                                   (char *) clientRandom.data(),
                                                                   (char *) serverRandom.data(),
-                                                                  sslVersion
+                                                                  sslVersion.asUInt()
                                                                  );
 
                             //TODO: not good to add sslkey file directly into index!!!
@@ -192,7 +266,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     resultPtr->setOffsetType(filePtr->getFiletype());
                     resultPtr->setFiletype("ssl");
                     resultPtr->cipherSuite = cipherSuite;
-                    resultPtr->sslVersion = sslVersion;
+                    resultPtr->sslVersion = sslVersion.asUInt();
                     resultPtr->setFilename("SSL");
                     resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
                     resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
@@ -235,7 +309,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
                 resultPtr->offsets.push_back(soffset);
                 //TODO: processedsize should be set
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+
+                /*
+                 * Here we need to fix MAC
+                 */
+
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - 16);
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
@@ -251,6 +330,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
 
                 offsetInLogicalFragment += completeSSLLen;
+
+                LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
             }
 
             LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
@@ -298,14 +379,51 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
  * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
  * 
  */
-pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char *data, char* key_material, bool isClientMessage) {
+
+
+
+
+//TODO: not abstract enough to handle all ciphers?
+//TODO: check if the key material is accessible for all ciphers and protocols.
+/*
+ * AES GCM mode has 40 byte key material - we will see if it still works.
+ * 
+ */
+
+
+
+
+
+
+
+void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
+        
+        /*
+         * TODO: maybe redesign since some ciphers need different call to PRF:
+         * 
+         * AES GCM:
+         * keys = PRF(master_secret, "key expansion", server_random + client_random, 40)
+         * 
+         * and the PRF might even differ (SHA256 vs SHA384):
+         * https://tools.ietf.org/html/rfc5246#section-5
+         */
         
         /*
          * RC4 in SSL/TLS implemented cipher suites are decrypted here:
          */
         
+        
+        /*
+         * Important note for export keys:
+         * 
+         * https://tools.ietf.org/html/rfc2246#section-6.3.1
+         * 
+         * they use the PRF for the IV!
+         * 
+         * 
+         */
         case pcpp::SSL_SYM_RC4_128:
         {
             /*
@@ -329,214 +447,45 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
              * [0xc016]         AECDH-RC4-SHA               ECDH            RC4             128         TLS_ECDH_anon_WITH_RC4_128_SHA
              * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
-             */
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            
+             */            
+
             const int mac_size = 16;
             const int key_size = 16;
-            const int iv_size = 16;
             
             unsigned char client_write_MAC_key[mac_size];
             unsigned char server_write_MAC_key[mac_size];
             unsigned char client_write_key[key_size];
             unsigned char server_write_key[key_size];
-            unsigned char client_write_IV[iv_size];
-            unsigned char server_write_IV[iv_size];
-            
+
             memcpy(client_write_MAC_key,    key_material,                                   mac_size);
             memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
             memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
             memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
             
+
             if(isClientMessage) {
                 /*
                  * This is a client message
                  */
                 
-                return Crypto::decrypt_RC4_128(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
-                
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, client_write_MAC_key, client_write_key, NULL, isClientMessage, output);
+
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                return Crypto::decrypt_RC4_128(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
-                
+                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, server_write_MAC_key, server_write_key, NULL, isClientMessage, output);
+
             }
+            
+
+            /*
+             * End of Switch SSL_SYM_RC4_128
+             */
+            break;
         }
-            
-            
         
-        case pcpp::SSL_SYM_RC4_64:
-        {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 8;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                return Crypto::decrypt_RC4_64(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                return Crypto::decrypt_RC4_64(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }
-            
-            
-        case pcpp::SSL_SYM_RC4_56:
-        {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_64 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 7;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                return Crypto::decrypt_RC4_56(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                return Crypto::decrypt_RC4_56(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }
-            
-            
-        case pcpp::SSL_SYM_RC4_128_EXPORT40:
-        {
-            //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-            LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-            LOG_ERROR << "unsupported operation" << std::endl;
-            const int mac_size = 16;
-            const int key_size = 5;
-            //const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            //unsigned char client_write_IV[iv_size];
-            //unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                return Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                return Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                
-            }
-        }          
-            
-        case pcpp::SSL_SYM_RC4_40:
-            /* 
-             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
-             * [0x020080]       EXP-RC4-MD5                 RSA(512)        RC4             40, export  SSL_CK_RC4_128_EXPORT40_WITH_MD5
-             * 
-             * this entry has to be checked, it should be a RC4 128 bit implementation with the last 88 bytes set to zero.
-             */            
-            {
-                //TODO: maybe the last 64 bytes have to be zero to have 128bit rc4
-                LOG_DEBUG << "Decrypting SSL_SYM_RC4_128_EXPORT40 using " << " KEY: " << key_material << " length: " << length << " padding: " << padding << " data: " << data << std::endl;
-                LOG_ERROR << "unsupported operation" << std::endl;
-                const int mac_size = 16;
-                const int key_size = 5;
-                //const int iv_size = 16;
-                
-                unsigned char client_write_MAC_key[mac_size];
-                unsigned char server_write_MAC_key[mac_size];
-                unsigned char client_write_key[key_size];
-                unsigned char server_write_key[key_size];
-                //unsigned char client_write_IV[iv_size];
-                //unsigned char server_write_IV[iv_size];
-                
-                memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-                memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-                memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-                memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-                //memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-                //memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-                
-                if(isClientMessage) {
-                    /*
-                     * This is a client message
-                     */
-                    
-                    return Crypto::decrypt_RC4_40(padding, length, data, client_write_MAC_key, client_write_key, NULL);
-                    
-                } else {
-                    /*
-                     * This is a server message, so we use server key etc.
-                     */
-                    
-                    return Crypto::decrypt_RC4_40(padding, length, data, server_write_MAC_key, server_write_key, NULL);
-                    
-                }
-            }               
-            
         case pcpp::SSL_SYM_AES_128_CBC:
         {
             /*
@@ -568,21 +517,21 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
                  * This is a client message
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC called with a client packet" << std::endl;
-                return Crypto::decrypt_AES_128_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC called with a server packet" << std::endl;
-                return Crypto::decrypt_AES_128_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
-            
+            break;
         }
-            
+
         case pcpp::SSL_SYM_AES_256_CBC:
         {
             /*
@@ -614,110 +563,82 @@ pcapfs::Bytes pcapfs::SslFile::decryptData(uint64_t padding, size_t length, char
                  * This is a client message
                  */
                 
-                return Crypto::decrypt_AES_256_CBC(padding, length, data, client_write_MAC_key, client_write_key, client_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                return Crypto::decrypt_AES_256_CBC(padding, length, data, server_write_MAC_key, server_write_key, server_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
                 
             }
-            
+            break;
         }
-        
         
         case pcpp::SSL_SYM_AES_128_GCM:
         {
-            
-            printf("key_material:\n");
-            BIO_dump_fp (stdout, (const char *) key_material, 128);
+            /*
+             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
+             * 
+             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
+             */
             
             unsigned char client_write_key[16];
             unsigned char server_write_key[16];
             unsigned char client_write_IV[4];
             unsigned char server_write_IV[4];
             
+            
             /*
              * Copy all bytes from the key material into our split key material.
              */
             
-            memcpy(client_write_key,        key_material,           16);
+            memcpy(client_write_key,        key_material+0,         16);
             memcpy(server_write_key,        key_material+16,        16);
             memcpy(client_write_IV,         key_material+32,         4);
-            memcpy(server_write_IV,         key_material+36,         4);
+            memcpy(server_write_IV,         key_material+32+4,       4);
+            
+            
+            //static for testing
+            unsigned char public_nonce[12] = {0xd1 ,0xc9 ,0xc3 ,0x3f ,0x9d ,0x30 ,0x2f ,0x94 ,0x47 ,0xe2 ,0x1b ,0x9d};
+            
+            //static for testing
+            unsigned char aad[13] = {0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x01 ,0x17 ,0x03 ,0x03 ,0x00 ,0x18};
             
             if(isClientMessage) {
                 /*
                  * This is a client message
                  */
                 
-                return Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, client_write_key, client_write_IV, aad, output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                return Crypto::decrypt_AES_128_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
+                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, server_write_key, server_write_IV, aad, output);
                 
             }
-            
+            break;
         }
         
-        case pcpp::SSL_SYM_AES_256_GCM:
-        {
-            
-            /*
-             * AES 256 has 256 bit keys, aka 32 byte
-             */
-            
-            unsigned char client_write_key[32];
-            unsigned char server_write_key[32];
-            unsigned char client_write_IV[4];
-            unsigned char server_write_IV[4];
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_key,        key_material,           32);
-            memcpy(server_write_key,        key_material+32,        32);
-            memcpy(client_write_IV,         key_material+64,         4);
-            memcpy(server_write_IV,         key_material+68,         4);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                return Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, client_write_key, client_write_IV);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                return Crypto::decrypt_AES_256_GCM(padding, length, data, NULL, server_write_key, server_write_IV);
-                
-            }
-            
-        }
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
-    return Bytes();
 }
 
-//TODO: not abstract enough to handle all ciphers?
-//TODO: check if the key material is accessible for all ciphers and protocols.
-/*
- * AES GCM mode has 40 byte key material - we will see if it still works.
- * 
- */
-pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, pcpp::SSLVersion sslVersion) {
+
+
+
+
+pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
@@ -725,6 +646,13 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      * Different Hashes: SSLv3/TLS (most versions) differ, SSLv2 obviously too.
      * They do not use always SHA256! This will be a problem at some point
      * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
+     * 
+     * 
+     * SSLv3:
+     * 
+     * It is a bit longer, see this one:
+     * 
+     * https://tools.ietf.org/html/rfc6101#section-6.2.1
      * 
      * 
      * TLS 1.0 Page 11, 12, 13
@@ -776,7 +704,38 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
      * 
      */
     
+    
+    /*
+     * The concrete openssl doc for this section:
+     * 
+     * https://www.openssl.org/docs/man1.1.0/man3/EVP_PKEY_CTX_set_tls1_prf_md.html
+     */
+    
+    size_t KEY_MATERIAL_SIZE = 128;
+    size_t const LABEL_SIZE = 13;
+    size_t const SERVER_RANDOM_SIZE = 32;
+    size_t const CLIENT_RANDOM_SIZE = 32;
+    char const LABEL[14] = "key expansion";
+    size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
+    Bytes seed(seedSize);
+    memcpy(&seed[0], LABEL, LABEL_SIZE);
+    memcpy(&seed[LABEL_SIZE], serverRandom, SERVER_RANDOM_SIZE);
+    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom, CLIENT_RANDOM_SIZE);
+    
+    Bytes keyMaterial(KEY_MATERIAL_SIZE);
+    EVP_PKEY_CTX *pctx;
+    
+    
     switch(sslVersion) {
+        
+        /*
+         * https://tools.ietf.org/html/rfc2246
+         * 
+         * 
+         * 
+         * 
+         */
+        
         case pcpp::SSLVersion::SSL2:
         {
             LOG_ERROR << "ssl2 is currently not supported\n";
@@ -789,145 +748,357 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         }
         case pcpp::SSLVersion::TLS1_0:
         {
-            LOG_ERROR << "tls1 is currently not supported\n";
+            LOG_INFO << "tls 1.0 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+                LOG_ERROR << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
+            	LOG_ERROR << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            	LOG_ERROR << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+            	LOG_ERROR << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+            	LOG_ERROR << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
         case pcpp::SSLVersion::TLS1_1:
         {
-            LOG_ERROR << "tls1_1 is currently not supported\n";
+            LOG_INFO << "tls 1.1 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+            	LOG_ERROR << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
+            	LOG_ERROR << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            	LOG_ERROR << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+            	LOG_ERROR << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+            	LOG_ERROR << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
         case pcpp::SSLVersion::TLS1_2:
         {
-        	LOG_ERROR << "tls 1.2\n";
+            LOG_INFO << "tls 1.2 detected\n";
+            
+            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+            if (EVP_PKEY_derive_init(pctx) <= 0)
+            	LOG_ERROR << "Error1!" << std::endl;
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
+            	LOG_ERROR << "Error2!" << std::endl;
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            	LOG_ERROR << "Error3!" << std::endl;
+            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
+            	LOG_ERROR << "Error4!" << std::endl;
+            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
+            	LOG_ERROR << "Error5!" << std::endl;
+            ERR_print_errors_fp(stderr);
+            
+            EVP_PKEY_CTX_free(pctx);
+            
             break;
         }
+        case pcpp::SSLVersion::TLS1_3:
+        {
+        	LOG_INFO << "TLS 1.3 detected, currently not supported!" << std::endl;
+        }
         default:
-        	LOG_ERROR << "error\n";
+        	pcpp::SSLVersion version(sslVersion);
+            LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << version.toString() << std::endl;
     }
     
-    
-    /*
-     * This is TLS 1.2
-     * 
-     * TODO: Build for ssl2,3,tls10,tls11
-     * 
-     */
-    
-    size_t KEY_MATERIAL_SIZE = 128;
-    size_t const LABEL_SIZE = 13;
-    size_t const SERVER_RANDOM_SIZE = 32;
-    size_t const CLIENT_RANDOM_SIZE = 32;
-    char const LABEL[14] = "key expansion";
-
-    size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
-    Bytes seed(seedSize);
-    memcpy(&seed[0], LABEL, LABEL_SIZE);
-    memcpy(&seed[LABEL_SIZE], serverRandom, SERVER_RANDOM_SIZE);
-    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom, CLIENT_RANDOM_SIZE);
-
-    Bytes keyMaterial(KEY_MATERIAL_SIZE);
-    EVP_PKEY_CTX *pctx;
-    pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
-    if (EVP_PKEY_derive_init(pctx) <= 0)
-    	LOG_ERROR << "Error1!" << std::endl;
-    if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
-    	LOG_ERROR << "Error2!" << std::endl;
-    if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
-    	LOG_ERROR << "Error3!" << std::endl;
-    if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-    	LOG_ERROR << "Error4!" << std::endl;
-    if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-    	LOG_ERROR << "Error5!" << std::endl;
-    ERR_print_errors_fp(stderr);
-
-    EVP_PKEY_CTX_free(pctx);
+    LOG_INFO << "Key Material Size: " << KEY_MATERIAL_SIZE << std::endl;
     
     return keyMaterial;
 }
 
 
+/*
+ * TODO: 
+ * 
+ * CURRENT READ FUNCTION:
+ * 
+ * The current read function currently tries to encrypt traffic at a certain position.
+ * We wanted to implement an abstract way to ask for decrypted data at a certain position
+ * WITHOUT decrypting everything every time.
+ * 
+ * This seems not to be possible at this point.
+ * 
+ * Idea: We need a mapping which does the following:
+ * 
+ * +----------+----------+----------
+ * |          |          |
+ * |   AAAA   |   BBBB   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * If someone asks now for block 2 (BBBB), then we should return such a structure:
+ * 
+ * +----------+----------+---------------
+ * |          |          |
+ * |   0000   |   BBBB   |   0000....
+ * |          |          |
+ * +----------+----------+---------------
+ * 
+ * Many ciphers require a complete decryption of such a track.
+ * This leads to, depending on the length of the track, a very inefficient implementation.
+ * 
+ * But since this is required for many ciphers such as CBC or GCM cipher modes, we need to
+ * decrypt a certain amount of blocks, either up to the requested block or other, etc.
+ * This is a topic highly depending on the cipher and the cipher mode used in the TLS application data.
+ * 
+ * Improvement goals:
+ * 
+ * ### Build a function which decrypts all of the blocks from the beginning.
+ * ### Build a handler function which wraps the plaintext to text for the user, meaning: "remove" the MAC.
+ * ### Build a wrapper which handles specific requests to single blocks in the chain (using certain offsets).
+ * 
+ * 
+ * 
+ * CHALLENGES:
+ * 
+ * ### plaintext offset calculation depends i.e. on the size of the authentication digests, we need another abstraction layer:
+ * 
+ * 
+ * ciphertext (symbolic AAAA and BBBB, think about garbage looking bytes):
+ * +----------+----------+----------
+ * |          |          |
+ * |   AAAA   |   BBBB   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * 
+ * plaintext (derived from decryption, has a lot of stuff like message authentication digests):
+ * +----------+----------+----------
+ * |      | M |      | M |
+ * |   AA | A |   BB | A |   ...
+ * |      | C |      | C |
+ * +----------+----------+----------
+ * 
+ * 
+ * real text, readable by the user, either MAC checked or not:
+ * +----------+----------+----------
+ * |          |          |
+ * |   abcd   |   efgh   |   ...
+ * |          |          |
+ * +----------+----------+----------
+ * 
+ * Concrete: If the user requests the block 2 containing the BBBB ciphertext, we want to provide efgh to the user.
+ * We still have to decrypt the complete TLS application data stream.
+ * 
+ * 
+ * 
+ * FUTURE GOALS:
+ * 
+ * ### Cache the decrypted streams to prevent the decryption of the complete stream in requests which loop through
+ *     all fields of a stream, refer inside a single stream or many recurring requests to a certain pool of
+ *     TLS application data streams.
+ * 
+ * 
+ * 
+ * 
+ */
+
+
+/*
+ * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
+ */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+    
+    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
+
+    /*
+     * Init for the vectors with regular shared pointers
+     */
+    for(auto& c : cipherTextVector) {
+    	c = std::make_shared<CipherTextElement>();
+    }
+    for(auto& p : plainTextVector) {
+		p = std::make_shared<PlainTextElement>();
+	}
+    
+    getFullCipherText(startOffset, length, idx, cipherTextVector);
+    
+    for(size_t i=0; i< cipherTextVector.size(); i++) {
+        
+        CipherTextElement *elem = cipherTextVector.at(i).get();
+        
+        elem->printMe();
+    }
+    
+    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
+    
+    int offset = 0;
+
+    LOG_TRACE << "entering file writer..." << std::endl;
+
+    std::vector<Bytes> result;
+    Bytes write_me_to_file;
+
+
+    for(size_t i=0; i<plainTextVector.size(); i++) {
+        
+        PlainTextElement *elem = plainTextVector.at(i).get();
+        
+        elem->printMe();
+
+        result.push_back(elem->plaintextBlock);
+
+        //LOG_DEBUG << "current plaintext: " << std::endl << plaintext.data() << std::endl;
+        //LOG_DEBUG << "startOffset: "<< startOffset << " plaintext-size: " << plaintext.size() << " current " << i+1 << "/" << plainTextVector->size() << " elements. " << std::endl;
+
+        //memset(buf + offset, 0, plaintext.size());
+        //memcpy(buf + offset, plaintext.data() + startOffset, plaintext.size());
+
+        //BIO_dump_fp(stdout, (const char *) buf, offset + plaintext.size());
+
+        offset += elem->plaintextBlock.size();
+
+    }
+    
+    LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+
+	//write_me_to_file.push_back(0);
+    for(size_t i=0; i<result.size(); i++) {
+    	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+    }
+
+    if (write_me_to_file.size() > 0) {
+		memset(buf, 0, length);
+		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
+
+		LOG_TRACE << "file writer done!" << std::endl;
+		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset << " length: " << length;
+    }
+
+    if (startOffset + length < filesizeRaw) {
+    	//read till length is ended
+        return length;
+    } else {
+    	// read till file end
+        return filesizeRaw - startOffset;
+    }
+}
+
+
+/*
+ * pcapfs::SslFile::getFullCipherText
+ * 
+ * The function gets the full TLS application layer stream into a vector.
+ * Each element in the vector represents one decrypted packet, containing a alternating stream of the packets from client and server.
+ * Concrete: iterate over all fragments, return the cipher text blocks and the keymaterial.
+ * 
+ * TODO: New datatype for the vector, a datatype holding:
+ *          - pcapfs::Bytes object
+ *          - key material bytes
+ *          - cipher type, ssl version, server or client (?)
+ * 
+ * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
+ * 
+ */
+size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
     //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
+	/*TODO:
+	 * Data is always completely returned, startOffset should always be zero. length is the full length.
+	 * These are no request parameters as in an API design, these parameters are necessary to
+	 *
+	 */
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
+    //int startOffset = 0;
     int counter = 0;
-
-    // seek to start_offset
-    while (position < startOffset) {
-        position += offsets[fragment].length;
-        fragment++;
-    }
-
-    if (position > startOffset) {
-        fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
-        position = static_cast<size_t>(startOffset);
-    }
-
+    
+    LOG_DEBUG << "getFullCipherText is called\n";
+    
     // start copying
+
+    /*
+     * Iterate with for loop over all fragements:
+     * startOffset and length are irrelevant
+     */
     while (position < startOffset + length && fragment < offsets.size()) {
+        
+    	LOG_DEBUG << "Read iteration number: " << counter << " fragment: " << fragment;
+        
         counter++;
         size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        
         //TODO: is start=0 really good for missing data?
+        // -> missing data should probably be handled in an exception?
+        
         if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
-            LOG_DEBUG << "filling data";
-            memset(buf + (position - startOffset), 0, toRead);
+            LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
+            
+            /*
+             * Read the bytes from the packets of the file (using the file pointer):
+             * After this step, toDecrypt is filled with bytes.
+             */
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
             filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
-
+            
+            
+            
+            LOG_DEBUG << "offset at fragement " << fragment << " has following length: " << this->offsets.at(fragment).length << std::endl;
+            
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
-
+                
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
-                        idx.get({"sslkey", keyIDinIndex}));
-                if (isClientMessage(keyForFragment.at(fragment))) {
-                    LOG_DEBUG << "CLIENT CLIENT CLIENT ? " + counter << std::endl;
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
-                    
-                    //
-                    // FIX AHEAD!
-                    //
-                    
-                } else {
-                    LOG_DEBUG << "ERROR ERROR ERROR ? " + counter << std::endl;
-                    
-                    
-                    decrypted = decryptData(previousBytes[fragment],
-                                            toDecrypt.size(),
-                                            (char *) toDecrypt.data(),
-                                            (char *) keyPtr->getKeyMaterial().data(),
-                                            isClientMessage(keyForFragment.at(fragment)));
-                    
-                }
-                if(toRead != decrypted.size()) {
-                    LOG_ERROR << "[E] various errors ahead?" << std::endl;
-                    LOG_ERROR << "[E] decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                }
-                LOG_ERROR << "decrypted data is null and should not be used right now? decrypted_size: " << decrypted.size() << " - toRead: " << toRead << std::endl;
-                memset(buf + (position - startOffset), 0, toRead);
-                memcpy(buf + (position - startOffset), decrypted.data() + posInFragment, decrypted.size());
+                    idx.get({"sslkey", keyIDinIndex}));
+                
+                // Delete them in the vector which was provided!
+                // In case you want to increase performance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
+                
+                std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+                /*
+                 * previousBytes:
+                 * Decrypt e.g. RC4 at certain position.
+                 *
+                 * SO:
+                 *
+                 * previousBytes = ciphertext before current ciphertext element.
+                 *
+                 */
+                cte->padding = previousBytes[fragment];
+                cte->cipherSuite = this->cipherSuite;
+                cte->sslVersion = this->sslVersion;
+                cte->cipherBlock = toDecrypt;
+                cte->length = toRead;
+                cte->keyMaterial.end();
+                cte->keyMaterial = keyPtr->getKeyMaterial();
+                cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
+                outputCipherTextVector.push_back(cte);
             } else {
-                LOG_ERROR << "NO KEYS FOUND FOR " << counter << std::endl;
-                memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
+                LOG_ERROR << "NO KEYS FOUND FOR " << counter;
+                //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }
-
+        
         // set run variables in case next fragment is needed
         position += toRead;
         fragment++;
         posInFragment = 0;
     }
-
+    
+    LOG_ERROR << "READ IS DONE\n";
+    
     if (startOffset + length < filesizeRaw) {
         return length;
     } else {
@@ -935,6 +1106,52 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 }
 
+/*
+ * pcapfs::SslFile::decryptCiphertextToPlaintext
+ * 
+ * Encrypt the vector of bytes using the key material provided via every frame of the vector.
+ * returns a vector of plaintext plus information such as if mac, alignment, padding is correct.
+ * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
+ * 
+ */
+size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec( std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector) {
+    int counter = 0;
+    
+    for (size_t i=0; i<cipherTextVector.size(); i++) {
+        counter++;
+        
+        /*
+         * This approach currently requires that we hold ciphertext and plaintext in memory. No file-based indexes are supported at this point.
+         * refactor to shared_ptr?
+         */
+        
+        CipherTextElement *element = cipherTextVector.at(i).get();
+        std::shared_ptr<PlainTextElement> output( new PlainTextElement());
+        
+
+        /*
+         * Padding is removed we don't need it anymore.
+         */
+
+
+
+        decryptDataNew(element->padding,
+                        element->cipherBlock.size(),
+                        (char *) element->cipherBlock.data(),
+                        (char *) element->keyMaterial.data(),
+                        element->isClientBlock,
+                        output.get());
+        
+        output->padding = element->padding;
+        output->isClientBlock = element->isClientBlock;
+        output->cipherSuite = element->cipherSuite;
+        output->sslVersion = element->sslVersion;
+        
+        outputPlainTextVector.push_back(output);
+
+    }
+    return counter;
+}
 
 bool pcapfs::SslFile::isClientMessage(uint64_t i) {
     if (i % 2 == 0) {
@@ -948,15 +1165,11 @@ bool pcapfs::SslFile::isClientMessage(uint64_t i) {
 bool pcapfs::SslFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("ssl", pcapfs::SslFile::create, pcapfs::SslFile::parse);
         
-/*
- * 
- * archive << sslVersion; ??
- * 
- */
         
 void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
     VirtualFile::serialize(archive);
     archive << cipherSuite;
+    archive << sslVersion;
     archive << keyIDinIndex;
     archive << previousBytes;
     archive << keyForFragment;
@@ -966,6 +1179,7 @@ void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
 void pcapfs::SslFile::deserialize(boost::archive::text_iarchive &archive) {
     VirtualFile::deserialize(archive);
     archive >> cipherSuite;
+    archive >> sslVersion;
     archive >> keyIDinIndex;
     archive >> previousBytes;
     archive >> keyForFragment;

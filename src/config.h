@@ -10,6 +10,7 @@
 
 
 namespace pcapfs {
+
     namespace options {
 
         struct PcapFsOptions {
