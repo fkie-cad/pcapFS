@@ -25,9 +25,18 @@
 
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *, bool isClientMessage, PlainTextElement *output) {
+decrypt_RC4_128(
+		uint64_t virtual_file_offset,
+		size_t length,
+		char *ciphertext,
+		unsigned char *mac,
+		unsigned char *key,
+		unsigned char *iv,
+		bool isClientMessage,
+		PlainTextElement *output
+	) {
     
-	LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
+	LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
 
     /*
      * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
@@ -68,10 +77,10 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     int len = 0;
     int plaintext_len = 0;
 
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
+    Bytes decryptedData(virtual_file_offset + length);
+    Bytes dataToDecrypt(virtual_file_offset);
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-    LOG_TRACE << "decrypting with padding: " << std::to_string(padding) << " and cipher text length: "
+    LOG_TRACE << "decrypting with padding: " << std::to_string(virtual_file_offset) << " and cipher text length: "
               << dataToDecrypt.size();
 
     //decrypt data using keys and RC4
@@ -152,7 +161,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     LOG_DEBUG << "plaintext_len after decrypt_final decryption: " << plaintext_len << std::endl;
 
     //remove the padding
-    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding);
+    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + virtual_file_offset);
 
     //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
 
@@ -168,13 +177,20 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_RC4_128(uint64_t padding, size_t length, c
     output->plaintextBlock = plaintext;
 
     EVP_CIPHER_CTX_cleanup(ctx);
-
-    return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
+decrypt_AES_128_CBC(
+		uint64_t virtual_file_offset,
+		size_t length,
+		char *ciphertext,
+		unsigned char *mac,
+		unsigned char *key,
+		unsigned char *iv,
+		bool isClientMessage,
+		PlainTextElement *output
+	) {
     
-    LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
+    LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
     printf("mac_key:\n");
     BIO_dump_fp (stdout, (const char *) mac, 20);
@@ -185,12 +201,12 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
+    Bytes decryptedData(virtual_file_offset + length);
+    Bytes dataToDecrypt(virtual_file_offset);
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
-    LOG_TRACE << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_TRACE << "decrypting with padding " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
@@ -256,7 +272,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     
     plaintext_len += len;
     
-    //remove the padding
+    //remove the virtual_file_offset
     //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
     
     //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
@@ -265,19 +281,26 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_CBC(uint64_t padding, size_t lengt
     
     printf("plaintext:\n");
     //BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len-virtual_file_offset);
     printf("\n\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding - 20 - 1);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset - 20 - 1);
     
     
     EVP_CIPHER_CTX_cleanup(ctx);
-    
-    return decryptedData;
 }
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t length, char *ciphertext, unsigned char *mac, unsigned char *key, unsigned char *iv, PlainTextElement *output) {
+decrypt_AES_256_CBC(
+		uint64_t virtual_file_offset,
+		size_t length,
+		char *ciphertext,
+		unsigned char *mac,
+		unsigned char *key,
+		unsigned char *iv,
+		bool isClientMessage,
+		PlainTextElement *output
+	) {
     
-    LOG_DEBUG << "entering decrypt_AES_256_CBC - padding: " << std::to_string(padding) << " length: " << std::to_string(length)  << std::endl;
+    LOG_DEBUG << "entering decrypt_AES_256_CBC - virtual_file_offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
     printf("mac_key:\n");
     BIO_dump_fp (stdout, (const char *) mac, 20);
@@ -288,12 +311,12 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
+    Bytes decryptedData(virtual_file_offset + length);
+    Bytes dataToDecrypt(virtual_file_offset);
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
-    LOG_TRACE << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_TRACE << "decrypting with virtual_file_offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
@@ -362,15 +385,15 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
     //remove the padding
     //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
     
-    //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
+    //decryptedData.erase(decryptedData.begin()+ plaintext_len-virtual_file_offset - 20 - 1, decryptedData.end());
     
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
     printf("plaintext:\n");
-    //BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len-padding);
+    //BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len-virtual_file_offset);
     printf("\n\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding - 20 - 1);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset - 20 - 1);
     
     
     EVP_CIPHER_CTX_cleanup(ctx);
@@ -379,7 +402,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_CBC(uint64_t padding, size_t lengt
 }
 
 
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
+decrypt_AES_256_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output) {
     
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);
@@ -410,17 +433,17 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t lengt
     
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
+    Bytes decryptedData(virtual_file_offset + length);
+    Bytes dataToDecrypt(virtual_file_offset);
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
-    LOG_TRACE << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_TRACE << "decrypting with virtual_file_offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
     printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, padding + length);
+    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, virtual_file_offset + length);
     
     EVP_CIPHER_CTX *ctx;
     
@@ -517,16 +540,14 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_256_GCM(uint64_t padding, size_t lengt
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
     printf("plaintext:\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len);
     
     
     EVP_CIPHER_CTX_cleanup(ctx);
-    
-    return decryptedData;
 }
 
 //See https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
-pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, PlainTextElement *output) {
+decrypt_AES_128_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output) {
 
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);
@@ -557,17 +578,17 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
     
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(padding + length);
-    Bytes dataToDecrypt(padding);
+    Bytes decryptedData(virtual_file_offset + length);
+    Bytes dataToDecrypt(virtual_file_offset);
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
-    LOG_TRACE << "decrypting with padding " << std::to_string(padding) << " of length " << dataToDecrypt.size();
+    LOG_TRACE << "decrypting with padding " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
     printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, padding + length);
+    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, virtual_file_offset + length);
     
     EVP_CIPHER_CTX *ctx;
     
@@ -664,7 +685,7 @@ pcapfs::Bytes pcapfs::Crypto::decrypt_AES_128_GCM(uint64_t padding, size_t lengt
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
     
     printf("plaintext:\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding, plaintext_len);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len);
     
         
     EVP_CIPHER_CTX_cleanup(ctx);
