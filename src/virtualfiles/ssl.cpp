@@ -14,13 +14,10 @@
 
 #include "../filefactory.h"
 #include "../logging.h"
-#include <../../src/crypto/decryptSymmetric.h>
-#include <../../src/crypto/cipherTextElement.h>
-#include <../../src/crypto/plainTextElement.h>
 
-
-//TODO: remove all boost:shared_pointers and replace them with the std ones.
-
+#include "../crypto/cipherTextElement.h"
+#include "../crypto/plainTextElement.h"
+#include "../crypto/decryptSymmetric.h"
 
 namespace {
     //TODO: variable size get them in static functions?
@@ -467,22 +464,33 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 /*
                  * This is a client message
                  */
-                
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, client_write_MAC_key, client_write_key, NULL, isClientMessage, output);
+
+                Crypto::decrypt_RC4_128(
+                		padding,
+    					length,
+    					cipherText,
+						client_write_MAC_key,
+						client_write_key,
+						isClientMessage,
+						output);
+
 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                pcapfs::Bytes plainText = Crypto::decrypt_RC4_128(padding, length, cipherText, server_write_MAC_key, server_write_key, NULL, isClientMessage, output);
+            	Crypto::decrypt_RC4_128(
+            			padding,
+						length,
+						cipherText,
+						server_write_MAC_key,
+						server_write_key,
+						isClientMessage,
+						output);
 
             }
             
-
-            /*
-             * End of Switch SSL_SYM_RC4_128
-             */
             break;
         }
         
@@ -518,7 +526,15 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(
+                		padding,
+						length,
+						cipherText,
+						client_write_MAC_key,
+						client_write_key,
+						client_write_IV,
+						isClientMessage,
+						output);
                 
             } else {
                 /*
@@ -526,7 +542,15 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  */
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                Crypto::decrypt_AES_128_CBC(
+                		padding,
+						length,
+						cipherText,
+						server_write_MAC_key,
+						server_write_key,
+						server_write_IV,
+						isClientMessage,
+						output);
                 
             }
             break;
@@ -563,16 +587,32 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  * This is a client message
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, client_write_MAC_key, client_write_key, client_write_IV, output);
+                LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_256_CBC(
+                		padding,
+						length,
+						cipherText,
+						client_write_MAC_key,
+						client_write_key,
+						client_write_IV,
+						isClientMessage,
+						output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(padding, length, cipherText, server_write_MAC_key, server_write_key, server_write_IV, output);
+                LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_256_CBC(
+                		padding,
+						length,
+						cipherText,
+						server_write_MAC_key,
+						server_write_key,
+						server_write_IV,
+						isClientMessage,
+						output);
                 
             }
             break;
@@ -613,16 +653,34 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  * This is a client message
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, client_write_key, client_write_IV, aad, output);
+                LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a client packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM(
+                		padding,
+						length,
+						cipherText,
+						NULL,
+						client_write_key,
+						client_write_IV,
+						aad,
+						isClientMessage,
+						output);
                 
             } else {
                 /*
                  * This is a server message, so we use server key etc.
                  */
                 
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM(padding, length, cipherText, server_write_key, server_write_IV, aad, output);
+                LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a server packet" << std::endl;
+                Crypto::decrypt_AES_128_GCM(
+                		padding,
+						length,
+						cipherText,
+						NULL,
+						server_write_key,
+						server_write_IV,
+						aad,
+						isClientMessage,
+						output);
                 
             }
             break;

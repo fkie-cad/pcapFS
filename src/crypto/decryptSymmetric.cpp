@@ -19,21 +19,17 @@
 #include <openssl/ossl_typ.h>
 
 #include "../commontypes.h"
-#include "../virtualfiles/ssl.h"
-#include "../filefactory.h"
-#include "../logging.h"
 
+using namespace pcapfs;
 
-
-decrypt_RC4_128(
+void pcapfs::Crypto::decrypt_RC4_128(
 		uint64_t virtual_file_offset,
 		size_t length,
 		char *ciphertext,
 		unsigned char *mac,
 		unsigned char *key,
-		unsigned char *iv,
 		bool isClientMessage,
-		PlainTextElement *output
+		pcapfs::PlainTextElement *output
 	) {
     
 	LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
@@ -179,7 +175,7 @@ decrypt_RC4_128(
     EVP_CIPHER_CTX_cleanup(ctx);
 }
 
-decrypt_AES_128_CBC(
+void pcapfs::Crypto::decrypt_AES_128_CBC(
 		uint64_t virtual_file_offset,
 		size_t length,
 		char *ciphertext,
@@ -187,7 +183,7 @@ decrypt_AES_128_CBC(
 		unsigned char *key,
 		unsigned char *iv,
 		bool isClientMessage,
-		PlainTextElement *output
+		pcapfs::PlainTextElement *output
 	) {
     
     LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
@@ -289,7 +285,7 @@ decrypt_AES_128_CBC(
     EVP_CIPHER_CTX_cleanup(ctx);
 }
 
-decrypt_AES_256_CBC(
+void pcapfs::Crypto::decrypt_AES_256_CBC(
 		uint64_t virtual_file_offset,
 		size_t length,
 		char *ciphertext,
@@ -297,7 +293,7 @@ decrypt_AES_256_CBC(
 		unsigned char *key,
 		unsigned char *iv,
 		bool isClientMessage,
-		PlainTextElement *output
+		pcapfs::PlainTextElement *output
 	) {
     
     LOG_DEBUG << "entering decrypt_AES_256_CBC - virtual_file_offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
@@ -397,12 +393,20 @@ decrypt_AES_256_CBC(
     
     
     EVP_CIPHER_CTX_cleanup(ctx);
-    
-    return decryptedData;
 }
 
 
-decrypt_AES_256_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output) {
+void pcapfs::Crypto::decrypt_AES_256_GCM(
+		uint64_t virtual_file_offset,
+		size_t length,
+		char *ciphertext,
+		unsigned char *mac,
+		unsigned char *key,
+		unsigned char *iv,
+		unsigned char *additional_data,
+		bool isClientMessage,
+		PlainTextElement *output
+	) {
     
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);
@@ -547,7 +551,17 @@ decrypt_AES_256_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertex
 }
 
 //See https://wiki.openssl.org/index.php/EVP_Authenticated_Encryption_and_Decryption
-decrypt_AES_128_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output) {
+void pcapfs::Crypto::decrypt_AES_128_GCM(
+		uint64_t virtual_file_offset,
+		size_t length,
+		char *ciphertext,
+		unsigned char *mac,
+		unsigned char *key,
+		unsigned char *iv,
+		unsigned char *additional_data,
+		bool isClientMessage,
+		PlainTextElement *output
+	) {
 
     unsigned char public_nonce[12] = {0};
     memcpy(public_nonce, iv, 4);
@@ -689,7 +703,5 @@ decrypt_AES_128_GCM(uint64_t virtual_file_offset, size_t length, char *ciphertex
     
         
     EVP_CIPHER_CTX_cleanup(ctx);
-    
-    return decryptedData;
 }
 

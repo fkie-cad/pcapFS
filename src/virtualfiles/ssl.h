@@ -18,6 +18,8 @@
 #include "virtualfile.h"
 #include "../crypto/cipherTextElement.h"
 #include "../crypto/plainTextElement.h"
+#include "../crypto/decryptSymmetric.h"
+
 
 namespace pcapfs {
 

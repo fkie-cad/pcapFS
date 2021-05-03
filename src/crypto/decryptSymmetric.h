@@ -23,15 +23,11 @@
 #include "../virtualfiles/ssl.h"
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../crypto/plainTextElement.h"
+#include "plainTextElement.h"
 
 namespace pcapfs {
 
-    class Crypto {
-        public:
-            
-            
-                        
+    namespace Crypto {
             
             /*
              * 
@@ -41,7 +37,16 @@ namespace pcapfs {
             
             
             //new stuff:
-            decrypt_RC4_128(
+            void decrypt_RC4_128(
+            		uint64_t virtual_file_offset,
+					size_t length,
+					char *ciphertext,
+					unsigned char *mac,
+					unsigned char *key,
+					bool isClientMessage,
+					PlainTextElement *output);
+
+            void decrypt_AES_128_CBC(
             		uint64_t virtual_file_offset,
 					size_t length,
 					char *ciphertext,
@@ -51,17 +56,7 @@ namespace pcapfs {
 					bool isClientMessage,
 					PlainTextElement *output);
 
-            decrypt_AES_128_CBC(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					unsigned char *iv,
-					bool isClientMessage,
-					PlainTextElement *output);
-
-            decrypt_AES_256_CBC(
+            void decrypt_AES_256_CBC(
             		uint64_t virtual_file_offset,
 					size_t length,
 					char *ciphertext,
@@ -73,10 +68,29 @@ namespace pcapfs {
 
             
             // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)
-            decrypt_AES_128_GCM(   uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output);
-            decrypt_AES_256_GCM(   uint64_t virtual_file_offset, size_t length, char *ciphertext, unsigned char *key, unsigned char *iv, unsigned char *additional_data, bool isClientMessage, PlainTextElement *output);
+            void decrypt_AES_128_GCM(
+            		uint64_t virtual_file_offset,
+					size_t length,
+					char *ciphertext,
+					unsigned char *mac,
+					unsigned char *key,
+					unsigned char *iv,
+					unsigned char *additional_data,
+					bool isClientMessage,
+					PlainTextElement *output);
+
+            void decrypt_AES_256_GCM(
+            		uint64_t virtual_file_offset,
+					size_t length,
+					char *ciphertext,
+					unsigned char *mac,
+					unsigned char *key,
+					unsigned char *iv,
+					unsigned char *additional_data,
+					bool isClientMessage,
+					PlainTextElement *output);
             
-    };
+    }
 
 }
 
