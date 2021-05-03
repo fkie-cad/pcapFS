@@ -393,7 +393,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
 
 
 
-void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
+void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
     pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -466,7 +466,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  */
 
                 Crypto::decrypt_RC4_128(
-                		padding,
+                		virtual_file_offset,
     					length,
     					cipherText,
 						client_write_MAC_key,
@@ -481,7 +481,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                  */
                 
             	Crypto::decrypt_RC4_128(
-            			padding,
+            			virtual_file_offset,
 						length,
 						cipherText,
 						server_write_MAC_key,
@@ -527,7 +527,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
                 Crypto::decrypt_AES_128_CBC(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						client_write_MAC_key,
@@ -543,7 +543,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
                 Crypto::decrypt_AES_128_CBC(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						server_write_MAC_key,
@@ -589,7 +589,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a client packet" << std::endl;
                 Crypto::decrypt_AES_256_CBC(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						client_write_MAC_key,
@@ -605,7 +605,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a server packet" << std::endl;
                 Crypto::decrypt_AES_256_CBC(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						server_write_MAC_key,
@@ -655,7 +655,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a client packet" << std::endl;
                 Crypto::decrypt_AES_128_GCM(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						NULL,
@@ -672,7 +672,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t padding, size_t length, char *ciph
                 
                 LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a server packet" << std::endl;
                 Crypto::decrypt_AES_128_GCM(
-                		padding,
+                		virtual_file_offset,
 						length,
 						cipherText,
 						NULL,
@@ -1132,9 +1132,10 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
                  * SO:
                  *
                  * previousBytes = ciphertext before current ciphertext element.
+                 * This offset is needed to recalculate some (usually stream) ciphers correctly
                  *
                  */
-                cte->padding = previousBytes[fragment];
+                cte->virtual_file_offset = previousBytes[fragment];
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
                 cte->cipherBlock = toDecrypt;
@@ -1172,7 +1173,12 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  * 
  */
-size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec( std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector) {
+size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
+		std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
+		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
+
+	) {
+
     int counter = 0;
     
     for (size_t i=0; i<cipherTextVector.size(); i++) {
@@ -1193,14 +1199,14 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec( std::vector< std::sh
 
 
 
-        decryptDataNew(element->padding,
+        decryptDataNew(element->virtual_file_offset,
                         element->cipherBlock.size(),
                         (char *) element->cipherBlock.data(),
                         (char *) element->keyMaterial.data(),
                         element->isClientBlock,
                         output.get());
         
-        output->padding = element->padding;
+        output->virtual_file_offset = element->virtual_file_offset;
         output->isClientBlock = element->isClientBlock;
         output->cipherSuite = element->cipherSuite;
         output->sslVersion = element->sslVersion;

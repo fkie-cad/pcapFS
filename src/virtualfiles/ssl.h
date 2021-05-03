@@ -44,9 +44,9 @@ namespace pcapfs {
         //ssl decrypt functions
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion);
 
-        Bytes decryptData(uint64_t padding, size_t length, char* data, char* key_material, bool isClientMessage);
+        //Bytes decryptData(uint64_t virtual_file_offset, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
-        void decryptDataNew(uint64_t padding, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output);
+        void decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output);
             
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 

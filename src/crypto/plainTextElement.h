@@ -19,7 +19,7 @@ namespace pcapfs {
 	public:
 		pcapfs::Bytes plaintextBlock;
 		pcapfs::Bytes hmac;
-		int padding;
+		uint64_t virtual_file_offset;
 
 		bool isClientBlock;
 

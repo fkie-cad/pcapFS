@@ -17,7 +17,7 @@ namespace pcapfs {
 		std::string cipherSuite = "";
 		uint16_t sslVersion = 0;
 		int length = 0;
-		int padding = 0;
+		uint64_t virtual_file_offset = 0;
 
 		bool isClientBlock;
 		Bytes cipherBlock;
