@@ -22,6 +22,10 @@
 
 using namespace pcapfs;
 
+size_t getMacSize(pcpp::SSLVersion sslVersion, std::string cipherSuite) {
+	return 16;
+}
+
 void pcapfs::Crypto::decrypt_RC4_128(
 		uint64_t virtual_file_offset,
 		size_t length,

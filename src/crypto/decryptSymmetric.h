@@ -34,7 +34,9 @@ namespace pcapfs {
              * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
              * 
              */
-            
+
+    		size_t getMacSize(pcpp::SSLVersion sslVersion, std::string cipherSuite);
+
             
             //new stuff:
             void decrypt_RC4_128(

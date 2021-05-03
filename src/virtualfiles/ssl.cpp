@@ -311,7 +311,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * Here we need to fix MAC
                  */
 
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - 16);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
+                		+ soffset.length
+						- Crypto::getMacSize(sslVersion, cipherSuite));
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
