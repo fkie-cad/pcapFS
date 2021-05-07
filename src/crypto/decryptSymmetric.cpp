@@ -59,16 +59,16 @@ size_t pcapfs::Crypto::getMacSize(pcpp::SSLVersion sslVersion, std::string ciphe
 		 * Unsupported yet
 		 */
 
-		case pcpp::SSL_HASH_GOST28147: return -3;
-		case pcpp::SSL_HASH_GOSTR3411: return -3;
+		case pcpp::SSL_HASH_GOST28147: throw "Unsupported Authentication type";
+		case pcpp::SSL_HASH_GOSTR3411: throw "Unsupported Authentication type";
 
-		case pcpp::SSL_HASH_CCM: return -3;
-		case pcpp::SSL_HASH_CCM_8: return -3;
+		case pcpp::SSL_HASH_CCM: throw "Unsupported Authentication type";
+		case pcpp::SSL_HASH_CCM_8: throw "Unsupported Authentication type";
 
-		case pcpp::SSL_HASH_Unknown: return -2;
+		case pcpp::SSL_HASH_Unknown: throw "Unsupported Authentication type";
 	}
 
-	return -2;
+	throw "Unsupported Authentication type";
 }
 
 void pcapfs::Crypto::decrypt_RC4_128(
