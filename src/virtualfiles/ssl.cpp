@@ -182,6 +182,17 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         }
                         processedSSLHandshake = true;
                         LOG_DEBUG << "handshake completed";
+
+                        /*
+                         * TLS Extension for HMAC truncation activated?
+                         */
+                        LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
+
+                        if(serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != NULL) {
+                        	LOG_INFO << "Truncated HMAC extension was enabled!";
+                        	throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
+                        }
+
                     } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
                         pcpp::SSLCertificateMessage *certificateMessage =
                                 dynamic_cast<pcpp::SSLCertificateMessage *>(handshakeMessage);
@@ -879,7 +890,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
         }
         case pcpp::SSLVersion::TLS1_3:
         {
-        	LOG_INFO << "TLS 1.3 detected, currently not supported!" << std::endl;
+        	LOG_INFO << "TLS 1.3 detected, currently not supported!";
+        	break;
         }
         default:
         	pcpp::SSLVersion version(sslVersion);
