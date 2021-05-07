@@ -22,8 +22,53 @@
 
 using namespace pcapfs;
 
-size_t getMacSize(pcpp::SSLVersion sslVersion, std::string cipherSuite) {
-	return 16;
+size_t pcapfs::Crypto::getMacSize(pcpp::SSLVersion sslVersion, std::string cipherSuite) {
+
+	pcpp::SSLCipherSuite *cipher_suite = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+
+	if(cipher_suite == NULL) {
+		return -1;
+	}
+
+	pcpp::SSLHashingAlgorithm hash_algorithm = cipher_suite->getMACAlg();
+
+	/*
+	 * From https://tools.ietf.org/html/rfc5246#appendix-A.5
+	 *
+	 * 	MAC       Algorithm    mac_length  mac_key_length
+		--------  -----------  ----------  --------------
+		NULL      N/A              0             0
+		MD5       HMAC-MD5        16            16
+		SHA       HMAC-SHA1       20            20
+		SHA256    HMAC-SHA256     32            32
+
+		Following problems might occur: HMAC truncation.
+		See
+	 */
+
+	switch(hash_algorithm) {
+		case pcpp::SSL_HASH_NULL: return 0;
+
+		case pcpp::SSL_HASH_MD5: return 16;
+
+		case pcpp::SSL_HASH_SHA: return 20;
+		case pcpp::SSL_HASH_SHA256: return 32;
+		case pcpp::SSL_HASH_SHA384: return 48;
+
+		/*
+		 * Unsupported yet
+		 */
+
+		case pcpp::SSL_HASH_GOST28147: return -3;
+		case pcpp::SSL_HASH_GOSTR3411: return -3;
+
+		case pcpp::SSL_HASH_CCM: return -3;
+		case pcpp::SSL_HASH_CCM_8: return -3;
+
+		case pcpp::SSL_HASH_Unknown: return -2;
+	}
+
+	return -2;
 }
 
 void pcapfs::Crypto::decrypt_RC4_128(

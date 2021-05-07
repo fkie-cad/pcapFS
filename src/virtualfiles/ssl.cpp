@@ -307,13 +307,21 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 resultPtr->offsets.push_back(soffset);
                 //TODO: processedsize should be set
 
+
                 /*
                  * Here we need to fix MAC
                  */
+                size_t mac_size = Crypto::getMacSize(sslVersion, cipherSuite);
+                LOG_TRACE << "MAC SIZE FOR " << cipherSuite << " is " << mac_size;
+
+                if(mac_size < 0) {
+                	LOG_ERROR << "MAC IS NOT SUPPORTED";
+                	break;
+                }
 
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
                 		+ soffset.length
-						- Crypto::getMacSize(sslVersion, cipherSuite));
+						- mac_size);
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
@@ -427,7 +435,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length
         {
             /*
              * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
-             * Hint: Although this is correct in theory, in practive some of the ciphers are not supported by pcap++ nor openssl
+             * Hint: Although this is correct in theory, in practice some of the ciphers are not supported by pcap++ nor openssl
              * 
              * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
              * [0x05]           RC4-SHA                     RSA             RC4             128         TLS_RSA_WITH_RC4_128_SHA
