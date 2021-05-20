@@ -1,0 +1,5 @@
+[[decode.xor.properties]]
+  srcIP = "172.17.0.3"
+  dstIP = "172.17.0.2"
+  dstPort = 54321
+
