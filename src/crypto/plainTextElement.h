@@ -21,6 +21,8 @@ namespace pcapfs {
 		pcapfs::Bytes hmac;
 		uint64_t virtual_file_offset;
 
+		uint64_t padding;
+
 		bool isClientBlock;
 
 		uint16_t sslVersion;

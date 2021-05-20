@@ -235,7 +235,7 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 		pcapfs::PlainTextElement *output
 	) {
     
-    LOG_DEBUG << "entering decrypt_AES_128_CBC - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
+    LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
     printf("mac_key:\n");
     BIO_dump_fp (stdout, (const char *) mac, 20);
@@ -244,14 +244,16 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     printf("iv:\n");
     BIO_dump_fp (stdout, (const char *) iv, 16);
     
+    int cbc128_padding_len = 16;
+
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(virtual_file_offset + length);
-    Bytes dataToDecrypt(virtual_file_offset);
+    Bytes decryptedData(length);
+    Bytes dataToDecrypt(0);
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
-    LOG_TRACE << "decrypting with padding " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
+    LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
@@ -319,18 +321,21 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     
     //remove the virtual_file_offset
     //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
-    
+
     //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
-    
+
     std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-    
+
     printf("plaintext:\n");
-    //BIO_dump_fp (stdout, (const char *)decryptedData.data() + padding+16, plaintext_len-padding);
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len-virtual_file_offset);
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() +16, plaintext_len);
+
+    int cbc_padding = cbc128_padding_len - (plaintext_len % cbc128_padding_len);
+
+    LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc_padding;
+
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + cbc_padding, plaintext_len + cbc_padding);
     printf("\n\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset - 20 - 1);
-    
-    
+
     EVP_CIPHER_CTX_cleanup(ctx);
 }
 

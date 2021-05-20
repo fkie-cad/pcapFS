@@ -184,7 +184,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         LOG_DEBUG << "handshake completed";
 
                         /*
-                         * TLS Extension for HMAC truncation activated?
+                         * TLS Extension for HMAC truncation activated? Eventually then HMAC is always 10 bytes only.
                          */
                         LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
 

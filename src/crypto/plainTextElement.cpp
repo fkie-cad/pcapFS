@@ -17,4 +17,7 @@ void pcapfs::PlainTextElement::printMe(void) {
     printf("plain block:\n");
     BIO_dump_fp (stdout, (const char *)plaintextBlock.data(), plaintextBlock.size());
 
+    printf("hmac block:\n");
+    BIO_dump_fp (stdout, (const char *)hmac.data(), hmac.size());
+
 }
