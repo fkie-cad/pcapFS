@@ -366,6 +366,18 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 
     printf("\n\n");
 
+    /*
+     * Warning: This hmac is actually useless, it should verify the ciphertext only!
+     */
+    output->hmac = mac_from_ciphertext;
+
+    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + iv_len);
+    decryptedData.erase(decryptedData.end() - cbc128_padding, decryptedData.end());
+
+    output->isClientBlock = isClientMessage;
+    output->padding = cbc128_padding;
+    output->plaintextBlock = decryptedData;
+
     EVP_CIPHER_CTX_cleanup(ctx);
 }
 
