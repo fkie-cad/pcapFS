@@ -235,6 +235,22 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 		pcapfs::PlainTextElement *output
 	) {
     
+	/*
+	 * AES CBC Mode for TLS 1.1:
+	 *
+	 * ciphertext has this structure:
+	 *
+	 * actual ciphertext
+	 * MAC (20 bytes)
+	 *
+	 * The mac is used to check the ciphertext!
+	 *
+	 * The decrypted stuff looks like this:
+	 *
+	 * 16 byte IV (? not sure if these bytes are actually the IV for next packets)
+	 *
+	 */
+
     LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
     printf("mac_key:\n");
@@ -244,14 +260,23 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     printf("iv:\n");
     BIO_dump_fp (stdout, (const char *) iv, 16);
     
-    int cbc128_padding_len = 16;
+    int cbc128_padding = 0;
+    const int iv_len = 16;
+    int mac_len = 20;
+    const int ciphertext_len_calculated = length - mac_len;
 
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(length);
+    Bytes decryptedData(ciphertext_len_calculated);
+    std::fill(decryptedData.begin(), decryptedData.end(), 0);
+
+    Bytes mac_from_ciphertext(0);
+    mac_from_ciphertext.insert(mac_from_ciphertext.end(), ciphertext + ciphertext_len_calculated, ciphertext + ciphertext_len_calculated + mac_len);
+
     Bytes dataToDecrypt(0);
     
-    dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
+
+    dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + ciphertext_len_calculated);
     
     LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
@@ -324,16 +349,21 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 
     //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
 
-    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
+    //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
 
-    printf("plaintext:\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() +16, plaintext_len);
+    /*
+     * get last byte, contains the padding length.
+     * you need to add one to the byte. when padding would not be necessary we add 16 (0x0f) (plus one, -> 16).
+     */
 
-    int cbc_padding = cbc128_padding_len - (plaintext_len % cbc128_padding_len);
+    // MAC SIZE IS 20 byte
 
-    LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc_padding;
+    cbc128_padding = decryptedData.back() + 1;
+    LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
 
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + cbc_padding, plaintext_len + cbc_padding);
+    printf("plaintext: plaintext_len %d  decryptedData.size() %d\n", plaintext_len, decryptedData.size());
+    BIO_dump_fp (stdout, (const char *)decryptedData.data() + iv_len, decryptedData.size() - iv_len - cbc128_padding);
+
     printf("\n\n");
 
     EVP_CIPHER_CTX_cleanup(ctx);
