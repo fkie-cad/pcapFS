@@ -193,6 +193,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                         	throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
                         }
 
+                        if(serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
+                        	LOG_INFO << "Encrypt-Then-Mac Extension IS ENABLED!";
+                        } else {
+                        	LOG_INFO << "Encrypt-Then-Mac Extension IS NOT ENABLED";
+                        }
+
                     } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
                         pcpp::SSLCertificateMessage *certificateMessage =
                                 dynamic_cast<pcpp::SSLCertificateMessage *>(handshakeMessage);
@@ -1049,6 +1055,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     }
     
     LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+    LOG_TRACE << "length: " << length;
 
 	//write_me_to_file.push_back(0);
     for(size_t i=0; i<result.size(); i++) {
