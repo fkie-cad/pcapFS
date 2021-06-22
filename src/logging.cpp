@@ -5,6 +5,7 @@
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/console.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
 
 
 namespace pcapfs {
@@ -36,10 +37,14 @@ namespace pcapfs {
 void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
     namespace expr = boost::log::expressions;
     boost::log::add_common_attributes();
+
     const auto format = (boost::log::expressions::stream
+    		<< expr::attr<unsigned int>("LineID") << " | "
             << expr::format_date_time<boost::posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << " | "
             << boost::log::trivial::severity << " | "
             << expr::smessage);
     const auto sink = boost::log::add_console_log(std::clog, boost::log::keywords::format = format);
     boost::log::core::get()->set_filter(boost::log::trivial::severity >= get_log_level(log_level));
 }
+
+

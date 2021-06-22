@@ -19,7 +19,11 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
 
 
 void pcapfs::File::fillBuffer(const Index &idx) {
+	//TODO inspect sizes here
+
+	LOG_TRACE << "current buffer size: " << buffer.size();
     buffer.resize(filesizeRaw);
+    LOG_TRACE << "new filesizeRaw: " << filesizeRaw;
     read(0, filesizeRaw, idx, (char *) buffer.data());
 }
 
@@ -60,6 +64,23 @@ bool pcapfs::File::meetsDecodeMapCriteria(const std::string &file) {
     return false;
 }
 
+ std::string pcapfs::File::to_string() {
+
+	 std::stringstream ss;
+
+	 ss << "File(\n"
+    			<< "  filetype: " << this->getFiletype() << "\n"
+				<< "  filename: " << this->getFilename() << "\n"
+				<< "  filesizeRaw: " << this->getFilesizeRaw() << "\n"
+				<< "  filesizeProcessed: " << this->getFilesizeProcessed() << "\n"
+				<< "  buffer: " << this->getBuffer().data() << "\n"
+				<< ")";
+
+	 std::string ret = ss.str();
+
+	 return ret;
+
+}
 
 void pcapfs::File::serialize(boost::archive::text_oarchive &archive) {
     //uint16_t

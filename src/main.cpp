@@ -43,6 +43,11 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         if (file->flags.test(pcapfs::flags::IS_REAL_FILE)) {
             continue;
         }
+
+        LOG_TRACE << "current file name: " << file->getFilename() <<
+        		" fileSizeRaw: " << file->getFilesizeRaw() <<
+				" fileSizeProcessed: " << file->getFilesizeProcessed();
+
         file->fillBuffer(idx);
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
@@ -51,6 +56,9 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             	 * Debug helpers for this construct here is necessary
             	 */
                 newPtr = it.second(file, idx);
+
+                LOG_TRACE << file->to_string();
+
                 if (!newPtr.empty()) {
                     file->flags.set(pcapfs::flags::PARSED);
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());

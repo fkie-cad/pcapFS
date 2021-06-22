@@ -1065,14 +1065,14 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     if (write_me_to_file.size() > 0) {
 
     	LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-    			" length: " << length << "result_size: " << write_me_to_file.size();
+    			" length: " << length << " result_size: " << write_me_to_file.size();
 
 		memset(buf, 0, length);
 		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 
 		LOG_TRACE << "file writer done!" << std::endl;
     	LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-    			" length: " << length << "result_size: " << write_me_to_file.size();
+    			" length: " << length << " result_size: " << write_me_to_file.size();
     }
 
     if (startOffset + length < filesizeRaw) {

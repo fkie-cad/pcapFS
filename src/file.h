@@ -96,6 +96,9 @@ namespace pcapfs {
 
         virtual void deserialize(boost::archive::text_iarchive &archive);
 
+        std::string to_string();
+
+
     protected:
         std::string filetype;
         std::string filename;
@@ -108,7 +111,11 @@ namespace pcapfs {
         static options::PcapFsOptions config;
 
         Bytes buffer;
+
     };
+
+
+
 
     typedef std::shared_ptr<File> FilePtr;
 }
