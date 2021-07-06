@@ -129,6 +129,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
+        //connection break has wrong size if content is encrypted
+        LOG_DEBUG << "connectionBreaks Size: " << size;
+
+
         //Step 4: one logical fragment may contain multiple ssl layer messages
         pcpp::SSLLayer *sslLayer = sslLayer->createSSLMessage((uint8_t *) data.data() + offset, size, nullptr, packet);
         uint64_t offsetInLogicalFragment = 0;
@@ -297,6 +301,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 if (connectionBreakOccured) {
                     resultPtr->connectionBreaks.push_back(
                             {resultPtr->getFilesizeRaw(), filePtr->connectionBreaks.at(i).second});
+
+                    LOG_DEBUG << "connection break occurred: fsraw: " << resultPtr->getFilesizeRaw()
+						<< " - time: " << filePtr->connectionBreaks.at(i).second;
+
                     connectionBreakOccured = false;
                 }
 
