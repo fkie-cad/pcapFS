@@ -122,7 +122,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         LOG_DEBUG << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
 
-        //get correct size (depending on element processed)
+        // get correct size (depending on element processed)
+        // get size between the two connections
         if (i == numElements - 1) {
             size = filePtr->getFilesizeRaw() - offset;
         } else {
@@ -298,11 +299,13 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     }
                 }
 
+                //TODO: set filesizeProcessed when decryption is done
+                //resultPtr->filesizeRaw before
                 if (connectionBreakOccured) {
                     resultPtr->connectionBreaks.push_back(
-                            {resultPtr->getFilesizeRaw(), filePtr->connectionBreaks.at(i).second});
+                            {resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
 
-                    LOG_DEBUG << "connection break occurred: fsraw: " << resultPtr->getFilesizeRaw()
+                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed
 						<< " - time: " << filePtr->connectionBreaks.at(i).second;
 
                     connectionBreakOccured = false;
