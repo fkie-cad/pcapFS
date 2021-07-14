@@ -8,9 +8,9 @@
 
 
 struct SimpleOffset {
-    uint64_t id;
-    uint64_t start;
-    uint64_t length;
+    uint64_t id = 0L;
+    uint64_t start = 0L;
+    uint64_t length = 0L;
 
     template<class Archive>
     void serialize(Archive &archive, const unsigned int) {

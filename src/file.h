@@ -103,9 +103,9 @@ namespace pcapfs {
         std::string filetype;
         std::string filename;
         TimePoint timestamp;
-        uint64_t filesizeRaw;
-        uint64_t filesizeProcessed;
-        uint64_t idInIndex;
+        uint64_t filesizeRaw = 0L;
+        uint64_t filesizeProcessed = 0L;
+        uint64_t idInIndex = 0L;
         std::map<std::string, std::string> properties;
 
         static options::PcapFsOptions config;
