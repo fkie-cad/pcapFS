@@ -217,6 +217,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
 
+            //TODO WHY?
             //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
