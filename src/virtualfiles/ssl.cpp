@@ -305,8 +305,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     resultPtr->connectionBreaks.push_back(
                             {resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
 
-                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed
-						<< " - time: " << filePtr->connectionBreaks.at(i).second;
+                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
 
                     connectionBreakOccured = false;
                 }
