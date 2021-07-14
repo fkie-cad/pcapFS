@@ -299,16 +299,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     }
                 }
 
-                //TODO: set filesizeProcessed when decryption is done
-                //resultPtr->filesizeRaw before
-                if (connectionBreakOccured) {
-                    resultPtr->connectionBreaks.push_back(
-                            {resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
-
-                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
-
-                    connectionBreakOccured = false;
-                }
 
                 //each application data is part of the stream
                 SimpleOffset soffset;
@@ -335,20 +325,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 //TODO: processedsize should be set
 
 
-                /*
-                 * Here we need to fix MAC
-                 */
-                size_t mac_size = Crypto::getMacSize(sslVersion, cipherSuite);
-                LOG_TRACE << "MAC SIZE FOR " << cipherSuite << " is " << mac_size;
-
-                if(mac_size < 0) {
-                	LOG_ERROR << "MAC IS NOT SUPPORTED";
-                	break;
-                }
-
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
-                		+ soffset.length
-						- mac_size);
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
@@ -364,6 +340,33 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
 
                 offsetInLogicalFragment += completeSSLLen;
+
+                /*
+                 * Here we need to fix MAC
+                 */
+                size_t mac_size = Crypto::getMacSize(sslVersion, cipherSuite);
+                LOG_TRACE << "MAC SIZE FOR " << cipherSuite << " is " << mac_size;
+
+                if(mac_size < 0) {
+                	LOG_ERROR << "MAC IS NOT SUPPORTED";
+                	break;
+                }
+
+                //TODO is this a good idea to remove the mac from file size raw?
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
+                		+ soffset.length
+						- mac_size);
+
+                //TODO: set filesizeProcessed when decryption is done
+                //resultPtr->filesizeRaw before
+                if (connectionBreakOccured) {
+                    resultPtr->connectionBreaks.push_back(
+                            {resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
+
+                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
+
+                    connectionBreakOccured = false;
+                }
 
                 LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
             }
