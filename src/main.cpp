@@ -148,6 +148,12 @@ int main(int argc, const char *argv[]) {
         LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
         		<< filesToProcess.size() << ">";
 
+        /*
+         * Every file is created as TCP or UDP File
+         * Both file types are handled by the getNextVirtualFile function,
+         * which gets all TCP and UDP files.
+         * They are iteratively added and reprocessed until no new files are left
+         */
         do {
             counter++;
             std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);

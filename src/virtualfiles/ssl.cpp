@@ -357,13 +357,16 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 		+ soffset.length
 						- mac_size);
 
-                //TODO we will get plaintext length without? decrypting it before
-                //What do we want to calculate?
-                //TODO: Nothing happens if we add or subtract anything here.
-                resultPtr->setFilesizeProcessed(resultPtr->getFilesizeProcessed()
-                		+ soffset.length
-						- mac_size - 20);
 
+                if (!flags.test(pcapfs::flags::PROCESSED)) {
+                    //TODO we will get plaintext length without? decrypting it before
+                    //What do we want to calculate?
+                    //TODO: Nothing happens if we add or subtract anything here.
+                    resultPtr->setFilesizeProcessed(resultPtr->getFilesizeProcessed()
+                    		+ soffset.length
+    						- mac_size);
+
+                }
 
 
                 //TODO: set filesizeProcessed when decryption is done

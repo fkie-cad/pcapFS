@@ -56,6 +56,7 @@ namespace pcapfs {
 
         uint64_t getFilesizeRaw() { return filesizeRaw; };
 
+        //uint64_t getFilesizeProcessed() { return filesizeProcessed; };
         uint64_t getFilesizeProcessed();
 
         uint64_t getIdInIndex() { return idInIndex; };
@@ -70,9 +71,9 @@ namespace pcapfs {
 
         void setFiletype(const std::string &filetype) { this->filetype = filetype; };
 
-        void setFilesizeRaw(uint64_t filesizeRaw) { this->filesizeRaw = filesizeRaw; }
+        void setFilesizeRaw(uint64_t filesizeRaw) { this->filesizeRaw = filesizeRaw; };
 
-        void setFilesizeProcessed(uint64_t filesizeProcessed) { this->filesizeProcessed = filesizeProcessed; }
+        void setFilesizeProcessed(uint64_t filesizeProcessed) { this->filesizeProcessed = filesizeProcessed; };
 
         void setTimestamp(TimePoint timestamp) { this->timestamp = timestamp; };
 

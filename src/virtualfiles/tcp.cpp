@@ -106,6 +106,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer->setIdInIndex(state->nextUniqueId);
         tcpPointer->setOffsetType("pcap"); //tcp files point directly into the pcap
         tcpPointer->setFilesizeRaw(tcpData.getDataLength());
+        tcpPointer->setFilesizeProcessed(tcpData.getDataLength());
         tcpPointer->setFiletype("tcp");
         //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
@@ -119,6 +120,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
     } else {
         tcpPointer = state->files[flowkey];
         tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
+        tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
         //TODO: where to add uncompressed/unprocessed filesize?
         //tcp_file->fileinformation.filesize_uncompressed += tcpData.getDataLength();
     }
