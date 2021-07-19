@@ -88,6 +88,11 @@ std::string pcapfs::SslFile::toString() {
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
+int pcapfs::SslFile::calculateProcessedSize(FilePtr filePtr, Index &idx) {
+
+	return 0;
+}
+
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
@@ -358,13 +363,24 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 						- mac_size);
 
 
-                if (!flags.test(pcapfs::flags::PROCESSED)) {
+                /*
+                 * The current design needs information about the file sizes to allocate the buffer
+                 * for the respective size. We calculate the buffer size if it has not been set.
+                 * This size is called setFilesizeProcessed (virtual files)
+                 */
+                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+                	LOG_TRACE << "Length calculation now";
                     //TODO we will get plaintext length without? decrypting it before
                     //What do we want to calculate?
                     //TODO: Nothing happens if we add or subtract anything here.
+
+                	int calculated_size = calculateProcessedSize(filePtr, idx);
+
                     resultPtr->setFilesizeProcessed(resultPtr->getFilesizeProcessed()
                     		+ soffset.length
     						- mac_size);
+
+                    filePtr->flags.set(pcapfs::flags::PROCESSED);
 
                 }
 
