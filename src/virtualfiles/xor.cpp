@@ -23,6 +23,10 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
         offset.length = filePtr->getFilesizeProcessed();
         resultPtr->offsets.push_back(offset);
         resultPtr->setFilesizeRaw(filePtr->getFilesizeRaw());
+
+        // Filesize processed is equal to file size raw when XORed.
+        resultPtr->setFilesizeProcessed(filePtr->getFilesizeRaw());
+
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setTimestamp(filePtr->getTimestamp());
         resultPtr->filename = FILE_TYPE_NAME;
