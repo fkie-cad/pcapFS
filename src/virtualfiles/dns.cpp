@@ -143,6 +143,10 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
         soffset.length = filePtr->getFilesizeRaw();
         resultPtr->offsets.push_back(soffset);
         resultPtr->setFilesizeRaw(soffset.length);
+
+        //We assume the processed file size does not change in this protocol in cmp to the raw file size
+        resultPtr->setFilesizeProcessed(soffset.length);
+
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setFiletype(FILE_TYPE_NAME);
         resultPtr->setTimestamp(filePtr->getTimestamp());
