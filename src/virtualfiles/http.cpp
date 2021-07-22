@@ -72,7 +72,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffsetHeader.length = firstLine + headerLength;
             resultHeaderPtr->offsets.push_back(soffsetHeader);
             resultHeaderPtr->setOffsetType(filePtr->getFiletype());
+
             resultHeaderPtr->setFilesizeRaw(soffsetHeader.length);
+            resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
+
             resultHeaderPtr->setFiletype("http");
             requestedHost = header["host"];
             requestedUri = getRequestUri(data, offset, size);
@@ -118,6 +121,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultPtr->offsets.push_back(soffset);
             resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
+
             resultPtr->setOffsetType(filePtr->getFiletype());
             resultPtr->setFiletype("http");
             if (requestedFilename != "") {
@@ -152,7 +157,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffsetHeader.length = firstLine + headerLength;
             resultHeaderPtr->offsets.push_back(soffsetHeader);
             resultHeaderPtr->setOffsetType(filePtr->getFiletype());
+
             resultHeaderPtr->setFilesizeRaw(soffsetHeader.length);
+            resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
+
             resultHeaderPtr->setFiletype("http");
             resultHeaderPtr->setFilename(requestedFilename);
             resultHeaderPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
@@ -178,7 +186,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffset.length = size - firstLine - headerLength;
 
             resultPtr->offsets.push_back(soffset);
+
             resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
+
+
             resultPtr->setOffsetType(filePtr->getFiletype());
             resultPtr->setFiletype("http");
             resultPtr->setFilename(requestedFilename);
