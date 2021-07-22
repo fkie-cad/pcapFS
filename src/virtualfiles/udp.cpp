@@ -167,6 +167,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setIdInIndex(state.nextUniqueId);
                     udpPointer->setOffsetType("pcap"); //udp files point directly into the pcap
                     udpPointer->setFilesizeRaw(udpLayer->getDataLen());
+                    udpPointer->setFilesizeProcessed(udpLayer->getDataLen());
                     udpPointer->setFiletype("udp");
                     //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
                     //udpPointer->connectionBreaks.push_back({0, state.currentTimestamp});
