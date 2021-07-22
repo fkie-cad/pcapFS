@@ -91,6 +91,9 @@ pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::Fi
 
     result->offsets.push_back(soffset);
     result->setFilesizeRaw(result->getFilesizeRaw() + size);
+
+    //We assume the processed file size does not change in this protocol in cmp to the raw file size
+    result->setFilesizeProcessed(result->getFilesizeRaw());
 }
 
 
