@@ -108,6 +108,7 @@ pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile>
 
     result->offsets.push_back(soffset);
     result->setFilesizeRaw(result->getFilesizeRaw() + size + DATA_DIRECTION_PREFIX_LN);
+    result->setFilesizeProcessed(result->getFilesizeRaw());
 }
 
 
@@ -132,6 +133,8 @@ pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> resu
 
     result->offsets.push_back(soffset);
     result->setFilesizeRaw(result->getFilesizeRaw() + size + DATA_DIRECTION_PREFIX_LN * nr_of_lines);
+    result->setFilesizeProcessed(result->getFilesizeRaw());
+
 }
 
 
