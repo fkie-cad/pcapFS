@@ -120,7 +120,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
     } else {
         tcpPointer = state->files[flowkey];
         tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
-        tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
+        tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw());
         //TODO: where to add uncompressed/unprocessed filesize?
         //tcp_file->fileinformation.filesize_uncompressed += tcpData.getDataLength();
     }

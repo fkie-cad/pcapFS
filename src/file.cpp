@@ -25,13 +25,16 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
 void pcapfs::File::fillBuffer(const Index &idx) {
 	//TODO inspect sizes here
 
+	// This here fix hopefully cases where we have not wet the filesizeProcessed proper
+
 	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::PROCESSED)) {
+		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position!";
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeRaw);
 		LOG_TRACE << "new filesizeRaw: " << filesizeRaw;
 		read(0, filesizeRaw, idx, (char *) buffer.data());
 	} else {
-		// filesizeProcessed can be used as the file has ben processed:
+		// filesizeProcessed can be used as the file has been processed:
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeProcessed);
 		LOG_TRACE << "new filesizeRaw: " << filesizeProcessed;

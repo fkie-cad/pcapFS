@@ -88,9 +88,11 @@ std::string pcapfs::SslFile::toString() {
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
-int pcapfs::SslFile::calculateProcessedSize(FilePtr filePtr, Index &idx) {
+int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
+	// filesizeRaw is larger than processed, we get the size back.
+	size_t plaintext_size = read_for_size(0, filesizeRaw, idx);
 
-	return 0;
+	return plaintext_size;
 }
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
@@ -374,7 +376,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     //What do we want to calculate?
                     //TODO: Nothing happens if we add or subtract anything here.
 
-                	int calculated_size = calculateProcessedSize(filePtr, idx);
+                	//We set processed size before actual processing as we need the size of the target buffer
+                	//TODO fix design in future
+                	int calculated_size = calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 
                     resultPtr->setFilesizeProcessed(resultPtr->getFilesizeProcessed()
                     		+ soffset.length
@@ -382,6 +386,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                     filePtr->flags.set(pcapfs::flags::PROCESSED);
 
+                } else {
+                	LOG_DEBUG << "Already processed, length calculation done";
                 }
 
 
@@ -1037,68 +1043,46 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * 
  */
 
-
 /*
  * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
  */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    
+
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
-    /*
-     * Init for the vectors with regular shared pointers
-     */
+    // Init for the vectors with regular shared pointers
     for(auto& c : cipherTextVector) {
     	c = std::make_shared<CipherTextElement>();
     }
     for(auto& p : plainTextVector) {
 		p = std::make_shared<PlainTextElement>();
 	}
-    
+
     getFullCipherText(startOffset, length, idx, cipherTextVector);
-    
+
     for(size_t i=0; i< cipherTextVector.size(); i++) {
-        
         CipherTextElement *elem = cipherTextVector.at(i).get();
-        
         elem->printMe();
     }
-    
+
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
-    
+
     int offset = 0;
-
     LOG_TRACE << "entering file writer..." << std::endl;
-
     std::vector<Bytes> result;
     Bytes write_me_to_file;
 
-
     for(size_t i=0; i<plainTextVector.size(); i++) {
-        
         PlainTextElement *elem = plainTextVector.at(i).get();
-        
         elem->printMe();
-
         result.push_back(elem->plaintextBlock);
-
-        //LOG_DEBUG << "current plaintext: " << std::endl << plaintext.data() << std::endl;
-        //LOG_DEBUG << "startOffset: "<< startOffset << " plaintext-size: " << plaintext.size() << " current " << i+1 << "/" << plainTextVector->size() << " elements. " << std::endl;
-
-        //memset(buf + offset, 0, plaintext.size());
-        //memcpy(buf + offset, plaintext.data() + startOffset, plaintext.size());
-
-        //BIO_dump_fp(stdout, (const char *) buf, offset + plaintext.size());
-
         offset += elem->plaintextBlock.size();
-
     }
-    
+
     LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
     LOG_TRACE << "length: " << length;
 
-	//write_me_to_file.push_back(0);
     for(size_t i=0; i<result.size(); i++) {
     	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
     }
@@ -1124,6 +1108,64 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         return filesizeRaw - startOffset;
     }
 }
+
+
+
+
+
+
+/*
+ * This is the new function for the calculation of the plaintext:
+ */
+size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const Index &idx) {
+    
+    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
+
+    // Init for the vectors with regular shared pointers
+    for(auto& c : cipherTextVector) {
+    	c = std::make_shared<CipherTextElement>();
+    }
+    for(auto& p : plainTextVector) {
+		p = std::make_shared<PlainTextElement>();
+	}
+    
+    getFullCipherText(startOffset, length, idx, cipherTextVector);
+    
+    for(size_t i=0; i< cipherTextVector.size(); i++) {
+        CipherTextElement *elem = cipherTextVector.at(i).get();
+        elem->printMe();
+    }
+    
+    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
+    
+    int offset = 0;
+    LOG_TRACE << "entering file writer..." << std::endl;
+    std::vector<Bytes> result;
+    Bytes write_me_to_file;
+
+    for(size_t i=0; i<plainTextVector.size(); i++) {
+        PlainTextElement *elem = plainTextVector.at(i).get();
+        elem->printMe();
+        result.push_back(elem->plaintextBlock);
+        offset += elem->plaintextBlock.size();
+    }
+    
+    LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+    LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
+    LOG_TRACE << "length: " << length;
+
+    // TODO: check if this behavior needs to be adapted by the caller, then we need to call this function multiple times
+
+    if (startOffset + length < length) {
+    	//read till length is ended
+        return length;
+    } else {
+    	// read till file end
+        return length - startOffset;
+    }
+}
+
 
 
 /*
