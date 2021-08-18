@@ -39,6 +39,8 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
     std::vector<pcapfs::FilePtr> filesToProcess;
     std::vector<pcapfs::FilePtr> newFiles;
 
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+
     for (auto &file: files) {
         if (file->flags.test(pcapfs::flags::IS_REAL_FILE)) {
             continue;

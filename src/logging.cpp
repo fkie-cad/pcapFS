@@ -1,6 +1,7 @@
 #include "logging.h"
 
 #include <iostream>
+#include <fstream>
 
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
@@ -47,4 +48,10 @@ void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
     boost::log::core::get()->set_filter(boost::log::trivial::severity >= get_log_level(log_level));
 }
 
-
+void pcapfs::logging::profilerFunction(const char* file, const char* function, const char* msg) {
+	const char* target = "profiler.log";
+	std::ofstream target_output_file;
+	target_output_file.open(target, std::ios_base::app);
+	target_output_file << "file: " << file << " - function: " << function << " - message: " << msg << std::endl;
+	target_output_file.close();
+}

@@ -29,6 +29,7 @@ namespace pcapfs {
         const unsigned char MISSING_DATA = 7; // 1000 0000
         const unsigned char HAS_DECRYPTION_KEY = 8;
         const unsigned char PARSED = 9;
+        const unsigned char SSL_SIZE_CALCULATED = 10;
     }
 
     typedef std::pair<uint64_t, TimePoint> OffsetWithTime;

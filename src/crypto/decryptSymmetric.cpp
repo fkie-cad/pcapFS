@@ -235,6 +235,8 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 		pcapfs::PlainTextElement *output
 	) {
     
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+
 	/*
 	 * AES CBC Mode for TLS 1.1:
 	 *

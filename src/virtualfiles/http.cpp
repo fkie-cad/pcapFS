@@ -22,6 +22,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+
     size_t size = 0;
     headerMap header;
     std::string requestedFilename;
@@ -244,6 +246,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
 
 size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
         return readGzip(startOffset, length, idx, buf);
     } else if (flags.test(pcapfs::flags::COMPRESSED_DEFLATE)) {
@@ -257,6 +260,7 @@ size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &
 
 
 int pcapfs::HttpFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
     SimpleOffset offset = offsets.at(0);
     FilePtr filePtr = idx.get({offsetType, offset.id});
@@ -310,6 +314,7 @@ int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index 
 
 
 int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     Bytes data;
     data.resize(filesizeRaw);
 
@@ -407,6 +412,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
 
 int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     Bytes rawData;
     rawData.resize(filesizeRaw);
     readRaw(0, filesizeRaw, idx, (char *) rawData.data());
@@ -555,6 +561,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
 //functions for HTTP parsing
 bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, uint64_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     if (length == 0) {
         length = data.size();
     }
@@ -572,6 +579,7 @@ bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, ui
 
 pcpp::HttpRequestLayer::HttpMethod
 pcapfs::HttpFile::getRequestMethod(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     if (length == 0) {
         length = data.size();
     }

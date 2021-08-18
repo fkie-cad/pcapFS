@@ -96,6 +96,7 @@ int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
 }
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
@@ -361,8 +362,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 //TODO is this a good idea to remove the mac from file size raw?
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
-                		+ soffset.length
-						- mac_size);
+                		+ soffset.length);
 
 
                 /*
@@ -370,7 +370,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * for the respective size. We calculate the buffer size if it has not been set.
                  * This size is called setFilesizeProcessed (virtual files)
                  */
-                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+                if (!filePtr->flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
                 	LOG_TRACE << "Length calculation now";
                     //TODO we will get plaintext length without? decrypting it before
                     //What do we want to calculate?
@@ -378,13 +378,13 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 	//We set processed size before actual processing as we need the size of the target buffer
                 	//TODO fix design in future
-                	int calculated_size = calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
+                	int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 
-                    resultPtr->setFilesizeProcessed(resultPtr->getFilesizeProcessed()
-                    		+ soffset.length
-    						- mac_size);
+                    resultPtr->setFilesizeProcessed(calculated_size);
 
-                    filePtr->flags.set(pcapfs::flags::PROCESSED);
+                    filePtr->flags.set(pcapfs::flags::SSL_SIZE_CALCULATED);
+
+                    LOG_TRACE << "Length calculation done";
 
                 } else {
                 	LOG_DEBUG << "Already processed, length calculation done";
@@ -468,7 +468,8 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
 
 
 void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
-    pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
         /*
@@ -1047,7 +1048,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
  */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
@@ -1100,6 +1101,8 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     			" length: " << length << " result_size: " << write_me_to_file.size();
     }
 
+    // TODO filesizeRaw or filesizeProcessed? wahrscheinlich processed inhalt
+
     if (startOffset + length < filesizeRaw) {
     	//read till length is ended
         return length;
@@ -1118,7 +1121,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * This is the new function for the calculation of the plaintext:
  */
 size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const Index &idx) {
-    
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
@@ -1155,15 +1158,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
     LOG_TRACE << "length: " << length;
 
-    // TODO: check if this behavior needs to be adapted by the caller, then we need to call this function multiple times
-
-    if (startOffset + length < length) {
-    	//read till length is ended
-        return length;
-    } else {
-    	// read till file end
-        return length - startOffset;
-    }
+    return offset;
 }
 
 
@@ -1184,7 +1179,8 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
  * 
  */
 size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
-    //TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	//TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
 	/*TODO:
 	 * Data is always completely returned, startOffset should always be zero. length is the full length.
@@ -1295,6 +1291,8 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
 
 	) {
+
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
 
     int counter = 0;
     

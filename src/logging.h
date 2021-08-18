@@ -30,6 +30,8 @@ namespace pcapfs {
 
         void init(severity log_level);
 
+        void profilerFunction(const char* file, const char* function, const char* msg);
+
     }
 }
 
