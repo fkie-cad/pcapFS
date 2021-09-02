@@ -19,10 +19,9 @@
  * Is always called for a file that is classified as HTTP.
  */
 std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
-
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
 
     size_t size = 0;
     headerMap header;
@@ -38,7 +37,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
-            size = filePtr->getFilesizeRaw() - offset;
+            //size = filePtr->getFilesizeRaw() - offset;
+        	size = filePtr->getFilesizeProcessed() - offset;
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
@@ -241,35 +241,42 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultVector.push_back(resultPtr);
         }
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return resultVector;
 }
 
 
 size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return readGzip(startOffset, length, idx, buf);
     } else if (flags.test(pcapfs::flags::COMPRESSED_DEFLATE)) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return readDeflate(startOffset, length, idx, buf);
     } else if (flags.test(pcapfs::flags::CHUNKED)) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return readChunked(startOffset, length, idx, buf);
     } else {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return readRaw(startOffset, length, idx, buf);
     }
 }
 
 
 int pcapfs::HttpFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
     SimpleOffset offset = offsets.at(0);
     FilePtr filePtr = idx.get({offsetType, offset.id});
     //TODO: sanitizing length is done in filePtr->read!
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return filePtr->read(startOffset + offset.start, length, idx, buf);
 }
 
 
 int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes rawData;
     rawData.resize(filesizeRaw + 1);
     uint64_t size;
@@ -301,6 +308,7 @@ int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index 
 
     int readCount = (int) std::min((size_t) decr_size - startOffset, length);
     if (readCount <= 0) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
@@ -309,12 +317,13 @@ int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index 
     }
     decompressed.seekg(startOffset);
     decompressed.read(buf, readCount);
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return readCount;
 }
 
 
 int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data;
     data.resize(filesizeRaw);
 
@@ -349,7 +358,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
         } catch (bio::gzip_error &e) {
             LOG_WARNING << "Gzip Error: " << e.what();
         }
-
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return decr_size;
     }
 
@@ -361,6 +370,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
         if (inflateInit2(&zs, MAX_WBITS) != Z_OK) {
             LOG_ERROR << "ZLIB init error";
             delete[] inflated;
+            pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 0;
         }
 
@@ -381,6 +391,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
             if (inflateReset2(&zs, -MAX_WBITS) != Z_OK) {
                 LOG_ERROR << "ZLIB reset error";
                 delete[] inflated;
+                pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
                 return 0;
             }
 
@@ -402,17 +413,20 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
         if (zlib_return != Z_STREAM_END) {
             LOG_ERROR << "Zlib uncompress error, zlib-errno: " << zlib_return;
             delete[] inflated;
+            pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 0;
         }
         ulong infl_size = outlen - zs.avail_out;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return infl_size;
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return filesizeRaw;
 }
 
 
 int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes rawData;
     rawData.resize(filesizeRaw);
     readRaw(0, filesizeRaw, idx, (char *) rawData.data());
@@ -463,19 +477,23 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
         LOG_ERROR << "no buffer specified in readChunked!";
     }
     if (out_pos == 0) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
     size_t read_count = std::min((size_t) out_pos - startOffset, length);
     if (read_count == 0) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
     memcpy(buf, (char *) out_buf.data() + startOffset, read_count);
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return (int) read_count;
 }
 
 
 int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes rawData;
     rawData.resize(filesizeRaw + 1);
     uint64_t size;
@@ -496,6 +514,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     if (inflateInit2(&zs, MAX_WBITS) != Z_OK) {
         LOG_ERROR << "ZLIB init error";
         delete[] inflated;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
@@ -516,6 +535,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
         if (inflateReset2(&zs, -MAX_WBITS) != Z_OK) {
             LOG_ERROR << "ZLIB reset error";
             delete[] inflated;
+            pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 0;
         }
 
@@ -537,6 +557,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     if (zlib_return != Z_STREAM_END) {
         LOG_ERROR << "Zlib uncompress error, zlib-errno: " << zlib_return;
         delete[] inflated;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
@@ -544,51 +565,58 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     if (buf == nullptr) {
         LOG_ERROR << "no buffer specified in readDeflate!";
         delete[] inflated;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
     size_t read_count = std::min((size_t) infl_size - startOffset, length);
     if (read_count <= 0) {
         delete[] inflated;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 
     memcpy(buf, inflated + startOffset, read_count);
     delete[] inflated;
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return (int) read_count;
 }
 
 
 //functions for HTTP parsing
 bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, uint64_t length) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (length == 0) {
         length = data.size();
     }
     pcpp::HttpRequestLayer::HttpMethod method = pcpp::HttpRequestFirstLine::parseMethod(
             (char *) data.data() + startOffset, length);
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return false;
     }
     if (!usesValidHTTPVersion(data, startOffset, length)) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return false;
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return true;
 }
 
 
 pcpp::HttpRequestLayer::HttpMethod
 pcapfs::HttpFile::getRequestMethod(const Bytes &data, uint64_t startOffset, size_t length) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (length == 0) {
         length = data.size();
     }
-
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return pcpp::HttpRequestFirstLine::parseMethod((char *) data.data() + startOffset, length);
 }
 
 
 std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::HttpMethod method) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::string methodEnumToString[9] = {
             "GET",
             "HEAD",
@@ -604,84 +632,103 @@ std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::Http
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
         LOG_ERROR << "not a valid http method!";
     }
-
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return methodEnumToString[method];
 }
 
 
 bool pcapfs::HttpFile::usesValidHTTPVersion(const pcapfs::Bytes &data, uint64_t startOffset, size_t) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     char *dataPtr = (char *) (data.data() + startOffset);
     char *verPos = strstr(dataPtr, "HTTP/");
+    bool ret_val;
     if (verPos == NULL) {
-        return 0;
+    	ret_val = 0;
     }
 
     verPos += 5;
     switch (verPos[0]) {
         case '0':
-            if (verPos[1] == '.' && verPos[2] == '9')
-                return true;
-            else
-                return false;
-
+            if (verPos[1] == '.' && verPos[2] == '9') {
+            	ret_val = true;
+            	break;
+    		} else {
+            	ret_val = false;
+            	break;
+            }
         case '1':
-            if (verPos[1] == '.' && verPos[2] == '0')
-                return true;
-            else if (verPos[1] == '.' && verPos[2] == '1')
-                return true;
-            else
-                return false;
-
+            if (verPos[1] == '.' && verPos[2] == '0') {
+            	ret_val = true;
+            	break;
+            } else if (verPos[1] == '.' && verPos[2] == '1') {
+            	ret_val = true;
+            	break;
+            } else {
+            	ret_val = false;
+            	break;
+            }
         default:
             LOG_DEBUG << "Unsupported HTTP version " << (verPos - 5);
-            return false;
+            ret_val = false;
+            break;
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    return ret_val;
 }
 
 
 off_t pcapfs::HttpFile::getRequestUriOffset(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (length == 0) {
         length = data.size();
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return pcapfs::HttpFile::requestMethodToString(
             pcapfs::HttpFile::getRequestMethod(data, startOffset, length)).length() + 1;
 }
 
 
 off_t pcapfs::HttpFile::getRequestVersionOffset(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     off_t uriOffset = getRequestUriOffset(data, startOffset, length);
     char *dataPtr = (char *) (data.data() + startOffset + uriOffset);
     char *verPos = strstr(dataPtr, " HTTP/");
     if (verPos == NULL) {
         return 0;
     }
-
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return (verPos - dataPtr + uriOffset);
 }
 
 
 std::string pcapfs::HttpFile::getRequestUri(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     off_t uriOffset = getRequestUriOffset(data, startOffset, length);
     off_t versionOffset = getRequestVersionOffset(data, startOffset, length);
     if (uriOffset >= versionOffset) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return "";
     }
     std::string result(data.data() + startOffset + uriOffset, data.data() + startOffset + versionOffset);
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return result;
 }
 
 
 std::string pcapfs::HttpFile::uriToFilename(const std::string &uri) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector<std::string> split_questionmark;
     std::vector<std::string> split_slash;
     boost::split(split_questionmark, uri, [](char c) { return c == '?' || c == ' ' || c == ';'; });
     boost::split(split_slash, split_questionmark[0], [](char c) { return c == '/'; });
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return split_slash.back();
 }
 
 
 size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap &map, uint64_t startOffset,
                                                   size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     char nameValueSeperator = ':';
     map.clear();
     size_t fieldSize = 0;
@@ -756,50 +803,61 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
     }
 
     //add to for last CRLF
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return offsetInHeader;
 }
 
 
 size_t pcapfs::HttpFile::getRequestLineLength(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (length == 0) {
         length = data.size();
     }
 
     //+9 for version number and +2 for CRNL
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return pcapfs::HttpFile::getRequestVersionOffset(data, startOffset, length) + 11;
 }
 
 
 bool pcapfs::HttpFile::isHTTPResponse(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     if (length == 0) {
         length = data.size();
     }
     if (getResponseStatusCode(data, startOffset, length) ==
         pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return false;
     }
     if (!usesValidHTTPVersion(data, startOffset, length)) {
         LOG_ERROR << "does not use valid HTTP in response check!";
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return false;
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return true;
-
 }
 
 
 pcpp::HttpResponseLayer::HttpResponseStatusCode pcapfs::HttpFile::getResponseStatusCode(const Bytes &data,
                                                                                                uint64_t startOffset,
                                                                                                size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return pcpp::HttpResponseFirstLine::parseStatusCode((char *) data.data() + startOffset, length);
 }
 
 
 size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t startOffset, size_t length) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     char *endOfFirstLine;
 
     if ((endOfFirstLine = (char *) memchr((char *) data.data() + startOffset, '\n', length)) != NULL) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return (endOfFirstLine - (char *) (data.data() + startOffset) + 1);
     } else {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 }

@@ -90,7 +90,10 @@ namespace pcapfs {
 
         bool meetsDecodeMapCriteria(const std::string &file);
 
-        std::bitset<10> flags;
+        // std::bitset<10> flags;
+        // Why not 10 ?
+        std::bitset<11> flags;
+
         std::vector<OffsetWithTime> connectionBreaks; //TODO: are they good here?
 
 

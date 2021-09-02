@@ -59,3 +59,42 @@ pcapfs::TimePoint pcapfs::utils::convertTimeValToTimePoint(const timespec &tv) {
     const auto d = std::chrono::seconds{tv.tv_sec} + std::chrono::nanoseconds{tv.tv_nsec};
     return TimePoint(d);
 }
+/*
+void print_hexdump() {
+	unsigned long address = 0;
+
+	std::cout << hex << setfill('0');
+	while( cin.good() )
+	{
+		int nread;
+		char buf[16];
+
+		for( nread = 0; nread < 16 && cin.get(buf[nread]); nread++ );
+		if( nread == 0 ) break;
+
+		// Show the address
+		cout << setw(8) << address;
+
+		// Show the hex codes
+		for( int i = 0; i < 16; i++ )
+		{
+			if( i % 8 == 0 ) cout << ' ';
+			if( i < nread )
+				cout << ' ' << setw(2) << (unsigned int)(unsigned char)buf[i];
+			else
+				cout << "   ";
+		}
+
+		// Show printable characters
+		cout << "  ";
+		for( int i = 0; i < nread; i++)
+		{
+			if( buf[i] < 32 ) cout << '.';
+			else cout << buf[i];
+		}
+
+		cout << "\n";
+		address += 16;
+	}
+}
+*/

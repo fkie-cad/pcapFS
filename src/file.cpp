@@ -27,7 +27,7 @@ void pcapfs::File::fillBuffer(const Index &idx) {
 
 	// This here fix hopefully cases where we have not wet the filesizeProcessed proper
 
-	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::PROCESSED)) {
+	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
 		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position!";
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeRaw);
@@ -60,7 +60,7 @@ void pcapfs::File::clearBuffer() {
 
 
 uint64_t pcapfs::File::getFilesizeProcessed() {
-    if (flags.test(pcapfs::flags::PROCESSED)) {
+    if (flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
         return filesizeProcessed;
     } else {
         return filesizeRaw;

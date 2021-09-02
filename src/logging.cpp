@@ -34,6 +34,9 @@ namespace pcapfs {
     }
 }
 
+void pcapfs::logging::fuseIsActive() {
+	handed_to_fuse = true;
+}
 
 void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
     namespace expr = boost::log::expressions;
@@ -48,10 +51,23 @@ void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
     boost::log::core::get()->set_filter(boost::log::trivial::severity >= get_log_level(log_level));
 }
 
-void pcapfs::logging::profilerFunction(const char* file, const char* function, const char* msg) {
-	const char* target = "profiler.log";
+
+void pcapfs::logging::initProfilerFunction() {
+	const char* target = "profiler.csv";
 	std::ofstream target_output_file;
-	target_output_file.open(target, std::ios_base::app);
-	target_output_file << "file: " << file << " - function: " << function << " - message: " << msg << std::endl;
+	target_output_file.open(target, std::ios_base::out | std::ios_base::trunc);
+	target_output_file << "duration;timestamp;file;function;message;status" << std::endl;
+	LOG_TRACE << "[PROFILING]" << "timestamp;file;function;message;status" << std::endl;
+	target_output_file.close();
+}
+
+
+void pcapfs::logging::profilerFunction(const char* file, const char* function, const char* msg) {
+	std::time_t result = std::time(nullptr);
+	const char* target = "profiler.csv";
+	std::ofstream target_output_file;
+	target_output_file.open(target, std::ios_base::out | std::ios_base::app);
+	target_output_file << "" << ";" << result << ";" << file << ";" << function << ";" << msg << ";" << handed_to_fuse << std::endl;
+	LOG_TRACE << "[PROFILING]" <<  result << ";" << file << ";" << function << ";" << msg << ";" << handed_to_fuse << std::endl;
 	target_output_file.close();
 }

@@ -25,8 +25,8 @@
 #include "virtualfiles/xor.h"
 #include "capturefiles/pcap.h"
 
-
 namespace fs = boost::filesystem;
+
 
 /*
  * This function is entered for all *filesToProcess* candidates and to handle the new *newFiles*
@@ -34,12 +34,15 @@ namespace fs = boost::filesystem;
  * This happens e.g. when SSL Files are first parsed as TCP files and then as HTTP content files
  * after the decryption stage. It happens that the functions are called twice or in theory even more often.
  */
+
+
 std::pair<std::vector<pcapfs::FilePtr>, std::vector<pcapfs::FilePtr>>
 getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector<pcapfs::FilePtr> filesToProcess;
     std::vector<pcapfs::FilePtr> newFiles;
 
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
     for (auto &file: files) {
         if (file->flags.test(pcapfs::flags::IS_REAL_FILE)) {
@@ -76,11 +79,13 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         }
         file->clearBuffer();
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return std::make_pair(newFiles, filesToProcess);
 }
 
 
 int main(int argc, const char *argv[]) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
     pcapfs::Configuration options;
     try {
@@ -89,12 +94,14 @@ int main(int argc, const char *argv[]) {
         pcapfs::options::commandline::printHelp();
         std::cerr << e.what() << std::endl;
         std::cerr << "See help message above for usage information." << std::endl;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 1;
     }
 
     if (options.showHelp || options.showVersion) {
         if (options.showHelp) { pcapfs::options::commandline::printHelp(); }
         if (options.showVersion) { pcapfs::options::commandline::printVersion(); }
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return EXIT_SUCCESS;
     }
 
@@ -179,6 +186,7 @@ int main(int argc, const char *argv[]) {
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
             std::cerr << "Error: " << err.what() << std::endl;
+            pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 2;
         }
 
@@ -190,12 +198,16 @@ int main(int argc, const char *argv[]) {
      */
     if (config.noMount) {
         LOG_INFO << "Exiting because no-mount option was given";
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return EXIT_SUCCESS;
     } else {
         pcapfs_filesystem::DirectoryLayout::initFilesystem(index, config.sortby);
         pcapfs::PcapFs fs(index);
         //TODO: LOG levels don't seem to be the same... output of LOG_TRACE here is not there
         LOG_INFO << "Mounting PCAP file(s)";
+        LOG_INFO << "Fuse is now handling:";
+        pcapfs::logging::fuseIsActive();
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return fs.run(options.fuseOptions.argc(), options.fuseOptions.argv());
     }
 }

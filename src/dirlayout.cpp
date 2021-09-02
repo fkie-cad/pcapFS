@@ -144,9 +144,11 @@ namespace pcapfs_filesystem {
 
 
     int DirectoryLayout::initFilesystem(pcapfs::Index &index, std::string sortby) {
+    	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
         dirSortby = pathVector(sortby);
         fillDirTreeSortby(index);
         pcapfs_filesystem::index = index;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 0;
     }
 

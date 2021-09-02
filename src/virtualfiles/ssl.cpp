@@ -89,14 +89,16 @@ std::string pcapfs::SslFile::toString() {
 pcapfs::SslFile::SslFile() {};
 
 int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	// filesizeRaw is larger than processed, we get the size back.
 	size_t plaintext_size = read_for_size(0, filesizeRaw, idx);
 
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	return plaintext_size;
 }
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
@@ -362,7 +364,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 //TODO is this a good idea to remove the mac from file size raw?
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
-                		+ soffset.length);
+                		+ soffset.length - mac_size);
 
 
                 /*
@@ -415,6 +417,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     if (resultPtr != nullptr) {
         resultVector.push_back(resultPtr);
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return resultVector;
 }
 
@@ -468,7 +471,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, con
 
 
 void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
     switch (cipherSuite->getSymKeyAlg()) {
         
@@ -765,6 +768,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
 
 
@@ -953,7 +957,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     }
     
     LOG_INFO << "Key Material Size: " << KEY_MATERIAL_SIZE << std::endl;
-    
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return keyMaterial;
 }
 
@@ -1048,67 +1052,93 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
  */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
-    // Init for the vectors with regular shared pointers
-    for(auto& c : cipherTextVector) {
-    	c = std::make_shared<CipherTextElement>();
-    }
-    for(auto& p : plainTextVector) {
-		p = std::make_shared<PlainTextElement>();
-	}
+    /*
+     * Not working. buffer is at some point reused
+     */
 
-    getFullCipherText(startOffset, length, idx, cipherTextVector);
+    if(!this->buffer.empty()) {
+    	LOG_TRACE << "[CACHE HIT] NOT empty, keeping the buffer.";
 
-    for(size_t i=0; i< cipherTextVector.size(); i++) {
-        CipherTextElement *elem = cipherTextVector.at(i).get();
-        elem->printMe();
-    }
-
-    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
-
-    int offset = 0;
-    LOG_TRACE << "entering file writer..." << std::endl;
-    std::vector<Bytes> result;
-    Bytes write_me_to_file;
-
-    for(size_t i=0; i<plainTextVector.size(); i++) {
-        PlainTextElement *elem = plainTextVector.at(i).get();
-        elem->printMe();
-        result.push_back(elem->plaintextBlock);
-        offset += elem->plaintextBlock.size();
-    }
-
-    LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
-    LOG_TRACE << "length: " << length;
-
-    for(size_t i=0; i<result.size(); i++) {
-    	write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-    }
-
-    if (write_me_to_file.size() > 0) {
-
-    	LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-    			" length: " << length << " result_size: " << write_me_to_file.size();
+    	LOG_TRACE << "content now: ";
+    	LOG_TRACE << (char *) this->buffer.data();
 
 		memset(buf, 0, length);
-		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
+		memcpy(buf, (const char*) this->buffer.data() + startOffset, length);
 
-		LOG_TRACE << "file writer done!" << std::endl;
-    	LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-    			" length: " << length << " result_size: " << write_me_to_file.size();
-    }
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+        if (startOffset + length < filesizeRaw) {
+        	//read till length is ended
+            return length;
+        } else {
+        	// read till file end
+            return filesizeRaw - startOffset;
+        }
 
-    // TODO filesizeRaw or filesizeProcessed? wahrscheinlich processed inhalt
-
-    if (startOffset + length < filesizeRaw) {
-    	//read till length is ended
-        return length;
     } else {
-    	// read till file end
-        return filesizeRaw - startOffset;
+    	LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
+
+		// Init for the vectors with regular shared pointers
+		for(auto& c : cipherTextVector) {
+			c = std::make_shared<CipherTextElement>();
+		}
+		for(auto& p : plainTextVector) {
+			p = std::make_shared<PlainTextElement>();
+		}
+
+		getFullCipherText(startOffset, length, idx, cipherTextVector);
+
+		for(size_t i=0; i< cipherTextVector.size(); i++) {
+			CipherTextElement *elem = cipherTextVector.at(i).get();
+			elem->printMe();
+		}
+
+		decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
+
+		int offset = 0;
+		LOG_TRACE << "entering file writer..." << std::endl;
+		std::vector<Bytes> result;
+		Bytes write_me_to_file;
+
+		for(size_t i=0; i<plainTextVector.size(); i++) {
+			PlainTextElement *elem = plainTextVector.at(i).get();
+			elem->printMe();
+			result.push_back(elem->plaintextBlock);
+			offset += elem->plaintextBlock.size();
+		}
+
+		LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+		LOG_TRACE << "length: " << length;
+
+		for(size_t i=0; i<result.size(); i++) {
+			write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+		}
+
+		if (write_me_to_file.size() > 0) {
+
+			LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
+					" length: " << length << " result_size: " << write_me_to_file.size();
+
+			memset(buf, 0, length);
+			memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
+
+			LOG_TRACE << "file writer done!" << std::endl;
+			LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
+					" length: " << length << " result_size: " << write_me_to_file.size();
+		}
+
+		// TODO filesizeRaw or filesizeProcessed? wahrscheinlich processed inhalt
+		pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+		if (startOffset + length < filesizeRaw) {
+			//read till length is ended
+			return length;
+		} else {
+			// read till file end
+			return filesizeRaw - startOffset;
+		}
     }
 }
 
@@ -1121,7 +1151,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
  * This is the new function for the calculation of the plaintext:
  */
 size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
@@ -1157,7 +1187,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
     LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
     LOG_TRACE << "length: " << length;
-
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return offset;
 }
 
@@ -1179,7 +1209,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
  * 
  */
 size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	//TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
 	/*TODO:
@@ -1270,7 +1300,7 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     }
     
     LOG_ERROR << "READ IS DONE\n";
-    
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     if (startOffset + length < filesizeRaw) {
         return length;
     } else {
@@ -1292,7 +1322,11 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 
 	) {
 
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+
+	/*
+	 * Cache: If not already instantiated, it will be created.
+	 */
 
     int counter = 0;
     
@@ -1329,6 +1363,7 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
         outputPlainTextVector.push_back(output);
 
     }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return counter;
 }
 

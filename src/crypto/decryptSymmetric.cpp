@@ -235,7 +235,7 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 		pcapfs::PlainTextElement *output
 	) {
     
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "was called");
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
 	/*
 	 * AES CBC Mode for TLS 1.1:
@@ -255,12 +255,15 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
 
     LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
-    printf("mac_key:\n");
-    BIO_dump_fp (stdout, (const char *) mac, 20);
-    printf("key:\n");
-    BIO_dump_fp (stdout, (const char *) key, 16);
-    printf("iv:\n");
-    BIO_dump_fp (stdout, (const char *) iv, 16);
+    //TODO: get log level during runtime, print when trace
+    if (1==0) {
+		printf("mac_key:\n");
+		BIO_dump_fp (stdout, (const char *) mac, 20);
+		printf("key:\n");
+		BIO_dump_fp (stdout, (const char *) key, 16);
+		printf("iv:\n");
+		BIO_dump_fp (stdout, (const char *) iv, 16);
+    }
     
     int cbc128_padding = 0;
     const int iv_len = 16;
@@ -284,9 +287,11 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     
     const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
     
-    printf("ciphertext:\n");
-    BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, dataToDecrypt.size());
-    
+    if (1==0) {
+		printf("ciphertext:\n");
+		BIO_dump_fp (stdout, (const char *) dataToDecryptPtr, dataToDecrypt.size());
+	}
+
     EVP_CIPHER_CTX *ctx;
     
     ctx = EVP_CIPHER_CTX_new();
@@ -363,10 +368,11 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     cbc128_padding = decryptedData.back() + 1;
     LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
 
-    printf("plaintext: plaintext_len %d  decryptedData.size() %d\n", plaintext_len, decryptedData.size());
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + iv_len, decryptedData.size() - iv_len - cbc128_padding);
-
-    printf("\n\n");
+    if (1==0) {
+    	printf("plaintext: plaintext_len %d  decryptedData.size() %d\n", plaintext_len, decryptedData.size());
+    	BIO_dump_fp (stdout, (const char *)decryptedData.data() + iv_len, decryptedData.size() - iv_len - cbc128_padding);
+    	printf("\n\n");
+    }
 
     /*
      * Warning: This hmac is actually useless, it should verify the ciphertext only!
@@ -381,6 +387,7 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     output->plaintextBlock = decryptedData;
 
     EVP_CIPHER_CTX_cleanup(ctx);
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 }
 
 void pcapfs::Crypto::decrypt_AES_256_CBC(
