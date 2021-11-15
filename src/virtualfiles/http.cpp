@@ -221,12 +221,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
 
-            /*
-             * Segfault comes here...
-             *
-             *
-             */
-
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
 
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
@@ -589,6 +583,7 @@ bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, ui
     if (length == 0) {
         length = data.size();
     }
+    LOG_INFO << "isHTTPRequest, early bird call: " << (char *) data.data() + startOffset;
     pcpp::HttpRequestLayer::HttpMethod method = pcpp::HttpRequestFirstLine::parseMethod(
             (char *) data.data() + startOffset, length);
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
@@ -761,7 +756,7 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
         char *fieldValuePtr = (char *) memchr(fieldData, nameValueSeperator, length - offsetInHeader);
         // could not find the position of the separator, meaning field value position is unknown
         if (fieldValuePtr == NULL) {
-            LOG_ERROR << "could not find seperator in http header field!";
+            LOG_ERROR << "could not find separator in HTTP header field!";
             break;
         } else {
             fieldNameSize = fieldValuePtr - fieldData;
@@ -774,7 +769,7 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
 
         // reached the end of the packet and value start offset wasn't found
         if ((size_t) (fieldValuePtr - fieldData) > (length - offsetInHeader)) {
-            LOG_ERROR << "could not find value in http header field!";
+            LOG_ERROR << "could not find value in HTTP header field!";
         } else {
             //m_ValueOffsetInMessage = fieldValuePtr - (char*)m_TextBasedProtocolMessage->m_Data;
             // couldn't find the end of the field, so assuming the field value length is from m_ValueOffsetInMessage until the end of the packet
@@ -828,6 +823,7 @@ bool pcapfs::HttpFile::isHTTPResponse(const Bytes &data, uint64_t startOffset, s
     if (getResponseStatusCode(data, startOffset, length) ==
         pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown) {
     	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    	LOG_INFO << "This is the content of isHTTPResponse: " << (char *) data.data() + startOffset;
         return false;
     }
     if (!usesValidHTTPVersion(data, startOffset, length)) {

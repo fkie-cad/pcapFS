@@ -12,7 +12,7 @@ set(ENV{PKG_CONFIG_PATH}
 
 configure_file(${CMAKE_SOURCE_DIR}/src/versions.h.in ${CMAKE_SOURCE_DIR}/src/versions.h)
 
-find_package(Boost COMPONENTS filesystem iostreams log program_options system serialization REQUIRED)
+find_package(Boost COMPONENTS filesystem iostreams log program_options regex system serialization REQUIRED)
 find_package(cpptoml REQUIRED)
 find_package(FUSE3 REQUIRED)
 find_package(Fusepp REQUIRED)
@@ -58,7 +58,7 @@ set(PCAPFS_COMMON_SOURCES
         )
 
 set(PCAPFS_LINK_LIBRARIES
-        Boost::filesystem Boost::iostreams Boost::log Boost::program_options Boost::system Boost::serialization
+        Boost::filesystem Boost::iostreams Boost::log Boost::program_options Boost::regex Boost::system Boost::serialization
         FUSE3::FUSE3
         Fusepp::Fusepp
         nlohmann_json::nlohmann_json

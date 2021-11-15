@@ -62,10 +62,11 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             	 */
                 newPtr = it.second(file, idx);
 
-                LOG_TRACE << file->to_string();
+
 
                 if (!newPtr.empty()) {
                     file->flags.set(pcapfs::flags::PARSED);
+                    LOG_TRACE << file->to_string();
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
                     file->clearBuffer();
