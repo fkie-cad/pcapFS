@@ -57,17 +57,22 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
             if (file->getFiletype() != it.first) {
+
             	/*
             	 * Debug helpers for this construct here is necessary
             	 */
+
                 newPtr = it.second(file, idx);
-
-
 
                 if (!newPtr.empty()) {
                     file->flags.set(pcapfs::flags::PARSED);
                     LOG_TRACE << file->to_string();
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());
+
+                    LOG_TRACE << "current file name: " << file->getFilename() <<
+                    		" fileSizeRaw: " << file->getFilesizeRaw() <<
+            				" fileSizeProcessed: " << file->getFilesizeProcessed();
+
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
                     file->clearBuffer();
                     break;
@@ -93,8 +98,8 @@ int main(int argc, const char *argv[]) {
         options = pcapfs::parseOptions(argc, argv);
     } catch (pcapfs::ArgumentError &e) {
         pcapfs::options::commandline::printHelp();
-        std::cerr << e.what() << std::endl;
-        std::cerr << "See help message above for usage information." << std::endl;
+        std::cerr << e.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+        std::cerr << "See help message above for usage information." << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
         pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return 1;
     }
@@ -186,7 +191,7 @@ int main(int argc, const char *argv[]) {
             index.read(config.indexFilePath);
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
-            std::cerr << "Error: " << err.what() << std::endl;
+            std::cerr << "Error: " << err.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
             pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 2;
         }

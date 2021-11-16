@@ -47,7 +47,7 @@ void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
             << expr::format_date_time<boost::posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << " | "
             << boost::log::trivial::severity << " | "
             << expr::smessage);
-    const auto sink = boost::log::add_console_log(std::clog, boost::log::keywords::format = format);
+    const auto sink = boost::log::add_console_log(std::clog, boost::log::keywords::format = format); // @suppress("Invalid arguments")
     boost::log::core::get()->set_filter(boost::log::trivial::severity >= get_log_level(log_level));
 }
 
@@ -55,10 +55,10 @@ void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
 void pcapfs::logging::initProfilerFunction() {
 	const char* target = "profiler.csv";
 	std::ofstream target_output_file;
-	target_output_file.open(target, std::ios_base::out | std::ios_base::trunc);
+	target_output_file.open(target, std::ios_base::out | std::ios_base::trunc); // @suppress("Invalid arguments")
 	target_output_file << "duration;timestamp;file;function;message;status" << std::endl;
 	LOG_TRACE << "[PROFILING]" << "timestamp;file;function;message;status" << std::endl;
-	target_output_file.close();
+	target_output_file.close(); // @suppress("Invalid arguments")
 }
 
 
@@ -66,8 +66,8 @@ void pcapfs::logging::profilerFunction(const char* file, const char* function, c
 	std::time_t result = std::time(nullptr);
 	const char* target = "profiler.csv";
 	std::ofstream target_output_file;
-	target_output_file.open(target, std::ios_base::out | std::ios_base::app);
+	target_output_file.open(target, std::ios_base::out | std::ios_base::app); // @suppress("Invalid arguments")
 	target_output_file << "" << ";" << result << ";" << file << ";" << function << ";" << msg << ";" << handed_to_fuse << std::endl;
 	LOG_TRACE << "[PROFILING]" <<  result << ";" << file << ";" << function << ";" << msg << ";" << handed_to_fuse << std::endl;
-	target_output_file.close();
+	target_output_file.close(); // @suppress("Invalid arguments")
 }
