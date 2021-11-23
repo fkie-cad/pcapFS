@@ -49,18 +49,17 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             continue;
         }
 
-        LOG_TRACE << "current file name: " << file->getFilename() <<
-        		" fileSizeRaw: " << file->getFilesizeRaw() <<
+        if(file->getFiletype() == "ssl") {
+			LOG_ERROR << "current file name: " << file->getFilename() << " type: " << file->getFiletype() <<
+				" fileSizeRaw: " << file->getFilesizeRaw() <<
 				" fileSizeProcessed: " << file->getFilesizeProcessed();
+		}
+
 
         file->fillBuffer(idx);
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
             if (file->getFiletype() != it.first) {
-
-            	/*
-            	 * Debug helpers for this construct here is necessary
-            	 */
 
                 newPtr = it.second(file, idx);
 
@@ -69,10 +68,11 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
                     LOG_TRACE << file->to_string();
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());
 
-                    LOG_TRACE << "current file name: " << file->getFilename() <<
-                    		" fileSizeRaw: " << file->getFilesizeRaw() <<
+                    if(file->getFiletype() == "ssl") {
+            			LOG_ERROR << "current file name: " << file->getFilename() << " type: " << file->getFiletype() <<
+            				" fileSizeRaw: " << file->getFilesizeRaw() <<
             				" fileSizeProcessed: " << file->getFilesizeProcessed();
-
+            		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
                     file->clearBuffer();
                     break;
@@ -83,7 +83,13 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         if (!file->flags.test(pcapfs::flags::PARSED)) {
             filesToProcess.push_back(file);
         }
-        file->clearBuffer();
+        /*
+         * At some point we need to empty the buffer
+         * Although this buffer is used from index.
+         */
+        //if (file->getFiletype() != "ssl") {
+        	file->clearBuffer();
+        //}
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return std::make_pair(newFiles, filesToProcess);
@@ -160,7 +166,7 @@ int main(int argc, const char *argv[]) {
 
         int counter = 0;
 
-        LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+        LOG_TRACE << "Beign with processing the files from TCP/UDP: ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
         		<< filesToProcess.size() << ">";
 
         /*
@@ -173,11 +179,11 @@ int main(int argc, const char *argv[]) {
             counter++;
             std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);
             index.insert(newFiles);
-            LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+            LOG_TRACE << "Progress ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
             		<< filesToProcess.size() << ">";
         } while (!newFiles.empty());
 
-        LOG_TRACE << "PROGRESS("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+        LOG_TRACE << "Progress ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
         		<< filesToProcess.size() << ">";
 
         if (!config.indexInMemory) {

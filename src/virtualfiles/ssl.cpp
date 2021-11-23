@@ -386,7 +386,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                     filePtr->flags.set(pcapfs::flags::SSL_SIZE_CALCULATED);
 
-                    LOG_TRACE << "Length calculation done";
+                    LOG_TRACE << "Length calculation done: " << calculated_size;
 
                 } else {
                 	LOG_DEBUG << "Already processed, length calculation done";
@@ -411,7 +411,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             sslLayer->parseNextLayer();
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());
         }
-        //store ssl stream in result vector
     }
     //TODO: multiple ssl streams in one tcp stream?!
     if (resultPtr != nullptr) {
@@ -1099,7 +1098,6 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 		decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
 
 		int offset = 0;
-		LOG_TRACE << "entering file writer..." << std::endl;
 		std::vector<Bytes> result;
 		Bytes write_me_to_file;
 
@@ -1125,12 +1123,10 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 			memset(buf, 0, length);
 			memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 
-			LOG_TRACE << "file writer done!" << std::endl;
 			LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
 					" length: " << length << " result_size: " << write_me_to_file.size();
 		}
 
-		// TODO filesizeRaw or filesizeProcessed? wahrscheinlich processed inhalt
 		pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 		if (startOffset + length < filesizeRaw) {
 			//read till length is ended
