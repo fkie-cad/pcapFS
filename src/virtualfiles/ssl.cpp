@@ -1055,10 +1055,12 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
+    LOG_ERROR << "SSL File Read is called, with " << startOffset << " and length: " << length;
+
     /*
      * Not working. buffer is at some point reused
      */
-
+    /*
     if(!this->buffer.empty()) {
     	LOG_TRACE << "[CACHE HIT] NOT empty, keeping the buffer.";
 
@@ -1078,6 +1080,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         }
 
     } else {
+    */
     	LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
 
 		// Init for the vectors with regular shared pointers
@@ -1135,7 +1138,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 			// read till file end
 			return filesizeRaw - startOffset;
 		}
-    }
+    //}
 }
 
 
