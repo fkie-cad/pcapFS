@@ -28,6 +28,11 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
  */
 void pcapfs::File::fillBuffer(const Index &idx) {
 
+	bool breakpoint = false;
+	if(this->filetype == "ssl") {
+		breakpoint = true;
+	}
+
 	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
 		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position! (" << this->filetype << ")";
 		LOG_TRACE << "current buffer size: " << buffer.size();
