@@ -1060,40 +1060,28 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     /*
      * Not working. buffer is at some point reused
      */
+    /*
+    if(!this->buffer.empty()) {
+    	LOG_TRACE << "[CACHE HIT] NOT empty, keeping the buffer.";
 
-    bool isBufferEmpty = this->getBuffer().empty();
-
-    if(!isBufferEmpty) {
-    	LOG_ERROR << "[CACHE HIT] NOT empty, keeping the buffer.";
-
-    	LOG_ERROR << "content now: ";
-    	LOG_ERROR << (char *) this->getBuffer().data();
+    	LOG_TRACE << "content now: ";
+    	LOG_TRACE << (char *) this->buffer.data();
 
 		memset(buf, 0, length);
-		memcpy(buf, (const char*) this->getBuffer().data() + startOffset, length);
+		memcpy(buf, (const char*) this->buffer.data() + startOffset, length);
 
         pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-        if (startOffset + length < filesizeProcessed) {
+        if (startOffset + length < filesizeRaw) {
         	//read till length is ended
             return length;
         } else {
         	// read till file end
-            return filesizeProcessed - startOffset;
+            return filesizeRaw - startOffset;
         }
 
     } else {
-
-    	/*
-    	 * Should never be reached as we decrypt in the first call to read in the getNextVirtualFile function.
-    	 * The buffer is filed via the fillBuffer method. For other files we clean the buffer after this operation,
-    	 * but for SSL files we keep the buffer to prevent multiple decryption which would be inefficient.
-    	 *
-    	 * TODO:
-    	 * Do we want to catch this case and if so, do we want to fill the buffer here again?
-    	 * Should not be reached anyway.
-    	 */
-
-    	LOG_ERROR << "[CACHE MISS] empty buffer, we do the regular data decryption.";
+    */
+    	LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
 
 		// Init for the vectors with regular shared pointers
 		for(auto& c : cipherTextVector) {
@@ -1143,14 +1131,14 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 		}
 
 		pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-		if (startOffset + length < filesizeProcessed) {
+		if (startOffset + length < filesizeRaw) {
 			//read till length is ended
 			return length;
 		} else {
 			// read till file end
-			return filesizeProcessed - startOffset;
+			return filesizeRaw - startOffset;
 		}
-    }
+    //}
 }
 
 
@@ -1312,10 +1300,10 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     
     LOG_ERROR << "READ IS DONE\n";
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-    if (startOffset + length < filesizeProcessed) {
+    if (startOffset + length < filesizeRaw) {
         return length;
     } else {
-        return filesizeProcessed - startOffset;
+        return filesizeRaw - startOffset;
     }
 }
 
@@ -1334,7 +1322,6 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 	) {
 
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-	//CryptoCache cryptoCache = std::shared_ptr<pcapfs::CryptoCache>();
 
 	/*
 	 * Cache: If not already instantiated, it will be created.
@@ -1345,6 +1332,11 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         counter++;
         
+        /*
+         * This approach currently requires that we hold ciphertext and plaintext in memory. No file-based indexes are supported at this point.
+         * refactor to shared_ptr?
+         */
+        
         CipherTextElement *element = cipherTextVector.at(i).get();
         std::shared_ptr<PlainTextElement> output( new PlainTextElement());
         
@@ -1353,7 +1345,7 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
          * Padding is removed we don't need it anymore.
          */
 
-        //if(cached)
+
 
         decryptDataNew(element->virtual_file_offset,
                         element->cipherBlock.size(),
