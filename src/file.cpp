@@ -18,27 +18,14 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
 }
 
 /*
- * Is called by every file.
- * We need to handle SSL differently (because of the Decryption step we need to apply).
- * If the buffer is resized before the read function, the buffer is never empty.
- * Therefore, we exclude the buffer.resize operation for SSL Files.
- * If an SSLFile reads the first time, the buffer is empty.
- * It can check the buffer and if it is empty, it does one large encryption.
- * If not, we continue as the buffer is already filled with the plaintext.
+ * Buffer wird hier überhaupt nicht geschrieben oder verändert, erst später - Ist der buffer hier so überhaupt verfügbar?
  */
 void pcapfs::File::fillBuffer(const Index &idx) {
-
-	bool breakpoint = false;
-	if(this->filetype == "ssl") {
-		breakpoint = true;
-	}
 
 	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
 		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position! (" << this->filetype << ")";
 		LOG_TRACE << "current buffer size: " << buffer.size();
-
 		buffer.resize(filesizeRaw);
-
 		read(0, filesizeRaw, idx, (char *) buffer.data());
 		LOG_TRACE << "new filesizeRaw: " << filesizeRaw;
 	} else {
@@ -46,7 +33,7 @@ void pcapfs::File::fillBuffer(const Index &idx) {
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeProcessed);
 		read(0, filesizeProcessed, idx, (char *) buffer.data());
-		LOG_TRACE << "new filesizeProcessed: " << filesizeProcessed;
+		LOG_TRACE << "new filesizeRaw: " << filesizeProcessed;
 	}
 }
 
