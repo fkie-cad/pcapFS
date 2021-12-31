@@ -74,9 +74,10 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             				" fileSizeProcessed: " << file->getFilesizeProcessed();
             		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
-                    if (file->getFiletype() != "ssl") {
-						file->clearBuffer();
-					}
+                    file->clearBuffer();
+                    //if (file->getFiletype() != "ssl") {
+					//	file->clearBuffer();
+					//}
                     break;
                 }
             }
@@ -89,9 +90,10 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
          * At some point we need to empty the buffer
          * Although this buffer is used from index.
          */
-        if (file->getFiletype() != "ssl") {
-        	file->clearBuffer();
-        }
+        //if (file->getFiletype() != "ssl") {
+        //	file->clearBuffer();
+        //}
+        file->clearBuffer();
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return std::make_pair(newFiles, filesToProcess);

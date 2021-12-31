@@ -1066,7 +1066,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
     if(!isBufferEmpty) {
     	LOG_ERROR << "[CACHE HIT] NOT empty, keeping the buffer.";
 
-    	LOG_ERROR << "content now: ";
+    	LOG_ERROR << "content now (" << this->getBuffer().size() <<  ") : ";
     	LOG_ERROR << (char *) this->getBuffer().data();
 
 		memset(buf, 0, length);
