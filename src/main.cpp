@@ -75,9 +75,6 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
                     file->clearBuffer();
-                    //if (file->getFiletype() != "ssl") {
-					//	file->clearBuffer();
-					//}
                     break;
                 }
             }
@@ -91,9 +88,8 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
          * Although this buffer is used from index.
          */
         //if (file->getFiletype() != "ssl") {
-        //	file->clearBuffer();
+        	file->clearBuffer();
         //}
-        file->clearBuffer();
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return std::make_pair(newFiles, filesToProcess);
