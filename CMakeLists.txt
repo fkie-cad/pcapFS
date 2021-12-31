@@ -38,8 +38,11 @@ set(PCAPFS_COMMON_SOURCES
         src/capturefiles/capturefile.cpp
         src/capturefiles/pcap.cpp
         src/capturefiles/pcapng.cpp
+        src/crypto/decryptSymmetric.h
         src/crypto/decryptSymmetric.cpp
+        src/crypto/cipherTextElement.h
         src/crypto/cipherTextElement.cpp
+        src/crypto/plainTextElement.h
         src/crypto/plainTextElement.cpp
         src/keyfiles/sslkey.cpp
         src/keyfiles/xorkey.cpp
