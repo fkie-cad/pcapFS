@@ -372,7 +372,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * for the respective size. We calculate the buffer size if it has not been set.
                  * This size is called setFilesizeProcessed (virtual files)
                  */
-                if (!filePtr->flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
+                if (connectionBreakOccured) {
                 	LOG_TRACE << "Length calculation now";
                     //TODO we will get plaintext length without? decrypting it before
                     //What do we want to calculate?
