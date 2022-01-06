@@ -363,6 +363,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * We remove the size of the mac, filesizeRaw contains the length of the ssl decryption without the mac.
                  * We add the simple offset (soffset) to the base and the length of the raw size to provide the data we need for the decryption steps.
                  */
+
+                LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
                 		+ soffset.length - mac_size);
 
@@ -372,31 +374,32 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * for the respective size. We calculate the buffer size if it has not been set.
                  * This size is called setFilesizeProcessed (virtual files)
                  */
-                if (connectionBreakOccured) {
-                	LOG_TRACE << "Length calculation now";
 
-                	int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
+				if (!filePtr->flags.test(pcapfs::flags::SSL_SIZE_CALCULATED) || connectionBreakOccured) {
+					LOG_TRACE << "Length calculation now";
+					//TODO we will get plaintext length without? decrypting it before
+					//What do we want to calculate?
+					//TODO: Nothing happens if we add or subtract anything here.
+					//We set processed size before actual processing as we need the size of the target buffer
+					//TODO fix design in future
+					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
+					resultPtr->setFilesizeProcessed(calculated_size);
+					filePtr->flags.set(pcapfs::flags::SSL_SIZE_CALCULATED);
+					LOG_TRACE << "Length calculation done: " << calculated_size;
+				} else {
+					LOG_DEBUG << "Already processed, length calculation done";
+				}
+				//TODO: set filesizeProcessed when decryption is done
+				//resultPtr->filesizeRaw before
+				if (connectionBreakOccured) {
+					resultPtr->connectionBreaks.push_back(
+							{resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
+					LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
+					connectionBreakOccured = false;
+				}
+				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
+			}
 
-                    resultPtr->setFilesizeProcessed(calculated_size);
-
-                    filePtr->flags.set(pcapfs::flags::SSL_SIZE_CALCULATED);
-
-                    LOG_TRACE << "Length calculation done: " << calculated_size;
-
-                    LOG_TRACE << "Adding length as processed size for the target filePtr to provide boundaries for target buffer...";
-
-                    resultPtr->connectionBreaks.push_back(
-                            {resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
-
-                    LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
-
-                    connectionBreakOccured = false;
-                } else {
-                	LOG_DEBUG << "Already processed, length calculation done";
-                }
-
-                LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
-            }
 
             LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
             sslLayer->parseNextLayer();
@@ -1074,9 +1077,6 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 		result.push_back(elem->plaintextBlock);
 		offset += elem->plaintextBlock.size();
 	}
-
-	LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
-	LOG_TRACE << "length: " << length;
 
 	for(size_t i=0; i<result.size(); i++) {
 		write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );

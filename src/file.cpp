@@ -22,19 +22,20 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
  */
 void pcapfs::File::fillBuffer(const Index &idx) {
 
-	if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
+	//if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
 		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position! (" << this->filetype << ")";
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeRaw);
 		read(0, filesizeRaw, idx, (char *) buffer.data());
 		LOG_TRACE << "new filesizeRaw: " << filesizeRaw;
+	/*
 	} else {
 		// filesizeProcessed can be used as the file has been processed:
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeProcessed);
 		read(0, filesizeProcessed, idx, (char *) buffer.data());
 		LOG_TRACE << "new filesizeRaw: " << filesizeProcessed;
-	}
+	}*/
 }
 
 
