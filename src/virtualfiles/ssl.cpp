@@ -1100,10 +1100,12 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 	if (startOffset + length < filesizeRaw) {
 		//read till length is ended
 		LOG_TRACE << "File is not done yet. (filesizeraw: " << filesizeRaw << ")";
+		LOG_TRACE << "Length read: " << length;
 		return length;
 	} else {
 		// read till file end
 		LOG_TRACE << "File is done now. (filesizeraw: " << filesizeRaw << ")";
+		LOG_TRACE << "all processed bytes: " << filesizeRaw - startOffset;
 		return filesizeRaw - startOffset;
 	}
 }
