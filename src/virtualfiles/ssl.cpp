@@ -1092,14 +1092,18 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
 		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
 				" length: " << length << " result_size: " << write_me_to_file.size();
+	} else {
+		LOG_ERROR << "Empty buffer after decryption, probably unwanted behavior.";
 	}
 
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	if (startOffset + length < filesizeRaw) {
 		//read till length is ended
+		LOG_TRACE << "File is not done yet. (filesizeraw: " << filesizeRaw << ")";
 		return length;
 	} else {
 		// read till file end
+		LOG_TRACE << "File is done now. (filesizeraw: " << filesizeRaw << ")";
 		return filesizeRaw - startOffset;
 	}
 }
