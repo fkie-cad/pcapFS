@@ -1048,88 +1048,63 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
     LOG_ERROR << "SSL File Read is called, with " << startOffset << " and length: " << length;
 
-    /*
-     * Not working. buffer is at some point reused
-     */
-    /*
-    if(!this->buffer.empty()) {
-    	LOG_TRACE << "[CACHE HIT] NOT empty, keeping the buffer.";
+    LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
 
-    	LOG_TRACE << "content now: ";
-    	LOG_TRACE << (char *) this->buffer.data();
+	// Init for the vectors with regular shared pointers
+	for(auto& c : cipherTextVector) {
+		c = std::make_shared<CipherTextElement>();
+	}
+	for(auto& p : plainTextVector) {
+		p = std::make_shared<PlainTextElement>();
+	}
+
+	getFullCipherText(startOffset, length, idx, cipherTextVector);
+
+	for(size_t i=0; i< cipherTextVector.size(); i++) {
+		CipherTextElement *elem = cipherTextVector.at(i).get();
+		elem->printMe();
+	}
+
+	decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
+
+	int offset = 0;
+	std::vector<Bytes> result;
+	Bytes write_me_to_file;
+
+	for(size_t i=0; i<plainTextVector.size(); i++) {
+		PlainTextElement *elem = plainTextVector.at(i).get();
+		elem->printMe();
+		result.push_back(elem->plaintextBlock);
+		offset += elem->plaintextBlock.size();
+	}
+
+	LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
+	LOG_TRACE << "length: " << length;
+
+	for(size_t i=0; i<result.size(); i++) {
+		write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+	}
+
+	if (write_me_to_file.size() > 0) {
+
+		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
+				" length: " << length << " result_size: " << write_me_to_file.size();
 
 		memset(buf, 0, length);
-		memcpy(buf, (const char*) this->buffer.data() + startOffset, length);
+		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 
-        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-        if (startOffset + length < filesizeRaw) {
-        	//read till length is ended
-            return length;
-        } else {
-        	// read till file end
-            return filesizeRaw - startOffset;
-        }
+		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
+				" length: " << length << " result_size: " << write_me_to_file.size();
+	}
 
-    } else {
-    */
-    	LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
-
-		// Init for the vectors with regular shared pointers
-		for(auto& c : cipherTextVector) {
-			c = std::make_shared<CipherTextElement>();
-		}
-		for(auto& p : plainTextVector) {
-			p = std::make_shared<PlainTextElement>();
-		}
-
-		getFullCipherText(startOffset, length, idx, cipherTextVector);
-
-		for(size_t i=0; i< cipherTextVector.size(); i++) {
-			CipherTextElement *elem = cipherTextVector.at(i).get();
-			elem->printMe();
-		}
-
-		decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
-
-		int offset = 0;
-		std::vector<Bytes> result;
-		Bytes write_me_to_file;
-
-		for(size_t i=0; i<plainTextVector.size(); i++) {
-			PlainTextElement *elem = plainTextVector.at(i).get();
-			elem->printMe();
-			result.push_back(elem->plaintextBlock);
-			offset += elem->plaintextBlock.size();
-		}
-
-		LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
-		LOG_TRACE << "length: " << length;
-
-		for(size_t i=0; i<result.size(); i++) {
-			write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-		}
-
-		if (write_me_to_file.size() > 0) {
-
-			LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-					" length: " << length << " result_size: " << write_me_to_file.size();
-
-			memset(buf, 0, length);
-			memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
-
-			LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
-					" length: " << length << " result_size: " << write_me_to_file.size();
-		}
-
-		pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-		if (startOffset + length < filesizeRaw) {
-			//read till length is ended
-			return length;
-		} else {
-			// read till file end
-			return filesizeRaw - startOffset;
-		}
-    //}
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+	if (startOffset + length < filesizeRaw) {
+		//read till length is ended
+		return length;
+	} else {
+		// read till file end
+		return filesizeRaw - startOffset;
+	}
 }
 
 
