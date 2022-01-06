@@ -42,6 +42,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
+        	//TODO find our which one we want to use
             //size = filePtr->getFilesizeRaw() - offset;
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
@@ -114,8 +115,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
             if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
                 resultHeaderPtr->flags.set(pcapfs::flags::MISSING_DATA);
+                LOG_DEBUG << "HTTP missing data.";
             }
             resultVector.push_back(resultHeaderPtr);
+
+            LOG_TRACE << "size: " << size << " - firstLine: " << firstLine << " - headerLength: " << headerLength;
 
             if (size - firstLine - headerLength <= 0) {
                 continue;
@@ -126,6 +130,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffset.start = offset + firstLine + headerLength;
             soffset.length = size - firstLine - headerLength;
 
+            //TODO Why?
             resultPtr->offsets.push_back(soffset);
             resultPtr->setFilesizeRaw(soffset.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
