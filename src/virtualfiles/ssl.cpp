@@ -1038,9 +1038,6 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  * 
  */
 
-/*
- * Implementing the new read function. Read is called as it is called in virtualfile read. We override that:
- */
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
