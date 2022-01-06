@@ -35,3 +35,4 @@ pcapFS.kdev4
 .project
 .settings/
 
+/profiler.csv
