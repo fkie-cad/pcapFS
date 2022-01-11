@@ -41,9 +41,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     //for(auto &offsetWithTime : filePtr->connectionBreaks){
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
+        //TODO: Why do we distinguish here?
         if (i == numElements - 1) {
-        	//TODO find our which one we want to use
-            //size = filePtr->getFilesizeRaw() - offset;
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
@@ -871,3 +870,4 @@ size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t start
 
 bool pcapfs::HttpFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("http", pcapfs::HttpFile::create, pcapfs::HttpFile::parse);
+

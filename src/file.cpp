@@ -55,7 +55,7 @@ void pcapfs::File::clearBuffer() {
 
 
 uint64_t pcapfs::File::getFilesizeProcessed() {
-    if (flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
+    if (flags.test(pcapfs::flags::PROCESSED)) {
         return filesizeProcessed;
     } else {
         return filesizeRaw;

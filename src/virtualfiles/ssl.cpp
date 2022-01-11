@@ -375,7 +375,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * This size is called setFilesizeProcessed (virtual files)
                  */
 
-				if (!filePtr->flags.test(pcapfs::flags::SSL_SIZE_CALCULATED) || connectionBreakOccured) {
+				if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
 					LOG_TRACE << "Length calculation now";
 					//TODO we will get plaintext length without? decrypting it before
 					//What do we want to calculate?
@@ -384,7 +384,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 					//TODO fix design in future
 					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 					resultPtr->setFilesizeProcessed(calculated_size);
-					filePtr->flags.set(pcapfs::flags::SSL_SIZE_CALCULATED);
+					//TODO Here also file ptr?
+					filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
+					filePtr->setFilesizeProcessed(calculated_size);
+					filePtr->flags.set(pcapfs::flags::PROCESSED);
 					LOG_TRACE << "Length calculation done: " << calculated_size;
 				} else {
 					LOG_DEBUG << "Already processed, length calculation done";
