@@ -68,6 +68,13 @@ namespace pcapfs {
         std::vector<uint64_t> previousBytes;
         std::vector<uint64_t> keyForFragment;
 
+	static bool processTLSHandshake(bool processedSSLHandshake, unsigned int i,
+			bool clientChangeCipherSpec, bool serverChangeCipherSpec,
+			pcpp::SSLHandshakeLayer *handshakeLayer, Bytes &clientRandom,
+			uint64_t &offsetInLogicalFragment, Bytes &serverRandom,
+			std::string &cipherSuite, pcpp::SSLVersion &sslVersion,
+			pcpp::SSLLayer *sslLayer, uint64_t &clientEncryptedData,
+			uint64_t &serverEncryptedData);
 };
 }
 
