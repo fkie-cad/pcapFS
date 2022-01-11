@@ -33,7 +33,7 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
 
-        static bool pcapfs::SslFile::isTLSTraffic(FilePtr filePtr);
+        static bool isTLSTraffic(FilePtr filePtr);
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
         size_t read_for_size(uint64_t startOffset, size_t length, const Index &idx);
