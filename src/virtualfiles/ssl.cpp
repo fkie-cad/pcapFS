@@ -97,14 +97,22 @@ int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
 	return plaintext_size;
 }
 
+bool pcapfs::SslFile::isTLSTraffic(FilePtr filePtr) {
+    //TODO: other detection method -> config file vs heuristic?
+	if (filePtr->getProperty("dstPort") != "443") {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
-    //TODO: other detection method -> config file vs heuristic?
-    if (filePtr->getProperty("dstPort") != "443") {
+    if (!isTLSTraffic(filePtr)) {
         return resultVector;
     }
 
