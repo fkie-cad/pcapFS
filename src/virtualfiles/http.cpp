@@ -129,7 +129,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffset.start = offset + firstLine + headerLength;
             soffset.length = size - firstLine - headerLength;
 
-            //TODO Why?
+            //TODO
+            //Why?
             resultPtr->offsets.push_back(soffset);
             resultPtr->setFilesizeRaw(soffset.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
@@ -196,8 +197,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffset.start = offset + firstLine + headerLength;
             soffset.length = size - firstLine - headerLength;
 
+            //TODO:
+            //Also Why?
             resultPtr->offsets.push_back(soffset);
-
             resultPtr->setFilesizeRaw(soffset.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
