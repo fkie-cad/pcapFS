@@ -33,8 +33,6 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
 
-        static bool isTLSTraffic(FilePtr filePtr);
-
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
         size_t read_for_size(uint64_t startOffset, size_t length, const Index &idx);
 
@@ -44,6 +42,8 @@ namespace pcapfs {
         int calculateProcessedSize(uint64_t filesizeRaw, Index &idx);
 
         static bool isClientMessage(uint64_t i);
+
+    	static bool isTLSTraffic(const FilePtr &filePtr, bool isTLSTraffic);
 
         //ssl decrypt functions
         static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion);
@@ -67,7 +67,8 @@ namespace pcapfs {
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;
         std::vector<uint64_t> keyForFragment;
-    };
+
+};
 }
 
 #endif //PCAPFS_VIRTUAL_FILES_SSL_H
