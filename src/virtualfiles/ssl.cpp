@@ -415,8 +415,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  */
 
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw()
-                		+ soffset.length - mac_size);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
 
 
                 /*
