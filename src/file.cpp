@@ -21,8 +21,8 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
  * Buffer wird hier überhaupt nicht geschrieben oder verändert, erst später - Ist der buffer hier so überhaupt verfügbar?
  */
 void pcapfs::File::fillBuffer(const Index &idx) {
-
-	//if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::SSL_SIZE_CALCULATED)) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+	//if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::PROCESSED)) {
 		LOG_ERROR << "This should not be called, set filesizeProcessed at the proper position! (" << this->filetype << ")";
 		LOG_TRACE << "current buffer size: " << buffer.size();
 		buffer.resize(filesizeRaw);
@@ -36,6 +36,7 @@ void pcapfs::File::fillBuffer(const Index &idx) {
 		read(0, filesizeProcessed, idx, (char *) buffer.data());
 		LOG_TRACE << "new filesizeRaw: " << filesizeProcessed;
 	}*/
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
 
 
