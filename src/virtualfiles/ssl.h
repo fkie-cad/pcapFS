@@ -75,6 +75,12 @@ namespace pcapfs {
 			std::string &cipherSuite, pcpp::SSLVersion &sslVersion,
 			pcpp::SSLLayer *sslLayer, uint64_t &clientEncryptedData,
 			uint64_t &serverEncryptedData);
+
+	static void resultPtrInit(bool processedSSLHandshake,
+			pcpp::SSLVersion sslVersion,
+			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
+			const std::string &cipherSuite, unsigned int i, Bytes &clientRandom,
+			Index &idx, Bytes &serverRandom);
 };
 }
 

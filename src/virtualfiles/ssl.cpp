@@ -218,6 +218,43 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 	return processedSSLHandshake;
 }
 
+void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
+		pcpp::SSLVersion sslVersion, const std::shared_ptr<SslFile> &resultPtr,
+		const FilePtr &filePtr, const std::string &cipherSuite, unsigned int i,
+		Bytes &clientRandom, Index &idx, Bytes &serverRandom) {
+	//search for master secret in candidates
+	if (processedSSLHandshake) {
+		Bytes masterSecret = searchCorrectMasterSecret(
+				(char*) (clientRandom.data()), idx);
+		if (!masterSecret.empty()) {
+			Bytes keyMaterial = createKeyMaterial((char*) (masterSecret.data()),
+					(char*) (clientRandom.data()),
+					(char*) (serverRandom.data()), sslVersion.asUInt());
+			//TODO: not good to add sslkey file directly into index!!!
+			std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
+					keyMaterial);
+			idx.insert(keyPtr);
+			resultPtr->keyIDinIndex = keyPtr->getIdInIndex();
+			resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+		}
+	}
+	resultPtr->setOffsetType(filePtr->getFiletype());
+	resultPtr->setFiletype("ssl");
+	resultPtr->cipherSuite = cipherSuite;
+	resultPtr->sslVersion = sslVersion.asUInt();
+	resultPtr->setFilename("SSL");
+	resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+	resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+	resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+	resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+	//resultPtr->setProperty("ciphersuite", cipherSuite);
+	resultPtr->setProperty("protocol", "ssl");
+	resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+	if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
+		resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
+	}
+}
+
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
@@ -230,6 +267,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     	// No TLS Traffic found, continue with next.
     	return resultVector;
     }
+
     //Step 2: Get key material for SSL stream
     size_t size = 0;
     size_t numElements = filePtr->connectionBreaks.size();
@@ -284,7 +322,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 						offsetInLogicalFragment, serverRandom, cipherSuite,
 						sslVersion, sslLayer, clientEncryptedData,
 						serverEncryptedData);
+
                 //TODO: metadata followed by application data without connection break?!
+
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
                 if (isClientMessage(i)) {
                     LOG_DEBUG << "client starting encryption now!";
@@ -300,8 +340,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                                             changeCipherSpecLayer->getHeaderLen());
 
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
+
                 pcpp::SSLApplicationDataLayer *applicationDataLayer =
                         dynamic_cast<pcpp::SSLApplicationDataLayer *>(sslLayer);
+
                 uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
                 uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
@@ -310,40 +352,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 //TODO: does client always send first?
                 if (resultPtr == nullptr) {
                     resultPtr = std::make_shared<SslFile>();
+
                     //search for master secret in candidates
-                    if (processedSSLHandshake) {
-                        Bytes masterSecret = searchCorrectMasterSecret((char *) clientRandom.data(), idx);
-                        if (!masterSecret.empty()) {
-                            Bytes keyMaterial = createKeyMaterial((char *) masterSecret.data(),
-                                                                  (char *) clientRandom.data(),
-                                                                  (char *) serverRandom.data(),
-                                                                  sslVersion.asUInt()
-                                                                 );
-
-                            //TODO: not good to add sslkey file directly into index!!!
-                            std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(keyMaterial);
-                            idx.insert(keyPtr);
-                            resultPtr->keyIDinIndex = keyPtr->getIdInIndex();
-                            resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
-
-                        }
-                    }
-
-                    resultPtr->setOffsetType(filePtr->getFiletype());
-                    resultPtr->setFiletype("ssl");
-                    resultPtr->cipherSuite = cipherSuite;
-                    resultPtr->sslVersion = sslVersion.asUInt();
-                    resultPtr->setFilename("SSL");
-                    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-                    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-                    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-                    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-                    //resultPtr->setProperty("ciphersuite", cipherSuite);
-                    resultPtr->setProperty("protocol", "ssl");
-                    resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-                    if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                        resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
-                    }
+					resultPtrInit(processedSSLHandshake,
+							sslVersion, resultPtr, filePtr, cipherSuite, i,
+							clientRandom, idx, serverRandom);
                 }
 
 
@@ -446,10 +459,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());
         }
     }
+
     //TODO: multiple ssl streams in one tcp stream?!
     if (resultPtr != nullptr) {
         resultVector.push_back(resultPtr);
     }
+
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return resultVector;
 }
