@@ -417,14 +417,20 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
 
-
                 /*
                  * The current design needs information about the file sizes to allocate the buffer
                  * for the respective size. We calculate the buffer size if it has not been set.
                  * This size is called setFilesizeProcessed (virtual files)
                  */
 
-				if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+
+				LOG_TRACE << "Length calculation now";
+				int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
+				resultPtr->setFilesizeProcessed(calculated_size);
+				LOG_TRACE << "Length calculation done: " << calculated_size;
+
+                //if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+                if (1==0 && (!resultPtr->flags.test(pcapfs::flags::PROCESSED) || connectionBreakOccured)) {
 					LOG_TRACE << "Length calculation now";
 					//TODO we will get plaintext length without? decrypting it before
 					//What do we want to calculate?
@@ -434,9 +440,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 					resultPtr->setFilesizeProcessed(calculated_size);
 					//TODO Here also file ptr?
-					filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
-					filePtr->setFilesizeProcessed(calculated_size);
-					filePtr->flags.set(pcapfs::flags::PROCESSED);
+					//filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
+					//filePtr->setFilesizeProcessed(calculated_size);
+					resultPtr->flags.set(pcapfs::flags::PROCESSED);
 					LOG_TRACE << "Length calculation done: " << calculated_size;
 				} else {
 					LOG_DEBUG << "Already processed, length calculation done";
