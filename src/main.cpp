@@ -168,7 +168,7 @@ int main(int argc, const char *argv[]) {
 
         int counter = 0;
 
-        LOG_TRACE << "Beign with processing the files from TCP/UDP: ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
+        LOG_TRACE << "Begin with processing the files from TCP/UDP: ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
         		<< filesToProcess.size() << ">";
 
         /*
