@@ -369,7 +369,7 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
 
     if (1==0) {
-    	printf("plaintext: plaintext_len %d  decryptedData.size() %d\n", plaintext_len, decryptedData.size());
+    	printf("plaintext: plaintext_len %zu  decryptedData.size() %zu\n", plaintext_len, decryptedData.size());
     	BIO_dump_fp (stdout, (const char *)decryptedData.data() + iv_len, decryptedData.size() - iv_len - cbc128_padding);
     	printf("\n\n");
     }
