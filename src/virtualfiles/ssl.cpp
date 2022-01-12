@@ -97,13 +97,14 @@ int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
 	return plaintext_size;
 }
 
-bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, bool isTLSTraffic) {
+bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, bool tlsTrafficDetected) {
 	//Step 1: detect ssl stream by checking for dst Port 443
 	//TODO: other detection method -> config file vs heuristic?
+	tlsTrafficDetected = false;
 	if (filePtr->getProperty("dstPort") == "443") {
-		isTLSTraffic = true;
+		tlsTrafficDetected = true;
 	}
-	return isTLSTraffic;
+	return tlsTrafficDetected;
 }
 
 bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
@@ -256,13 +257,17 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 }
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
+
+	unsigned int counter_of_size_calculation_raw = 0;
+	unsigned int counter_of_size_calculation_processed = 0;
+
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     bool tlsTrafficDetected = false;
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
-    tlsTrafficDetected = isTLSTraffic(filePtr, isTLSTraffic);
+    tlsTrafficDetected = isTLSTraffic(filePtr, tlsTrafficDetected);
     if (!tlsTrafficDetected) {
     	// No TLS Traffic found, continue with next.
     	return resultVector;
@@ -415,7 +420,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  */
 
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
+                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                counter_of_size_calculation_raw++;
 
                 /*
                  * The current design needs information about the file sizes to allocate the buffer
@@ -423,26 +430,15 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * This size is called setFilesizeProcessed (virtual files)
                  */
 
-
-				LOG_TRACE << "Length calculation now";
-				int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
-				resultPtr->setFilesizeProcessed(calculated_size);
-				LOG_TRACE << "Length calculation done: " << calculated_size;
-
-                //if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
-                if (1==0 && (!resultPtr->flags.test(pcapfs::flags::PROCESSED) || connectionBreakOccured)) {
+                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
 					LOG_TRACE << "Length calculation now";
-					//TODO we will get plaintext length without? decrypting it before
-					//What do we want to calculate?
-					//TODO: Nothing happens if we add or subtract anything here.
-					//We set processed size before actual processing as we need the size of the target buffer
-					//TODO fix design in future
 					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 					resultPtr->setFilesizeProcessed(calculated_size);
+					counter_of_size_calculation_processed++;
 					//TODO Here also file ptr?
 					//filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
 					//filePtr->setFilesizeProcessed(calculated_size);
-					resultPtr->flags.set(pcapfs::flags::PROCESSED);
+					filePtr->flags.set(pcapfs::flags::PROCESSED);
 					LOG_TRACE << "Length calculation done: " << calculated_size;
 				} else {
 					LOG_DEBUG << "Already processed, length calculation done";
@@ -452,9 +448,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 				if (connectionBreakOccured) {
 					resultPtr->connectionBreaks.push_back(
 							{resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
+					LOG_TRACE << "file size processed for this virtual file: " << resultPtr->getFilesizeProcessed() << " and current break: " << resultPtr->filesizeProcessed;
 					LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
 					connectionBreakOccured = false;
 				}
+				LOG_TRACE << "Changed size raw to " << resultPtr->getFilesizeRaw() << " - times: " << counter_of_size_calculation_raw;
+				LOG_TRACE << "Changed size processed to " << resultPtr->getFilesizeProcessed() << " - times: " << counter_of_size_calculation_processed;
 				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
 			}
 
