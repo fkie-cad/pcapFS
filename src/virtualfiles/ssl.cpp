@@ -1176,6 +1176,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		LOG_ERROR << "Empty buffer after decryption, probably unwanted behavior.";
 	}
 
+	/*
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	if (startOffset + length < filesizeRaw) {
 		//read till length is ended
@@ -1187,6 +1188,19 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		LOG_TRACE << "File is done now. (filesizeraw: " << filesizeRaw << ")";
 		LOG_TRACE << "all processed bytes: " << filesizeRaw - startOffset;
 		return filesizeRaw - startOffset;
+	}
+	*/
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+	if (startOffset + length < filesizeProcessed) {
+		//read till length is ended
+		LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
+		LOG_TRACE << "Length read: " << length;
+		return length;
+	} else {
+		// read till file end
+		LOG_TRACE << "File is done now. (filesizeProcessed: " << filesizeProcessed << ")";
+		LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
+		return filesizeProcessed - startOffset;
 	}
 }
 
@@ -1220,7 +1234,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
     
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
     
-    int offset = 0;
+    size_t offset = 0;
     LOG_TRACE << "entering file writer..." << std::endl;
     std::vector<Bytes> result;
     Bytes write_me_to_file;
