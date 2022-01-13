@@ -1101,6 +1101,27 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  */
 
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+		return read_decrypted_content(startOffset, length, idx, buf);
+	} else {
+		return read_raw(startOffset, length, idx, buf);
+	}
+}
+
+/*
+ * TODO untested, copied from http.cpp:
+ */
+size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+    //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
+    SimpleOffset offset = offsets.at(0);
+    FilePtr filePtr = idx.get({offsetType, offset.id});
+    //TODO: sanitizing length is done in filePtr->read!
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    return filePtr->read(startOffset + offset.start, length, idx, buf);
+}
+
+size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
