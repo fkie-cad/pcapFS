@@ -420,8 +420,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  */
 
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
-                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
+                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
                 counter_of_size_calculation_raw++;
 
                 /*
@@ -430,10 +430,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * This size is called setFilesizeProcessed (virtual files)
                  */
 
-                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+                if (!filePtr->flags.test(pcapfs::flags::PROCESSED) || connectionBreakOccured) {
 					LOG_TRACE << "Length calculation now";
 					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
 					resultPtr->setFilesizeProcessed(calculated_size);
+
 					counter_of_size_calculation_processed++;
 					//TODO Here also file ptr?
 					//filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
