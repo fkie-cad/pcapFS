@@ -88,11 +88,10 @@ std::string pcapfs::SslFile::toString() {
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
-int pcapfs::SslFile::calculateProcessedSize(uint64_t filesizeRaw, Index &idx) {
+int pcapfs::SslFile::calculateProcessedSize(uint64_t length_of_ciphertext, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-	// filesizeRaw is larger than processed, we get the size back.
-	size_t plaintext_size = read_for_size(0, filesizeRaw, idx);
 
+	size_t plaintext_size = read_for_size(0, length_of_ciphertext, idx);
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	return plaintext_size;
 }
@@ -1364,6 +1363,9 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     
     LOG_ERROR << "READ IS DONE\n";
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    /*
+     * Filesize Raw is used, because we read the ciphertext aka the raw file.
+     */
     if (startOffset + length < filesizeRaw) {
         return length;
     } else {

@@ -41,7 +41,7 @@ namespace pcapfs {
         size_t getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
         size_t decryptCiphertextVecToPlaintextVec( std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
         
-        int calculateProcessedSize(uint64_t filesizeRaw, Index &idx);
+        int calculateProcessedSize(uint64_t length_of_ciphertext, Index &idx);
 
         static bool isClientMessage(uint64_t i);
 
