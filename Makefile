@@ -28,7 +28,15 @@ systemtests: build
 	@echo
 	@./tests/system/run-system-tests.sh
 
-tests: unittests systemtests
+cryptotests: build
+	@echo
+	@printf '%80s\n' | sed 's/ /#/g'
+	@echo "Running crypto tests"
+	@printf '%80s\n' | sed 's/ /#/g'
+	@echo
+	@./tests/crypto/run-crypto-tests.sh
+
+tests: unittests systemtests cryptotests
 
 build: dependencies
 	@echo
