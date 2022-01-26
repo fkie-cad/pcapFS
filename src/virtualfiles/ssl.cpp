@@ -293,7 +293,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     //Step 3: process all logical breaks in underlying virtual file
     //TODO: How many files? One?
     for (unsigned int i = 0; i < numElements; ++i) {
-        LOG_DEBUG << "processing element " << std::to_string(i) << " of " << std::to_string(numElements);
+        LOG_DEBUG << "processing element " << std::to_string(i+1) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
 
         // get correct size (depending on element processed)
@@ -350,7 +350,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
+
+                LOG_TRACE << "applicationDataLayer->getEncryptedDataLen(): " << applicationDataLayer->getEncryptedDataLen();
+                LOG_TRACE << "applicationDataLayer->getHeaderLen(): " << applicationDataLayer->getHeaderLen();
+
                 uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
+                LOG_TRACE << "bytesBeforeEncryptedData: " << bytesBeforeEncryptedData;
 
                 //create ssl application file
                 //TODO: does client always send first?
@@ -368,6 +373,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 SimpleOffset soffset;
                 soffset.id = filePtr->getIdInIndex();
                 soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
+                LOG_TRACE << "[SOFFSET.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << soffset.start;
+                // This is the way to enable all meta data from tls application layer packets, e.g. add length, protocol type etc.
+                //soffset.start = offset + offsetInLogicalFragment;
                 
                 /*
                  * This is an important change:
@@ -419,8 +427,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  */
 
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
-                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                LOG_TRACE << "filesizeRaw (after): " << resultPtr->getFilesizeRaw();
                 counter_of_size_calculation_raw++;
 
                 /*
@@ -1102,8 +1111,10 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
 
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+		LOG_TRACE << "[USING KEY] start with reading decrypted content, startOffset: " << startOffset << " and length: " << length;
 		return read_decrypted_content(startOffset, length, idx, buf);
 	} else {
+		LOG_TRACE << "[NO KEY] start with reading raw, startOffset: " << startOffset << " and length: " << length;
 		return read_raw(startOffset, length, idx, buf);
 	}
 }
@@ -1114,11 +1125,31 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
-    SimpleOffset offset = offsets.at(0);
-    FilePtr filePtr = idx.get({offsetType, offset.id});
+	LOG_TRACE << "read_raw offset size: " << offsets.size();
+	Bytes write_me_to_file;
+	size_t counter = 0;
+
+	for(SimpleOffset offset: offsets) {
+		LOG_TRACE << "start: " << offset.start << " length: " << offset.length;
+
+		FilePtr filePtr = idx.get({offsetType, offset.id});
+		Bytes temp_buffer(offset.length);
+		//counter += filePtr->read(startOffset + offset.start, length, idx, buf);
+		filePtr->read(offset.start, offset.length, idx, (char *) temp_buffer.data());
+		write_me_to_file.insert(std::end(write_me_to_file), std::begin(temp_buffer), std::end(temp_buffer));
+	}
+
+	if (write_me_to_file.size() > 0) {
+		memset(buf, 0, length);
+		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
+	} else {
+		LOG_ERROR << "Empty buffer in read_raw, probably unwanted behavior.";
+	}
+
     //TODO: sanitizing length is done in filePtr->read!
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-    return filePtr->read(startOffset + offset.start, length, idx, buf);
+    counter = length - startOffset;
+    return counter;
 }
 
 size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
