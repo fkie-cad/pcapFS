@@ -1146,8 +1146,9 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 		LOG_ERROR << "Empty buffer in read_raw, probably unwanted behavior.";
 	}
 
-    //TODO: sanitizing length is done in filePtr->read!
+
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    //TODO: Check if this is correct at this point
     counter = length - startOffset;
     return counter;
 }
