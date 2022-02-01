@@ -50,9 +50,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         }
 
         if(file->getFiletype() == "ssl") {
-			LOG_ERROR << "current file name BEFORE ssl stuff: " << file->getFilename() << " type: " << file->getFiletype() <<
-				" fileSizeRaw: " << file->getFilesizeRaw() <<
-				" fileSizeProcessed: " << file->getFilesizeProcessed();
+			LOG_TRACE << file->to_string();
 		}
 
 
@@ -69,9 +67,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());
 
                     if(file->getFiletype() == "ssl") {
-            			LOG_ERROR << "current file name (during SSL STUFF): " << file->getFilename() << " type: " << file->getFiletype() <<
-            				" fileSizeRaw: " << file->getFilesizeRaw() <<
-            				" fileSizeProcessed: " << file->getFilesizeProcessed();
+            			LOG_DEBUG << file->to_string();
             		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
                     file->clearBuffer();
@@ -85,9 +81,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         }
 
         if(file->getFiletype() == "ssl") {
-			LOG_ERROR << "current file name AFTER ssl stuff: " << file->getFilename() << " type: " << file->getFiletype() <<
-				" fileSizeRaw: " << file->getFilesizeRaw() <<
-				" fileSizeProcessed: " << file->getFilesizeProcessed();
+			LOG_DEBUG << file->to_string();
 		}
 
 

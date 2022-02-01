@@ -76,22 +76,34 @@ bool pcapfs::File::meetsDecodeMapCriteria(const std::string &file) {
     return false;
 }
 
- std::string pcapfs::File::to_string() {
+std::string pcapfs::File::to_string() {
+    std::stringstream ss;
+    std::stringstream connectionBreaksOutputStream;
+    
+    if(!this->connectionBreaks.empty()) {
+        connectionBreaksOutputStream << "\n";
+        
+        for(int i=0; i<this->connectionBreaks.size(); i++) {
+            connectionBreaksOutputStream << "    ";
+            connectionBreaksOutputStream << this->connectionBreaks[i].first << "\n";
+        }
+        
+    } else {
+        connectionBreaksOutputStream << "<none>";
+    }
+    
+    ss << "File(\n"
+        << "  filetype: " << this->getFiletype() << "\n"
+        << "  filename: " << this->getFilename() << "\n"
+        << "  filesizeRaw: " << this->getFilesizeRaw() << "\n"
+        << "  filesizeProcessed: " << this->getFilesizeProcessed() << "\n"
+        << "  connection breaks: " << connectionBreaksOutputStream.str() << "\n"
+        //<< "  buffer: " << this->getBuffer().data() << "\n"
+        << ")";
 
-	 std::stringstream ss;
+    std::string ret = ss.str();
 
-	 ss << "File(\n"
-    			<< "  filetype: " << this->getFiletype() << "\n"
-				<< "  filename: " << this->getFilename() << "\n"
-				<< "  filesizeRaw: " << this->getFilesizeRaw() << "\n"
-				<< "  filesizeProcessed: " << this->getFilesizeProcessed() << "\n"
-				<< "  buffer: " << this->getBuffer().data() << "\n"
-				<< ")";
-
-	 std::string ret = ss.str();
-
-	 return ret;
-
+    return ret;
 }
 
 void pcapfs::File::serialize(boost::archive::text_oarchive &archive) {

@@ -88,7 +88,7 @@ std::string pcapfs::SslFile::toString() {
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
-int pcapfs::SslFile::calculateProcessedSize(uint64_t length_of_ciphertext, Index &idx) {
+size_t pcapfs::SslFile::calculateProcessedSize(uint64_t length_of_ciphertext, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
 	size_t plaintext_size = read_for_size(0, length_of_ciphertext, idx);
@@ -132,11 +132,10 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 					serverHelloMessage->getServerHelloHeader()->random,
 					SERVER_RANDOM_SIZE);
 			offsetInLogicalFragment += serverHelloMessage->getMessageLength();
-			LOG_DEBUG
-			<< "found server hello message";
-			//TODO: Segfault in cipher suite?!
-			LOG_DEBUG
-			<< "chosen cipher suite: "
+			
+            LOG_DEBUG << "found server hello message";
+			
+            LOG_DEBUG << "chosen cipher suite: "
 					<< serverHelloMessage->getCipherSuite()->asString();
 			if (serverHelloMessage->getCipherSuite()) {
 				/*
@@ -223,7 +222,8 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 		const FilePtr &filePtr, const std::string &cipherSuite, unsigned int i,
 		Bytes &clientRandom, Index &idx, Bytes &serverRandom) {
 	//search for master secret in candidates
-	if (processedSSLHandshake) {
+	
+    if (processedSSLHandshake) {
 		Bytes masterSecret = searchCorrectMasterSecret(
 				(char*) (clientRandom.data()), idx);
 		if (!masterSecret.empty()) {
@@ -238,6 +238,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 			resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
 		}
 	}
+	
 	resultPtr->setOffsetType(filePtr->getFiletype());
 	resultPtr->setFiletype("ssl");
 	resultPtr->cipherSuite = cipherSuite;
@@ -250,6 +251,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	//resultPtr->setProperty("ciphersuite", cipherSuite);
 	resultPtr->setProperty("protocol", "ssl");
 	resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+    
 	if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
 		resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
 	}
@@ -259,6 +261,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
 	unsigned int counter_of_size_calculation_raw = 0;
 	unsigned int counter_of_size_calculation_processed = 0;
+    uint64_t connectionBreakCounter = 0;
 
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
@@ -366,13 +369,33 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 					resultPtrInit(processedSSLHandshake,
 							sslVersion, resultPtr, filePtr, cipherSuite, i,
 							clientRandom, idx, serverRandom);
+                    
+                    //TODO
+                    //init with 0, unsure where we init this right now
+                    resultPtr->filesizeProcessed = 0;
+                    resultPtr->filesizeRaw = 0;
                 }
 
-
+                /*
+                 * We need to distinguish between 2 cases:
+                 * 
+                 * A) We have a Key and we do the decryption with this key
+                 * B) We do not have the key and only return the ciphertext.
+                 * 
+                 * We got this information from the initialization step from resultPtrInit.
+                 */
+                
+                if (resultPtr->flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+                    LOG_INFO << "[PARSING TLS APP DATA **WITH** KEY]"; 
+                } else {
+                    LOG_INFO << "[PARSING TLS APP DATA **WITHOUT** KEY]"; 
+                }
+                
                 //each application data is part of the stream
                 SimpleOffset soffset;
                 soffset.id = filePtr->getIdInIndex();
                 soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
+                
                 LOG_TRACE << "[SOFFSET.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << soffset.start;
                 // This is the way to enable all meta data from tls application layer packets, e.g. add length, protocol type etc.
                 //soffset.start = offset + offsetInLogicalFragment;
@@ -393,10 +416,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 if (soffset.length > sslLayer->getDataLen()) {
                     break;
                 }
+                
                 resultPtr->offsets.push_back(soffset);
-                //TODO: processedsize should be set
-
-
 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
@@ -421,6 +442,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 	break;
                 }
 
+                
                 /*
                  * We remove the size of the mac, filesizeRaw contains the length of the ssl decryption without the mac.
                  * We add the simple offset (soffset) to the base and the length of the raw size to provide the data we need for the decryption steps.
@@ -428,42 +450,53 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
                 //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
-                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length);
+                resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + encryptedDataLen);
                 LOG_TRACE << "filesizeRaw (after): " << resultPtr->getFilesizeRaw();
                 counter_of_size_calculation_raw++;
 
+                LOG_TRACE << "resultPtr->filesizeProcessed: " << resultPtr->filesizeProcessed;
+                //size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
+                size_t calculated_size = encryptedDataLen;
+                LOG_TRACE << "calculated size: " << calculated_size;
+                
+                if(calculated_size > 0) {
+                    calculated_size = calculated_size - mac_size;
+                }
+                
+                LOG_TRACE << "calculated size - mac size: " << calculated_size;
+                resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + calculated_size);
+                
+                counter_of_size_calculation_processed++;
+                
                 /*
                  * The current design needs information about the file sizes to allocate the buffer
                  * for the respective size. We calculate the buffer size if it has not been set.
                  * This size is called setFilesizeProcessed (virtual files)
                  */
-
-                if (!filePtr->flags.test(pcapfs::flags::PROCESSED) || connectionBreakOccured) {
-					LOG_TRACE << "Length calculation now";
-					int calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
-					resultPtr->setFilesizeProcessed(calculated_size);
-
-					counter_of_size_calculation_processed++;
-					//TODO Here also file ptr?
-					//filePtr->setFilesizeRaw(resultPtr->getFilesizeRaw());
-					//filePtr->setFilesizeProcessed(calculated_size);
+                
+                if (connectionBreakOccured && filePtr->flags.test(pcapfs::flags::PROCESSED)) {
+                    resultPtr->connectionBreaks.push_back({resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
+                    LOG_TRACE << "file size processed for this virtual file: " 
+                        << resultPtr->getFilesizeProcessed() 
+                        << " and current break: " 
+                        << resultPtr->filesizeProcessed;
+                    connectionBreakOccured = false;
+                }
+                
+                
+                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
 					filePtr->flags.set(pcapfs::flags::PROCESSED);
-					LOG_TRACE << "Length calculation done: " << calculated_size;
 				} else {
 					LOG_DEBUG << "Already processed, length calculation done";
 				}
+				
 				//TODO: set filesizeProcessed when decryption is done
 				//resultPtr->filesizeRaw before
-				if (connectionBreakOccured) {
-					resultPtr->connectionBreaks.push_back(
-							{resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
-					LOG_TRACE << "file size processed for this virtual file: " << resultPtr->getFilesizeProcessed() << " and current break: " << resultPtr->filesizeProcessed;
-					LOG_DEBUG << "connection break occurred: fs processed: " << resultPtr->filesizeProcessed;
-					connectionBreakOccured = false;
-				}
+				
 				LOG_TRACE << "Changed size raw to " << resultPtr->getFilesizeRaw() << " - times: " << counter_of_size_calculation_raw;
 				LOG_TRACE << "Changed size processed to " << resultPtr->getFilesizeProcessed() << " - times: " << counter_of_size_calculation_processed;
 				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
+                //LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->to_string();
 			}
 
 
@@ -471,6 +504,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             sslLayer->parseNextLayer();
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());
         }
+        
     }
 
     //TODO: multiple ssl streams in one tcp stream?!
