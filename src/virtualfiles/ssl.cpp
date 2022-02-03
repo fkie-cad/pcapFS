@@ -258,14 +258,10 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 }
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
-
-	unsigned int counter_of_size_calculation_raw = 0;
-	unsigned int counter_of_size_calculation_processed = 0;
-    uint64_t connectionBreakCounter = 0;
-
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     bool tlsTrafficDetected = false;
+    bool visitedVirtualSslFile = false;
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
@@ -392,18 +388,16 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     LOG_INFO << "[PARSING TLS APP DATA **WITHOUT** KEY]"; 
                 }
                 
-                /*
                 if (connectionBreakOccured) {
-                    resultPtr->connectionBreaks.push_back({resultPtr->getFilesizeRaw(), filePtr->connectionBreaks.at(i).second});
-                    LOG_TRACE << "file size processed for this virtual file: " 
-                    << resultPtr->getFilesizeRaw()
-                    << " and current break: " 
-                    << resultPtr->getFilesizeRaw();
-                    connectionBreakOccured = false;
-                }
-                */
-                
-                if (connectionBreakOccured) {
+                    /*
+                     * Prevent the run of the calculation stub in the first execution of the loop, there is no data ready.
+                     */
+                    if(resultPtr->filesizeRaw > 0) {
+                        size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeRaw(), idx);
+                        resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + calculated_size);
+                        visitedVirtualSslFile = true;
+                    }
+                    
                     resultPtr->connectionBreaks.push_back({resultPtr->getFilesizeProcessed(), filePtr->connectionBreaks.at(i).second});
                     LOG_TRACE << "file size processed for this virtual file: " 
                     << resultPtr->getFilesizeProcessed()
@@ -420,18 +414,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
                 
                 LOG_TRACE << "[SOFFSET.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << soffset.start;
-                // This is the way to enable all meta data from tls application layer packets, e.g. add length, protocol type etc.
-                //soffset.start = offset + offsetInLogicalFragment;
-                
-                /*
-                 * This is an important change:
-                 * We keep the hmac (and other stuff if there is any) now behind every message.
-                 * 
-                 * This is a workaround for determining padding sizes in AES CBC and will help in future
-                 * to detect whether if a packet is signed correctly or not
-                 * 
-                 */
-                //soffset.length = encryptedDataLen - MAC_SIZE;
+
                 soffset.length = encryptedDataLen;
                 
                 //if size is a mismatch => ssl packet is malformed
@@ -441,7 +424,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
                 
                 resultPtr->offsets.push_back(soffset);
-
+                
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
                     resultPtr->previousBytes.push_back(clientEncryptedData);
@@ -454,71 +437,29 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     resultPtr->keyForFragment.push_back(1);
                     LOG_DEBUG << "server encrypted " << std::to_string(serverEncryptedData);
                 }
-
+                
                 offsetInLogicalFragment += completeSSLLen;
-
-                size_t mac_size = Crypto::getMacSize(sslVersion, cipherSuite);
-                LOG_TRACE << "MAC SIZE FOR " << cipherSuite << " is " << mac_size;
-
-                if(mac_size < 0) {
-                	LOG_ERROR << "MAC IS NOT SUPPORTED";
-                	break;
-                }
-
                 
-                /*
-                 * We remove the size of the mac, filesizeRaw contains the length of the ssl decryption without the mac.
-                 * We add the simple offset (soffset) to the base and the length of the raw size to provide the data we need for the decryption steps.
-                 */
-
-                LOG_TRACE << "filesizeRaw (before): " << resultPtr->getFilesizeRaw() << " - simple offset length: " << soffset.length << " - mac size for our cipher: " << mac_size;
-                //resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + soffset.length - mac_size);
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + encryptedDataLen);
-                LOG_TRACE << "filesizeRaw (after): " << resultPtr->getFilesizeRaw();
-                counter_of_size_calculation_raw++;
-
-                LOG_TRACE << "resultPtr->filesizeProcessed: " << resultPtr->filesizeProcessed;
-                //size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeProcessed(), idx);
-                size_t calculated_size = encryptedDataLen;
-                LOG_TRACE << "calculated size: " << calculated_size;
-                
-                if(calculated_size > 0) {
-                    calculated_size = calculated_size - mac_size;
-                }
-                
-                LOG_TRACE << "calculated size - mac size: " << calculated_size;
-                resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + calculated_size);
-                
-                counter_of_size_calculation_processed++;
-                
-                /*
-                 * The current design needs information about the file sizes to allocate the buffer
-                 * for the respective size. We calculate the buffer size if it has not been set.
-                 * This size is called setFilesizeProcessed (virtual files)
-                 */
-                
-                
-                /*
-                if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
-					filePtr->flags.set(pcapfs::flags::PROCESSED);
-				} else {
-					LOG_DEBUG << "Already processed, length calculation done";
-				}
-				*/
 				
-				//TODO: set filesizeProcessed when decryption is done
-				//resultPtr->filesizeRaw before
-				
-				LOG_TRACE << "Changed size raw to " << resultPtr->getFilesizeRaw() << " - times: " << counter_of_size_calculation_raw;
-				LOG_TRACE << "Changed size processed to " << resultPtr->getFilesizeProcessed() << " - times: " << counter_of_size_calculation_processed;
 				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
-                //LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->to_string();
 			}
-
-
+			
             LOG_DEBUG << "OFFSET IN LOG FRAGMENT: " << std::to_string(offsetInLogicalFragment);
             sslLayer->parseNextLayer();
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());
+            
+            /*
+             * If this is our last iteration we update the filesizeProcessed again
+             */
+            if(sslLayer == nullptr && visitedVirtualSslFile == true && resultPtr->flags.test(flags::PROCESSED)) {
+                LOG_DEBUG << "Content is last step";
+                size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeRaw(), idx);
+                /*
+                 * calculated_size contains all plain text in this context, therefore we do not need to add the current filesizeProcessed.
+                 */
+                resultPtr->setFilesizeProcessed(calculated_size);
+            }
         }
         
     }
