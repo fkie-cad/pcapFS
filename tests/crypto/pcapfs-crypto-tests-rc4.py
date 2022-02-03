@@ -11,7 +11,7 @@ import pytest
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 
-class TestAes128Cbc:
+class TestRc4:
 
     def test_with_key_file(self, test_pcap, expected_files_with_ssl):
         with mount_pcap(test_pcap, params=['-k', '{here}/keyfiles/aes128-cbc.key'.format(here=HERE)]) as mountpoint:
