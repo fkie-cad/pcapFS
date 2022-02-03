@@ -77,7 +77,7 @@ class TestSslFileReadRaw:
 class TestSslFileReadProcessed:
 
     def test_read_processed_ssl_rc4_full_appdata(self, test_pcap, content_tls_appdata_all_plain):
-        with mount_pcap(test_pcap, params=['-k', '{here}/keyfiles/ssl.key'.format(here=HERE)]) as mountpoint:
+        with mount_pcap(test_pcap, params=['--show-all', '-k', '{here}/keyfiles/ssl.key'.format(here=HERE)]) as mountpoint:
             files = get_file_list(mountpoint)
             assert('ssl/0-1838_SSL' in files)
             with open(os.path.join(mountpoint, 'ssl/0-1838_SSL'), 'rb') as f:
@@ -85,6 +85,16 @@ class TestSslFileReadProcessed:
                 data = binascii.hexlify(content)
                 hexdata = str(data, 'UTF-8')
                 assert(hexdata == content_tls_appdata_all_plain)
+                
+    def test_read_processed_ssl_as_http(self, test_pcap, content_tls_appdata_all_plain_response_body_only):
+        with mount_pcap(test_pcap, params=['--show-all', '-k', '{here}/keyfiles/ssl.key'.format(here=HERE)]) as mountpoint:
+            files = get_file_list(mountpoint)
+            assert('http/0-279' in files)
+            with open(os.path.join(mountpoint, 'http/0-279'), 'rb') as f:
+                content = f.read()
+                data = binascii.hexlify(content)
+                hexdata = str(data, 'UTF-8')
+                assert(hexdata == content_tls_appdata_all_plain_response_body_only)
 
 
 class TestConfigFile:
@@ -226,6 +236,34 @@ def content_tls_appdata_all_plain():
                                     "68616e6b20796f7520666f72207573696e67206e67696e782e3c2f656d3e" \
                                     "3c2f703e0a3c2f626f64793e0a3c2f68746d6c3e0a"
     return content_tls_appdata_all_plain
+
+
+@pytest.fixture
+def content_tls_appdata_all_plain_response_body_only():
+    content_tls_appdata_all_plain_response_body_only = "" \
+                                    "3c21444f43545950452068746d6c3e0a3c68746d6c" \
+                                    "3e0a3c686561643e0a3c7469746c653e57656c636f6d6520746f206e6769" \
+                                    "6e78213c2f7469746c653e0a3c7374796c653e0a20202020626f6479207b" \
+                                    "0a202020202020202077696474683a203335656d3b0a2020202020202020" \
+                                    "6d617267696e3a2030206175746f3b0a2020202020202020666f6e742d66" \
+                                    "616d696c793a205461686f6d612c2056657264616e612c20417269616c2c" \
+                                    "2073616e732d73657269663b0a202020207d0a3c2f7374796c653e0a3c2f" \
+                                    "686561643e0a3c626f64793e0a3c68313e57656c636f6d6520746f206e67" \
+                                    "696e78213c2f68313e0a3c703e496620796f752073656520746869732070" \
+                                    "6167652c20746865206e67696e7820776562207365727665722069732073" \
+                                    "75636365737366756c6c7920696e7374616c6c656420616e640a776f726b" \
+                                    "696e672e204675727468657220636f6e66696775726174696f6e20697320" \
+                                    "72657175697265642e3c2f703e0a0a3c703e466f72206f6e6c696e652064" \
+                                    "6f63756d656e746174696f6e20616e6420737570706f727420706c656173" \
+                                    "6520726566657220746f0a3c6120687265663d22687474703a2f2f6e6769" \
+                                    "6e782e6f72672f223e6e67696e782e6f72673c2f613e2e3c62722f3e0a43" \
+                                    "6f6d6d65726369616c20737570706f727420697320617661696c61626c65" \
+                                    "2061740a3c6120687265663d22687474703a2f2f6e67696e782e636f6d2f" \
+                                    "223e6e67696e782e636f6d3c2f613e2e3c2f703e0a0a3c703e3c656d3e54" \
+                                    "68616e6b20796f7520666f72207573696e67206e67696e782e3c2f656d3e" \
+                                    "3c2f703e0a3c2f626f64793e0a3c2f68746d6c3e0a"
+    return content_tls_appdata_all_plain_response_body_only
+
 
 
 @pytest.fixture
