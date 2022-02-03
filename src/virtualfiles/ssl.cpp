@@ -387,9 +387,32 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 
                 if (resultPtr->flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                     LOG_INFO << "[PARSING TLS APP DATA **WITH** KEY]"; 
+                    resultPtr->flags.set(flags::PROCESSED);
                 } else {
                     LOG_INFO << "[PARSING TLS APP DATA **WITHOUT** KEY]"; 
                 }
+                
+                /*
+                if (connectionBreakOccured) {
+                    resultPtr->connectionBreaks.push_back({resultPtr->getFilesizeRaw(), filePtr->connectionBreaks.at(i).second});
+                    LOG_TRACE << "file size processed for this virtual file: " 
+                    << resultPtr->getFilesizeRaw()
+                    << " and current break: " 
+                    << resultPtr->getFilesizeRaw();
+                    connectionBreakOccured = false;
+                }
+                */
+                
+                if (connectionBreakOccured) {
+                    resultPtr->connectionBreaks.push_back({resultPtr->getFilesizeProcessed(), filePtr->connectionBreaks.at(i).second});
+                    LOG_TRACE << "file size processed for this virtual file: " 
+                    << resultPtr->getFilesizeProcessed()
+                    << " and current break: " 
+                    << resultPtr->getFilesizeProcessed();
+                    connectionBreakOccured = false;
+                }
+                
+                
                 
                 //each application data is part of the stream
                 SimpleOffset soffset;
@@ -474,21 +497,14 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                  * This size is called setFilesizeProcessed (virtual files)
                  */
                 
-                if (connectionBreakOccured && filePtr->flags.test(pcapfs::flags::PROCESSED)) {
-                    resultPtr->connectionBreaks.push_back({resultPtr->filesizeProcessed, filePtr->connectionBreaks.at(i).second});
-                    LOG_TRACE << "file size processed for this virtual file: " 
-                        << resultPtr->getFilesizeProcessed() 
-                        << " and current break: " 
-                        << resultPtr->filesizeProcessed;
-                    connectionBreakOccured = false;
-                }
                 
-                
+                /*
                 if (!filePtr->flags.test(pcapfs::flags::PROCESSED)) {
 					filePtr->flags.set(pcapfs::flags::PROCESSED);
 				} else {
 					LOG_DEBUG << "Already processed, length calculation done";
 				}
+				*/
 				
 				//TODO: set filesizeProcessed when decryption is done
 				//resultPtr->filesizeRaw before
