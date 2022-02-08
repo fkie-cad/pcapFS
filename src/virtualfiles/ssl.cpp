@@ -451,9 +451,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             
             /*
              * If this is our last iteration we update the filesizeProcessed again
+             * TODO: make this last step the only step to reduce duplicate decryption.
+             * Idea: Just one decryption after all ciphertext is available. We need to keep track
+             * of all connection breaks and package breaks. Then we can reconstruct it here inside the parser.
              */
             if(sslLayer == nullptr && visitedVirtualSslFile == true && resultPtr->flags.test(flags::PROCESSED)) {
-                LOG_DEBUG << "Content is last step";
+                LOG_DEBUG << "Fixing the fileSizeProcessed, setting it to the full size of plaintext.";
                 size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeRaw(), idx);
                 /*
                  * calculated_size contains all plain text in this context, therefore we do not need to add the current filesizeProcessed.
@@ -461,7 +464,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 resultPtr->setFilesizeProcessed(calculated_size);
             }
         }
-        
     }
 
     //TODO: multiple ssl streams in one tcp stream?!
@@ -1191,6 +1193,9 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 				" length: " << length << " result_size: " << write_me_to_file.size();
 
 		memset(buf, 0, length);
+        /*
+         * This produces a crash when write_me_to_file is large enough.
+         */
 		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 
 		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<

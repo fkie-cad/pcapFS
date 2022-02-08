@@ -29,6 +29,7 @@ namespace pcapfs {
             bool showMetadata = false;
             bool showAll = false;
             bool indexInMemory = false;
+            bool allowHTTP09 = true;
             DecodeMap decodeMap;
 
             const DecodeMapEntry getDecodeMapFor(const std::string &file) { return decodeMap[file]; };

@@ -28,6 +28,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
+    pcapfs::Configuration options;
+    auto config = options.pcapfsOptions;
+    
     size_t size = 0;
     headerMap header;
     std::string requestedFilename;
@@ -129,8 +132,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             soffset.start = offset + firstLine + headerLength;
             soffset.length = size - firstLine - headerLength;
 
-            //TODO
-            //Why?
             resultPtr->offsets.push_back(soffset);
             resultPtr->setFilesizeRaw(soffset.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
@@ -243,6 +244,66 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
             prevWasRequest = false;
 
+            resultVector.push_back(resultPtr);
+        }  else if(prevWasRequest && config.allowHTTP09 == true) {
+
+            if(filePtr->getFiletype() == "ssl") {
+                //Debug here.
+                asm("NOP");
+            }
+            
+            if (size <= 0) {
+                continue;
+            }
+            
+            //create http response body
+            soffset.start = offset;
+            soffset.length = size;
+            
+            resultPtr->offsets.push_back(soffset);
+            resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
+            
+            
+            resultPtr->setOffsetType(filePtr->getFiletype());
+            resultPtr->setFiletype("http");
+            resultPtr->setFilename(requestedFilename);
+            resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+            resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
+            resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
+            resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
+            resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            resultPtr->setProperty("domain", requestedHost);
+            resultPtr->setProperty("uri", requestedUri);
+            resultPtr->setProperty("protocol", "http");
+            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
+                resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
+            }
+            
+            if (header["transfer-encoding"] == "chunked") {
+                resultPtr->flags.set(pcapfs::flags::CHUNKED);
+                resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            }
+            if (header["content-encoding"] == "gzip") {
+                resultPtr->flags.set(pcapfs::flags::COMPRESSED_GZIP);
+                resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            }
+            if (header["content-encoding"] == "deflate") {
+                resultPtr->flags.set(pcapfs::flags::COMPRESSED_DEFLATE);
+                resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            }
+            
+            resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            
+            LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
+            
+            //TODO WHY?
+            //TODO: hide files whose processed size is zero?
+            if (resultPtr->getFilesizeProcessed() == 0) {
+                continue;
+            }
+            prevWasRequest = false;
+            
             resultVector.push_back(resultPtr);
         }
     }
