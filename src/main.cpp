@@ -197,7 +197,6 @@ int main(int argc, const char *argv[]) {
             pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
             return 2;
         }
-
     }
 
 

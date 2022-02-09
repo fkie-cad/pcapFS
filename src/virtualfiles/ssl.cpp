@@ -1182,28 +1182,59 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		result.push_back(elem->plaintextBlock);
 		offset += elem->plaintextBlock.size();
 	}
-
-	for(size_t i=0; i<result.size(); i++) {
-		write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-	}
-
+	
+	for(int i = 0; i<result.size(); i++) {
+        write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+    }
+	
+	/*
+	size_t copy_offset = 0;
+    size_t result_index=0;
+    
+	while(copy_offset < length) {
+        if(result_index<result.size()) {
+            //write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+            Bytes buffer_file_target = result[result_index];
+            size_t current_buffer_size = buffer_file_target.size();
+            memset(buf + copy_offset, 0, current_buffer_size);
+            memcpy(buf + copy_offset, (const char*) buffer_file_target.data(), current_buffer_size);
+            copy_offset += current_buffer_size;
+            result_index++;
+        } else {
+            break;
+        }
+    }
+    if(copy_offset < length && result_index == result.size()-1) {
+        Bytes buffer_file_target = result[result_index];
+        size_t current_buffer_size = buffer_file_target.size();
+        if(current_buffer_size < length - copy_offset) {
+            memset(buf + copy_offset, 0, current_buffer_size);
+            memcpy(buf + copy_offset, (const char*) buffer_file_target.data(), current_buffer_size);
+        } else {
+            LOG_ERROR << "This case should not happen.";
+            throw std::length_error("Error, too long for too few elements.");
+        }
+    }
+    */
+    
+	
 	if (write_me_to_file.size() > 0) {
 
 		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
 				" length: " << length << " result_size: " << write_me_to_file.size();
 
 		memset(buf, 0, length);
-        /*
-         * This produces a crash when write_me_to_file is large enough.
-         */
-		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
+		
+        //This produces a crash when write_me_to_file is large enough.
+
+         memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 
 		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
 				" length: " << length << " result_size: " << write_me_to_file.size();
 	} else {
 		LOG_ERROR << "Empty buffer after decryption, probably unwanted behavior.";
 	}
-
+    
 	/*
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	if (startOffset + length < filesizeRaw) {
