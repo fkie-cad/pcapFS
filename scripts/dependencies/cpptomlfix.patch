@@ -1,0 +1,10 @@
+--- cpptoml.h	2022-02-14 09:01:22.666655926 +0100
++++ cpptoml.h.new	2022-02-14 09:01:16.679989458 +0100
+@@ -7,6 +7,7 @@
+ #ifndef CPPTOML_H
+ #define CPPTOML_H
+ 
++#include <limits>
+ #include <algorithm>
+ #include <cassert>
+ #include <clocale>

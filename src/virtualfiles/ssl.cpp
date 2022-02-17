@@ -1147,7 +1147,11 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 }
 
 size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+    size_t position = 0;
+    size_t posInFragment = 0;
+    size_t fragment = 0;
+
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
@@ -1182,42 +1186,62 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		result.push_back(elem->plaintextBlock);
 		offset += elem->plaintextBlock.size();
 	}
-	
+	/*
 	for(int i = 0; i<result.size(); i++) {
         write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
     }
-	
-	/*
-	size_t copy_offset = 0;
-    size_t result_index=0;
-    
-	while(copy_offset < length) {
-        if(result_index<result.size()) {
-            //write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-            Bytes buffer_file_target = result[result_index];
-            size_t current_buffer_size = buffer_file_target.size();
-            memset(buf + copy_offset, 0, current_buffer_size);
-            memcpy(buf + copy_offset, (const char*) buffer_file_target.data(), current_buffer_size);
-            copy_offset += current_buffer_size;
-            result_index++;
-        } else {
-            break;
-        }
-    }
-    if(copy_offset < length && result_index == result.size()-1) {
-        Bytes buffer_file_target = result[result_index];
-        size_t current_buffer_size = buffer_file_target.size();
-        if(current_buffer_size < length - copy_offset) {
-            memset(buf + copy_offset, 0, current_buffer_size);
-            memcpy(buf + copy_offset, (const char*) buffer_file_target.data(), current_buffer_size);
-        } else {
-            LOG_ERROR << "This case should not happen.";
-            throw std::length_error("Error, too long for too few elements.");
-        }
-    }
     */
-    
 	
+    // seek to start_offset
+    while (position < startOffset) {
+        position += result[fragment].size();
+        fragment++;
+    }
+
+    if (position > startOffset) {
+        fragment--;
+        posInFragment = result[fragment].size() - (position - startOffset);
+        position = static_cast<size_t>(startOffset);
+    }
+
+    /*
+     * Now we have the position in the result vector: posInFragment,
+     * the concrete fragment itself (fragment, element of result where we begin our decrypted plaintext stream)
+     * and the offset in the fragment (position).
+     * We copy at the begin of the position the relevant bytes into the target buffer.
+     * The data stream is copied until we reach the length or all data is copied.
+     */
+
+    size_t counter = startOffset;
+    size_t fragment_iterator = fragment;
+    bool first_iteration = true;
+    Bytes bytes_ref;
+
+    while(counter < length && fragment_iterator < result.size())  {
+
+        if(first_iteration) {
+            bytes_ref = result[fragment_iterator];
+            LOG_TRACE << "A: size of the current bytes_ref: " << bytes_ref.size();
+
+            if(posInFragment > bytes_ref.size()) {
+                LOG_ERROR << "FATAL: The posInFragment is smaller than the actual size.";
+                throw std::invalid_argument("The posInFragment is smaller than the actual size.");
+            }
+
+            bytes_ref.erase(bytes_ref.begin(), bytes_ref.begin() + posInFragment);
+            first_iteration = false;
+        } else {
+            bytes_ref = result[fragment_iterator];
+            LOG_TRACE << "B: size of the current bytes_ref: " << bytes_ref.size();
+        }
+
+        memset(buf + counter, 0, bytes_ref.size());
+        memcpy(buf + counter, (const char*) bytes_ref.data(), bytes_ref.size());
+        fragment_iterator++;
+        counter = counter + bytes_ref.size();
+    }
+
+    /*
 	if (write_me_to_file.size() > 0) {
 
 		LOG_TRACE << "offset: " << offset << " startOffset: " << startOffset <<
@@ -1234,6 +1258,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 	} else {
 		LOG_ERROR << "Empty buffer after decryption, probably unwanted behavior.";
 	}
+	*/
     
 	/*
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
