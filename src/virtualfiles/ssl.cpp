@@ -1112,9 +1112,6 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 	}
 }
 
-/*
- * TODO untested, copied from http.cpp:
- */
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
@@ -1211,34 +1208,25 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
      * We copy at the begin of the position the relevant bytes into the target buffer.
      * The data stream is copied until we reach the length or all data is copied.
      */
-
-    size_t counter = startOffset;
-    size_t fragment_iterator = fragment;
+    
+    
     bool first_iteration = true;
     Bytes bytes_ref;
 
-    while(counter < length && fragment_iterator < result.size())  {
-
+    while(position < startOffset + length && fragment < result.size())  {
+        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
         if(first_iteration) {
-            bytes_ref = result[fragment_iterator];
-            LOG_TRACE << "A: size of the current bytes_ref: " << bytes_ref.size();
-
-            if(posInFragment > bytes_ref.size()) {
-                LOG_ERROR << "FATAL: The posInFragment is smaller than the actual size.";
-                throw std::invalid_argument("The posInFragment is smaller than the actual size.");
-            }
-
+            bytes_ref = result[fragment];
             bytes_ref.erase(bytes_ref.begin(), bytes_ref.begin() + posInFragment);
             first_iteration = false;
         } else {
-            bytes_ref = result[fragment_iterator];
-            LOG_TRACE << "B: size of the current bytes_ref: " << bytes_ref.size();
+            bytes_ref = result[fragment];
         }
 
-        memset(buf + counter, 0, bytes_ref.size());
-        memcpy(buf + counter, (const char*) bytes_ref.data(), bytes_ref.size());
-        fragment_iterator++;
-        counter = counter + bytes_ref.size();
+        memset(buf + (position - startOffset), 0, toRead);
+        memcpy(buf + (position - startOffset), (const char*) bytes_ref.data(), toRead);
+        fragment++;
+        position += bytes_ref.size();
     }
 
     /*
