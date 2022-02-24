@@ -1181,6 +1181,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		PlainTextElement *elem = plainTextVector.at(i).get();
 		elem->printMe();
 		result.push_back(elem->plaintextBlock);
+        write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
 		offset += elem->plaintextBlock.size();
 	}
 	/*
@@ -1214,7 +1215,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     Bytes bytes_ref;
 
     while(position < startOffset + length && fragment < result.size())  {
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        size_t toRead = std::min(result[fragment].size() - posInFragment, length - (position - startOffset));
         if(first_iteration) {
             bytes_ref = result[fragment];
             bytes_ref.erase(bytes_ref.begin(), bytes_ref.begin() + posInFragment);
@@ -1222,10 +1223,9 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
         } else {
             bytes_ref = result[fragment];
         }
-
-        memset(buf + (position - startOffset), 0, toRead);
         memcpy(buf + (position - startOffset), (const char*) bytes_ref.data(), toRead);
         fragment++;
+        posInFragment = 0;
         position += bytes_ref.size();
     }
 
