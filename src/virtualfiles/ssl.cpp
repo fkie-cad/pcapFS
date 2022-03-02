@@ -1164,7 +1164,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		p = std::make_shared<PlainTextElement>();
 	}
 
-	getFullCipherText(startOffset, length, idx, cipherTextVector);
+	getFullCipherText(length, idx, cipherTextVector);
 
 	for(size_t i=0; i< cipherTextVector.size(); i++) {
 		CipherTextElement *elem = cipherTextVector.at(i).get();
@@ -1237,8 +1237,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
         LOG_ERROR << "The requested file is larger than the decrypted resource. Diff: " << length - write_me_to_file.size() << "byte_counter: " << byte_counter;
     }
     
-    
-    
+    /*
 	if (write_me_to_file.size() > 0) {
 
 		LOG_ERROR << "offset: " << offset << " startOffset: " << startOffset <<
@@ -1307,7 +1306,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
 		p = std::make_shared<PlainTextElement>();
 	}
     
-    getFullCipherText(startOffset, length, idx, cipherTextVector);
+    getFullCipherText(length, idx, cipherTextVector);
     
     for(size_t i=0; i< cipherTextVector.size(); i++) {
         CipherTextElement *elem = cipherTextVector.at(i).get();
@@ -1352,7 +1351,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(size_t plaintext_length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	//TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
     //TODO: split read into readStreamcipher, readCFB, readCBC...
@@ -1364,23 +1363,17 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     size_t fragment = 0;
     size_t posInFragment = 0;
     size_t position = 0;
-    //int startOffset = 0;
+    uint64_t startOffset = 0;
     int counter = 0;
     
     LOG_DEBUG << "getFullCipherText is called\n";
     
-    // start copying
-
-    /*
-     * Iterate with for loop over all fragements:
-     * startOffset and length are irrelevant
-     */
-    while (position < startOffset + length && fragment < offsets.size()) {
+    while (position < startOffset + plaintext_length && fragment < offsets.size()) {
         
     	LOG_DEBUG << "Read iteration number: " << counter << " fragment: " << fragment;
         
         counter++;
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        size_t toRead = std::min(offsets[fragment].length - posInFragment, plaintext_length - (position - startOffset));
         
         //TODO: is start=0 really good for missing data?
         // -> missing data should probably be handled in an exception?
@@ -1445,11 +1438,12 @@ size_t pcapfs::SslFile::getFullCipherText(uint64_t startOffset, size_t length, c
     
     LOG_ERROR << "READ IS DONE\n";
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    
     /*
      * Filesize Raw is used, because we read the ciphertext aka the raw file.
      */
-    if (startOffset + length < filesizeRaw) {
-        return length;
+    if (startOffset + plaintext_length < filesizeRaw) {
+        return plaintext_length;
     } else {
         return filesizeRaw - startOffset;
     }
