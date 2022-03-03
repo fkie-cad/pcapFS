@@ -39,7 +39,11 @@ namespace pcapfs {
         size_t read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf);
 
         size_t getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
-        size_t decryptCiphertextVecToPlaintextVec( std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector, std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
+        
+        void decryptCiphertextVecToPlaintextVec(
+            std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
+            std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
+        );
         
         size_t calculateProcessedSize(uint64_t length_of_ciphertext, Index& idx);
 
@@ -53,7 +57,7 @@ namespace pcapfs {
         //Bytes decryptData(uint64_t virtual_file_offset, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
         void decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output);
-            
+        
         static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;

@@ -1352,7 +1352,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     size_t fragment = 0;
     size_t position = 0;
-        
     int counter = 0;
     
     
@@ -1404,7 +1403,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
     
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     
-    
     // Assertion for checking if we really read everything from the buffer.
     // Constructed as assertion because only active in debug mode.
     assert(
@@ -1440,6 +1438,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
     return filesizeRaw;
 }
 
+
 /*
  * pcapfs::SslFile::decryptCiphertextToPlaintext
  * 
@@ -1448,37 +1447,16 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
  * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
  * 
  */
-size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
+void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
 		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
-
 	) {
 
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
-	/*
-	 * Cache: If not already instantiated, it will be created.
-	 */
-
-    int counter = 0;
-    
     for (size_t i=0; i<cipherTextVector.size(); i++) {
-        counter++;
-        
-        /*
-         * This approach currently requires that we hold ciphertext and plaintext in memory. No file-based indexes are supported at this point.
-         * refactor to shared_ptr?
-         */
-        
         CipherTextElement *element = cipherTextVector.at(i).get();
         std::shared_ptr<PlainTextElement> output( new PlainTextElement());
-        
-
-        /*
-         * Padding is removed we don't need it anymore.
-         */
-
-
 
         decryptDataNew(element->virtual_file_offset,
                         element->cipherBlock.size(),
@@ -1493,10 +1471,8 @@ size_t pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
         output->sslVersion = element->sslVersion;
         
         outputPlainTextVector.push_back(output);
-
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-    return counter;
 }
 
 bool pcapfs::SslFile::isClientMessage(uint64_t i) {
