@@ -116,7 +116,6 @@ namespace pcapfs {
         static options::PcapFsOptions config;
 
         Bytes buffer;
-
     };
 
 

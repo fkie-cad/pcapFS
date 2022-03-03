@@ -13,6 +13,7 @@
 #include <boost/shared_ptr.hpp>
 
 #include <assert.h>
+#include <unordered_set>
 
 #include "../filefactory.h"
 #include "../logging.h"
@@ -1139,7 +1140,7 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 		LOG_TRACE << "start: " << offset.start << " length: " << offset.length;
 		FilePtr filePtr = idx.get({offsetType, offset.id});
 		Bytes temp_buffer(offset.length);
-		//counter += filePtr->read(startOffset + offset.start, length, idx, buf);
+		counter += offset.length;
 		filePtr->read(offset.start, offset.length, idx, (char *) temp_buffer.data());
 		write_me_to_file.insert(std::end(write_me_to_file), std::begin(temp_buffer), std::end(temp_buffer));
 	}
@@ -1166,34 +1167,71 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
-	// Init for the vectors with regular shared pointers
-	for(auto& c : cipherTextVector) {
-		c = std::make_shared<CipherTextElement>();
-	}
-	for(auto& p : plainTextVector) {
-		p = std::make_shared<PlainTextElement>();
-	}
+    int offset = 0;
+    std::vector<Bytes> result;
+    Bytes write_me_to_file;
+    bool buffer_needs_content = true;
+    
+    // kind of a hack, null bytes should work but are kind of a special case.
+    // if all bytes are == 0, the result is true and the buffer "empty".
+    // (.empty() does not worked as it is resized before)
+    for (auto &elem: buffer) {
+        if (elem != 0) {
+            buffer_needs_content = false;
+        }
+    }
+    
+    if(buffer_needs_content == false) {
+        
+        assert(buffer.size() == filesizeProcessed);
+        
+        // BIO_dump_fp (stdout, (const char *) buffer.data(), buffer.size());
+        
+        memcpy(buf, (const char*) buffer.data() + startOffset, length);
+        
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+        if (startOffset + length < filesizeProcessed) {
+            //read till length is ended
+            LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
+            LOG_TRACE << "Length read: " << length;
+            return length;
+        } else {
+            // read till file end
+            LOG_TRACE << "File is done now. (filesizeProcessed: " << filesizeProcessed << ")";
+            LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
+            return filesizeProcessed - startOffset;
+        }
+        
+    }
+    
+    if(buffer.empty() || buffer_needs_content) {
+    
+        // Init for the vectors with regular shared pointers
+        for(auto& c : cipherTextVector) {
+            c = std::make_shared<CipherTextElement>();
+        }
+        for(auto& p : plainTextVector) {
+            p = std::make_shared<PlainTextElement>();
+        }
 
-	getFullCipherText(idx, cipherTextVector);
+        getFullCipherText(idx, cipherTextVector);
 
-	for(size_t i=0; i< cipherTextVector.size(); i++) {
-		CipherTextElement *elem = cipherTextVector.at(i).get();
-		elem->printMe();
-	}
+        for(size_t i=0; i< cipherTextVector.size(); i++) {
+            CipherTextElement *elem = cipherTextVector.at(i).get();
+            elem->printMe();
+        }
 
-	decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
+        decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
 
-	int offset = 0;
-	std::vector<Bytes> result;
-	Bytes write_me_to_file;
 
-	for(size_t i=0; i<plainTextVector.size(); i++) {
-		PlainTextElement *elem = plainTextVector.at(i).get();
-		elem->printMe();
-		result.push_back(elem->plaintextBlock);
-        write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-		offset += elem->plaintextBlock.size();
-	}
+        for(size_t i=0; i<plainTextVector.size(); i++) {
+            PlainTextElement *elem = plainTextVector.at(i).get();
+            elem->printMe();
+            result.push_back(elem->plaintextBlock);
+            write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
+            offset += elem->plaintextBlock.size();
+        }
+    }
 	
     while (position < startOffset) {
         position += result[fragment].size();
@@ -1227,6 +1265,8 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     
     
     while(position < startOffset + length && fragment < result.size())  {
+        // minimum handles 2 cases here: 
+        // 
         size_t toRead = std::min(result[fragment].size() - posInFragment, length - (position - startOffset));
         if(first_iteration) {
             bytes_ref = result[fragment];
@@ -1385,6 +1425,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
             // Read the bytes from the packets of the file (using the file pointer):
             // After this step, toDecrypt is filled with bytes.
             
+            // filePtr is a TCP file pointer at this position, the underlying file structure
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
             filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());

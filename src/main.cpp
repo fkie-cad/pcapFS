@@ -70,7 +70,9 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
             			LOG_DEBUG << file->to_string();
             		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
-                    file->clearBuffer();
+                    if(file->getFiletype() != "ssl" && file->getFiletype() != "http") {
+                        file->clearBuffer();
+                    }
                     break;
                 }
             }
