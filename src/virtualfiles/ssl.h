@@ -34,7 +34,7 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
-        size_t read_for_size(uint64_t startOffset, size_t length, const Index &idx);
+        size_t read_for_plaintext_size(const Index &idx);
         size_t read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf);
 
@@ -45,7 +45,7 @@ namespace pcapfs {
             std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
         );
         
-        size_t calculateProcessedSize(uint64_t length_of_ciphertext, Index& idx);
+        size_t calculateProcessedSize(Index& idx);
 
         static bool isClientMessage(uint64_t i);
 

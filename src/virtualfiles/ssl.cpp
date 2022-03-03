@@ -90,10 +90,10 @@ std::string pcapfs::SslFile::toString() {
 //Constructor
 pcapfs::SslFile::SslFile() {};
 
-size_t pcapfs::SslFile::calculateProcessedSize(uint64_t length_of_ciphertext, Index &idx) {
+size_t pcapfs::SslFile::calculateProcessedSize(Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
-	size_t plaintext_size = read_for_size(0, length_of_ciphertext, idx);
+	size_t plaintext_size = read_for_plaintext_size(idx);
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	return plaintext_size;
 }
@@ -395,7 +395,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                      * Prevent the run of the calculation stub in the first execution of the loop, there is no data ready.
                      */
                     if(resultPtr->filesizeRaw > 0) {
-                        size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeRaw(), idx);
+                        size_t calculated_size = resultPtr->calculateProcessedSize(idx);
                         resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + calculated_size);
                         visitedVirtualSslFile = true;
                     }
@@ -408,19 +408,17 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     connectionBreakOccured = false;
                 }
                 
-                
-                
                 //each application data is part of the stream
                 SimpleOffset soffset;
                 soffset.id = filePtr->getIdInIndex();
                 soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
                 
                 LOG_TRACE << "[SOFFSET.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << soffset.start;
-
+                
                 soffset.length = encryptedDataLen;
                 
-                //if size is a mismatch => ssl packet is malformed
-                //TODO: Better detection of malformed ssl packets
+                // if size is a mismatch => ssl packet is malformed
+                // TODO: Better detection of malformed ssl packets
                 if (soffset.length > sslLayer->getDataLen()) {
                     break;
                 }
@@ -459,7 +457,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
              */
             if(sslLayer == nullptr && visitedVirtualSslFile == true && resultPtr->flags.test(flags::PROCESSED)) {
                 LOG_DEBUG << "Fixing the fileSizeProcessed, setting it to the full size of plaintext.";
-                size_t calculated_size = resultPtr->calculateProcessedSize(resultPtr->getFilesizeRaw(), idx);
+                size_t calculated_size = resultPtr->calculateProcessedSize(idx);
                 /*
                  * calculated_size contains all plain text in this context, therefore we do not need to add the current filesizeProcessed.
                  */
@@ -1105,15 +1103,31 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
  */
 
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
-		LOG_TRACE << "[USING KEY] start with reading decrypted content, startOffset: " << startOffset << " and length: " << length;
-		return read_decrypted_content(startOffset, length, idx, buf);
+    
+    if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+		
+        LOG_TRACE << "[USING KEY] start with reading decrypted content, startOffset: " << startOffset << " and length: " << length;
+        
+        // Here, length is the plaintext length!
+		
+        return read_decrypted_content(startOffset, length, idx, buf);
+        
 	} else {
+        
 		LOG_TRACE << "[NO KEY] start with reading raw, startOffset: " << startOffset << " and length: " << length;
+        
+        // Here, length is the ciphertext length!
+        
 		return read_raw(startOffset, length, idx, buf);
+        
 	}
 }
 
+
+/*
+ * read_raw is called if a new 
+ * 
+ */
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
@@ -1129,15 +1143,14 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 		filePtr->read(offset.start, offset.length, idx, (char *) temp_buffer.data());
 		write_me_to_file.insert(std::end(write_me_to_file), std::begin(temp_buffer), std::end(temp_buffer));
 	}
-
+    
 	if (write_me_to_file.size() > 0) {
 		memset(buf, 0, length);
 		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
 	} else {
 		LOG_ERROR << "Empty buffer in read_raw, probably unwanted behavior.";
 	}
-
-
+    
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     //TODO: Check if this is correct at this point
     counter = length - startOffset;
@@ -1289,8 +1302,10 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 
 /*
  * This is the new function for the calculation of the plaintext:
+ * Better: return a vector of std::pair of ciphertext length and
+ * the respective plaintext length. Then you need only one decryption.
  */
-size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const Index &idx) {
+size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
@@ -1326,7 +1341,6 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
     
     LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
-    LOG_TRACE << "length: " << length;
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return offset;
 }
