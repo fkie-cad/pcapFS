@@ -12,6 +12,8 @@
 
 #include <boost/shared_ptr.hpp>
 
+#include <assert.h>
+
 #include "../filefactory.h"
 #include "../logging.h"
 
@@ -1121,7 +1123,6 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 
 	for(SimpleOffset offset: offsets) {
 		LOG_TRACE << "start: " << offset.start << " length: " << offset.length;
-
 		FilePtr filePtr = idx.get({offsetType, offset.id});
 		Bytes temp_buffer(offset.length);
 		//counter += filePtr->read(startOffset + offset.start, length, idx, buf);
@@ -1152,10 +1153,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
-    LOG_ERROR << "SSL File Read is called, with " << startOffset << " and length: " << length;
-
-    LOG_TRACE << "[CACHE MISS] empty buffer, we do the regular data decryption.";
-
 	// Init for the vectors with regular shared pointers
 	for(auto& c : cipherTextVector) {
 		c = std::make_shared<CipherTextElement>();
@@ -1164,7 +1161,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		p = std::make_shared<PlainTextElement>();
 	}
 
-	getFullCipherText(length, idx, cipherTextVector);
+	getFullCipherText(idx, cipherTextVector);
 
 	for(size_t i=0; i< cipherTextVector.size(); i++) {
 		CipherTextElement *elem = cipherTextVector.at(i).get();
@@ -1306,7 +1303,7 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
 		p = std::make_shared<PlainTextElement>();
 	}
     
-    getFullCipherText(length, idx, cipherTextVector);
+    getFullCipherText(idx, cipherTextVector);
     
     for(size_t i=0; i< cipherTextVector.size(); i++) {
         CipherTextElement *elem = cipherTextVector.at(i).get();
@@ -1351,29 +1348,18 @@ size_t pcapfs::SslFile::read_for_size(uint64_t startOffset, size_t length, const
  * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
  * 
  */
-size_t pcapfs::SslFile::getFullCipherText(size_t plaintext_length, const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-	//TODO: support to decrypt CBC etc. stuff... Maybe decrypt all of the data or return parts? Depends on mode of operation
-    //TODO: split read into readStreamcipher, readCFB, readCBC...
-	/*TODO:
-	 * Data is always completely returned, startOffset should always be zero. length is the full length.
-	 * These are no request parameters as in an API design, these parameters are necessary to
-	 *
-	 */
     size_t fragment = 0;
-    size_t posInFragment = 0;
     size_t position = 0;
-    uint64_t startOffset = 0;
+        
     int counter = 0;
     
-    LOG_DEBUG << "getFullCipherText is called\n";
     
-    while (position < startOffset + plaintext_length && fragment < offsets.size()) {
-        
-    	LOG_DEBUG << "Read iteration number: " << counter << " fragment: " << fragment;
-        
+    while (fragment < offsets.size()) {
+                
         counter++;
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, plaintext_length - (position - startOffset));
+        size_t toRead = offsets[fragment].length;
         
         //TODO: is start=0 really good for missing data?
         // -> missing data should probably be handled in an exception?
@@ -1383,17 +1369,12 @@ size_t pcapfs::SslFile::getFullCipherText(size_t plaintext_length, const Index &
             LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
             
-            /*
-             * Read the bytes from the packets of the file (using the file pointer):
-             * After this step, toDecrypt is filled with bytes.
-             */
+            // Read the bytes from the packets of the file (using the file pointer):
+            // After this step, toDecrypt is filled with bytes.
+            
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
             filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
-            
-            
-            
-            LOG_DEBUG << "offset at fragement " << fragment << " has following length: " << this->offsets.at(fragment).length << std::endl;
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
@@ -1401,20 +1382,7 @@ size_t pcapfs::SslFile::getFullCipherText(size_t plaintext_length, const Index &
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                     idx.get({"sslkey", keyIDinIndex}));
                 
-                // Delete them in the vector which was provided!
-                // In case you want to increase performance just precalculate the necessary speed before calling this function ('getFullCipherText') and pre-init the 'outputCipherTextVector'.
-                
                 std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
-                /*
-                 * previousBytes:
-                 * Decrypt e.g. RC4 at certain position.
-                 *
-                 * SO:
-                 *
-                 * previousBytes = ciphertext before current ciphertext element.
-                 * This offset is needed to recalculate some (usually stream) ciphers correctly
-                 *
-                 */
                 cte->virtual_file_offset = previousBytes[fragment];
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
@@ -1426,27 +1394,50 @@ size_t pcapfs::SslFile::getFullCipherText(size_t plaintext_length, const Index &
                 outputCipherTextVector.push_back(cte);
             } else {
                 LOG_ERROR << "NO KEYS FOUND FOR " << counter;
-                //memcpy(buf + (position - startOffset), toDecrypt.data() + posInFragment, toRead);
             }
         }
         
         // set run variables in case next fragment is needed
         position += toRead;
         fragment++;
-        posInFragment = 0;
     }
     
-    LOG_ERROR << "READ IS DONE\n";
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     
-    /*
-     * Filesize Raw is used, because we read the ciphertext aka the raw file.
-     */
-    if (startOffset + plaintext_length < filesizeRaw) {
-        return plaintext_length;
-    } else {
-        return filesizeRaw - startOffset;
-    }
+    
+    // Assertion for checking if we really read everything from the buffer.
+    // Constructed as assertion because only active in debug mode.
+    assert(
+        ([&]() -> bool{
+            if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
+                size_t counter_for_bytes_output_ciphertext = 0;
+                size_t counter_for_simple_offsets = 0;
+                for (auto &element: outputCipherTextVector) {
+                    counter_for_bytes_output_ciphertext += element->length;
+                }
+                for (auto offset: offsets) {
+                    counter_for_simple_offsets += offset.length;
+                }
+                if (position == counter_for_bytes_output_ciphertext && position == counter_for_simple_offsets) {
+                    return true;
+                } else {
+                    LOG_ERROR << "+++ ASSERTION TRIGGERED +++";
+                    LOG_ERROR << "position: " << position;
+                    LOG_ERROR << "counter_for_bytes_output_ciphertext: " << counter_for_bytes_output_ciphertext;
+                    LOG_ERROR << "counter_for_simple_offsets: " << counter_for_simple_offsets;
+                    return false;
+                }
+            } else {
+                // Always true if we do not have any keys.
+                return true;
+            }
+        })()
+    );
+    
+    
+    
+    // Filesize Raw is used, because we read the ciphertext aka the raw file.
+    return filesizeRaw;
 }
 
 /*
