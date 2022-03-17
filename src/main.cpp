@@ -35,25 +35,19 @@ namespace fs = boost::filesystem;
  * after the decryption stage. It happens that the functions are called twice or in theory even more often.
  */
 
-
 std::pair<std::vector<pcapfs::FilePtr>, std::vector<pcapfs::FilePtr>>
 getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector<pcapfs::FilePtr> filesToProcess;
     std::vector<pcapfs::FilePtr> newFiles;
-
+    
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-
+    
     for (auto &file: files) {
         if (file->flags.test(pcapfs::flags::IS_REAL_FILE)) {
             continue;
         }
-
-        if(file->getFiletype() == "ssl") {
-			LOG_TRACE << file->to_string();
-		}
-
-
+        
         file->fillBuffer(idx);
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
@@ -66,13 +60,8 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
                     LOG_TRACE << file->to_string();
                     filesToProcess.insert(filesToProcess.end(), newPtr.begin(), newPtr.end());
 
-                    if(file->getFiletype() == "ssl") {
-            			LOG_DEBUG << file->to_string();
-            		}
                     newFiles.insert(newFiles.end(), newPtr.begin(), newPtr.end());
-                    if(file->getFiletype() != "ssl" && file->getFiletype() != "http") {
-                        file->clearBuffer();
-                    }
+                    //file->clearBuffer();
                     break;
                 }
             }
@@ -81,13 +70,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         if (!file->flags.test(pcapfs::flags::PARSED)) {
             filesToProcess.push_back(file);
         }
-
-        if(file->getFiletype() == "ssl") {
-			LOG_DEBUG << file->to_string();
-		}
-
-
-        file->clearBuffer();
+        //file->clearBuffer();
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return std::make_pair(newFiles, filesToProcess);

@@ -1183,6 +1183,11 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     
     if(buffer_needs_content == false) {
         
+        LOG_ERROR << "[BUFFER HIT] buffer is this:" << std::endl;
+        std::string s(buffer.begin(), buffer.end());
+        // LOG_ERROR << s;
+        //_Exit(0);
+        
         assert(buffer.size() == filesizeProcessed);
         
         // BIO_dump_fp (stdout, (const char *) buffer.data(), buffer.size());
