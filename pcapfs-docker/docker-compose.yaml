@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  pcapfs:
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    privileged: true
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: "4G"
+        reservations:
+          cpus: "2"
+          memory: "1G"
+    container_name: pcapfs
+    build: ./pcapfs-docker
+    volumes:
+      - ./datastore:/root/datastore
+      - ./mountpoints:/root/mountpoints
