@@ -129,7 +129,7 @@ int main(int argc, const char *argv[]) {
      *
      * std::tie is used to unpack the returned tuple from *getNextVirtualFile*,
      * *std::pair* is returned. Then we have new files added to the index.
-     * This is done *UNTIL* new files is empty, whcih means it is possible that
+     * This is done *UNTIL* new files is empty, which means it is possible that
      * functions are called more than one time.
      *
      */

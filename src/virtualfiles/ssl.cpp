@@ -1133,29 +1133,45 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
 	LOG_TRACE << "read_raw offset size: " << offsets.size();
-	Bytes write_me_to_file;
-	size_t counter = 0;
-
-	for(SimpleOffset offset: offsets) {
-		LOG_TRACE << "start: " << offset.start << " length: " << offset.length;
-		FilePtr filePtr = idx.get({offsetType, offset.id});
-		Bytes temp_buffer(offset.length);
-		counter += offset.length;
-		filePtr->read(offset.start, offset.length, idx, (char *) temp_buffer.data());
-		write_me_to_file.insert(std::end(write_me_to_file), std::begin(temp_buffer), std::end(temp_buffer));
-	}
+    size_t position = 0;
+    size_t posInFragment = 0;
+    size_t fragment = 0;
     
-	if (write_me_to_file.size() > 0) {
-		memset(buf, 0, length);
-		memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
-	} else {
-		LOG_ERROR << "Empty buffer in read_raw, probably unwanted behavior.";
-	}
+    while (position < startOffset) {
+        position += offsets[fragment].length;
+        fragment++;
+    }
     
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-    //TODO: Check if this is correct at this point
-    counter = length - startOffset;
-    return counter;
+    if (position > startOffset) {
+        fragment--;
+        posInFragment = offsets[fragment].length - (position - startOffset);
+        position = static_cast<size_t>(startOffset);
+    }
+        
+    while (position < startOffset + length && fragment < offsets.size()) {
+        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        
+        pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
+        filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+        
+        // set run variables in case next fragment is needed
+        position += toRead;
+        fragment++;
+        posInFragment = 0;
+    }
+    
+    
+    if (startOffset + length < filesizeRaw) {
+        //read till length is ended
+        LOG_TRACE << "File is not done yet. (filesizeRaw: " << filesizeRaw << ")";
+        LOG_TRACE << "Length read: " << length;
+        return length;
+    } else {
+        // read till file end
+        LOG_TRACE << "File is done now. (filesizeRaw: " << filesizeRaw << ")";
+        LOG_TRACE << "all processed bytes: " << filesizeRaw - startOffset;
+        return filesizeRaw - startOffset;
+    }
 }
 
 size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
@@ -1271,7 +1287,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     
     while(position < startOffset + length && fragment < result.size())  {
         // minimum handles 2 cases here: 
-        // 
+        // either we have a "default" case, or we have a special case aka the beginning or end of a fragment.
         size_t toRead = std::min(result[fragment].size() - posInFragment, length - (position - startOffset));
         if(first_iteration) {
             bytes_ref = result[fragment];
