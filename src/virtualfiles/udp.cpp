@@ -131,12 +131,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
                 if (parsedPacket.isPacketOfType(IPv4)) {
                     IPv4Layer *iPv4Layer = parsedPacket.getLayerOfType<IPv4Layer>();
-                    conString += iPv4Layer->getSrcIpAddress().toString();
-                    conString += iPv4Layer->getDstIpAddress().toString();
+                    conString += iPv4Layer->getSrcIPv4Address().toString();
+                    conString += iPv4Layer->getDstIPv4Address().toString();
                 } else if (parsedPacket.isPacketOfType(IPv6)) {
                     IPv6Layer *iPv6Layer = parsedPacket.getLayerOfType<IPv6Layer>();
-                    conString += iPv6Layer->getSrcIpAddress().toString();
-                    conString += iPv6Layer->getDstIpAddress().toString();
+                    conString += iPv6Layer->getSrcIPv6Address().toString();
+                    conString += iPv6Layer->getDstIPv6Address().toString();
                 }
 
                 conString += std::to_string(ntohs(udpLayer->getUdpHeader()->portSrc));
@@ -174,12 +174,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
                     if (parsedPacket.isPacketOfType(IPv4)) {
                         IPv4Layer *iPv4Layer = parsedPacket.getLayerOfType<IPv4Layer>();
-                        udpPointer->setProperty("srcIP", iPv4Layer->getSrcIpAddress().toString());
-                        udpPointer->setProperty("dstIP", iPv4Layer->getDstIpAddress().toString());
+                        udpPointer->setProperty("srcIP", iPv4Layer->getSrcIPv4Address().toString());
+                        udpPointer->setProperty("dstIP", iPv4Layer->getDstIPv4Address().toString());
                     } else if (parsedPacket.isPacketOfType(IPv6)) {
                         IPv6Layer *iPv6Layer = parsedPacket.getLayerOfType<IPv6Layer>();
-                        udpPointer->setProperty("srcIP", iPv6Layer->getSrcIpAddress().toString());
-                        udpPointer->setProperty("dstIP", iPv6Layer->getDstIpAddress().toString());
+                        udpPointer->setProperty("srcIP", iPv6Layer->getSrcIPv6Address().toString());
+                        udpPointer->setProperty("dstIP", iPv6Layer->getDstIPv6Address().toString());
                     }
 
                     udpPointer->setProperty("srcPort", std::to_string(ntohs(udpLayer->getUdpHeader()->portSrc)));

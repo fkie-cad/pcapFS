@@ -20,7 +20,7 @@
  */
 std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-    LOG_ERROR << filePtr->getFilename() << " EGGHUNTME";
+    //LOG_ERROR << filePtr->getFilename() << " EGGHUNTME";
     /*
      * Check if SSL file has proper offsets before parsing as HTTP
      * Seems something is broken at this point, maybe check the connection breaks first

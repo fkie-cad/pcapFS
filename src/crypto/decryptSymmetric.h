@@ -35,7 +35,7 @@ namespace pcapfs {
              * 
              */
 
-    		size_t getMacSize(pcpp::SSLVersion sslVersion, std::string cipherSuite);
+    		size_t getMacSize(std::string cipherSuite);
 
             
             //new stuff:

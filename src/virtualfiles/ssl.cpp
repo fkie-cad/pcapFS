@@ -65,7 +65,7 @@ std::string pcapfs::SslFile::toString() {
 	ret.append("previousBytes: ");
 	std::string prev_bytes;
 
-	for(int i=0; i<previousBytes.size(); i++) {
+	for(size_t i=0; i<previousBytes.size(); i++) {
 		prev_bytes.append(std::to_string(previousBytes.at(i)));
 		prev_bytes.append(" ");
 	}
@@ -77,7 +77,7 @@ std::string pcapfs::SslFile::toString() {
 	ret.append("keyForFragment: ");
 	std::string keys;
 
-	for(int i=0; i<keyForFragment.size(); i++) {
+	for(size_t i=0; i<keyForFragment.size(); i++) {
 		keys.append(std::to_string(keyForFragment.at(i)));
 		keys.append(" ");
 	}
@@ -776,7 +776,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length
             
             
             //static for testing
-            unsigned char public_nonce[12] = {0xd1 ,0xc9 ,0xc3 ,0x3f ,0x9d ,0x30 ,0x2f ,0x94 ,0x47 ,0xe2 ,0x1b ,0x9d};
+            //unsigned char public_nonce[12] = {0xd1 ,0xc9 ,0xc3 ,0x3f ,0x9d ,0x30 ,0x2f ,0x94 ,0x47 ,0xe2 ,0x1b ,0x9d};
             
             //static for testing
             unsigned char aad[13] = {0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x01 ,0x17 ,0x03 ,0x03 ,0x00 ,0x18};
@@ -1468,7 +1468,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
                 outputCipherTextVector.push_back(cte);
             } else {
-                LOG_ERROR << "NO KEYS FOUND FOR " << counter;
+                LOG_INFO << "NO KEYS FOUND FOR " << counter;
             }
         }
         
