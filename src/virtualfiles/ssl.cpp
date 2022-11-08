@@ -88,8 +88,6 @@ std::string pcapfs::SslFile::toString() {
 	return ret;
 }
 
-//Constructor
-pcapfs::SslFile::SslFile() {};
 
 size_t pcapfs::SslFile::calculateProcessedSize(Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");

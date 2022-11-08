@@ -27,8 +27,6 @@ namespace pcapfs {
     class SslFile : public VirtualFile {
     public:
 
-    	SslFile();
-
         static FilePtr create() { return std::make_shared<SslFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
