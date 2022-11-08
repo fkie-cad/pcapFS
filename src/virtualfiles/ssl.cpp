@@ -227,12 +227,9 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	//search for master secret in candidates
 	
     if (processedSSLHandshake) {
-		Bytes masterSecret = searchCorrectMasterSecret(
-				(char*) (clientRandom.data()), idx);
+		Bytes masterSecret = searchCorrectMasterSecret(clientRandom, idx);
 		if (!masterSecret.empty()) {
-			Bytes keyMaterial = createKeyMaterial((char*) (masterSecret.data()),
-					(char*) (clientRandom.data()),
-					(char*) (serverRandom.data()), sslVersion.asUInt());
+			Bytes keyMaterial = createKeyMaterial(masterSecret, clientRandom, serverRandom, sslVersion.asUInt());
 			//TODO: not good to add sslkey file directly into index!!!
 			std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
 					keyMaterial);
@@ -479,14 +476,17 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 }
 
 //Returns the correct Master Secret out of a bunch of candidates
-pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(char *clientRandom, const Index &idx) {
+pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRandom, const Index &idx) {
 
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
 
     for (auto &keyFile: keyFiles) {
         std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
 
-        if (memcmp((char *) sslKeyFile->getClientRandom().data(), clientRandom, sslKeyFile->getClientRandom().size()) == 0) {
+        /*if (memcmp((char *) sslKeyFile->getClientRandom().data(), clientRandom, sslKeyFile->getClientRandom().size()) == 0) {
+            return sslKeyFile->getMasterSecret();
+        }*/
+        if(sslKeyFile->getClientRandom() == clientRandom){
             return sslKeyFile->getMasterSecret();
         }
     }
@@ -832,7 +832,7 @@ void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length
 
 
 
-pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion) {
+pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
@@ -913,8 +913,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
     size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
     Bytes seed(seedSize);
     memcpy(&seed[0], LABEL, LABEL_SIZE);
-    memcpy(&seed[LABEL_SIZE], serverRandom, SERVER_RANDOM_SIZE);
-    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom, CLIENT_RANDOM_SIZE);
+    memcpy(&seed[LABEL_SIZE], serverRandom.data(), SERVER_RANDOM_SIZE);
+    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom.data(), CLIENT_RANDOM_SIZE);
     
     Bytes keyMaterial(KEY_MATERIAL_SIZE);
     EVP_PKEY_CTX *pctx;
@@ -949,7 +949,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
                 LOG_ERROR << "Error1!" << std::endl;
             if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
             	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
             	LOG_ERROR << "Error3!" << std::endl;
             if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
             	LOG_ERROR << "Error4!" << std::endl;
@@ -970,7 +970,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
             	LOG_ERROR << "Error1!" << std::endl;
             if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
             	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
             	LOG_ERROR << "Error3!" << std::endl;
             if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
             	LOG_ERROR << "Error4!" << std::endl;
@@ -991,7 +991,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(char *masterSecret, char *clien
             	LOG_ERROR << "Error1!" << std::endl;
             if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
             	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret, 48) <= 0)
+            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
             	LOG_ERROR << "Error3!" << std::endl;
             if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
             	LOG_ERROR << "Error4!" << std::endl;
@@ -1201,7 +1201,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     
     if(buffer_needs_content == false) {
         
-        LOG_ERROR << "[BUFFER HIT] buffer is this:" << std::endl;
+        LOG_DEBUG << "[BUFFER HIT] buffer is this:" << std::endl;
         std::string s(buffer.begin(), buffer.end());
         // LOG_ERROR << s;
         //_Exit(0);
@@ -1302,7 +1302,7 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
         byte_counter += toRead;
         fragment++;
         posInFragment = 0;
-        LOG_ERROR << "bytes_ref.size(): " << bytes_ref.size() << " " << "toRead: " << toRead;
+        LOG_DEBUG << "bytes_ref.size(): " << bytes_ref.size() << " " << "toRead: " << toRead;
         position += bytes_ref.size();
     }
     

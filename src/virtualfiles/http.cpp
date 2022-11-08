@@ -246,11 +246,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultVector.push_back(resultPtr);
         }  else if(prevWasRequest && config.allowHTTP09 == true) {
-
-            if(filePtr->getFiletype() == "ssl") {
-                //Debug here.
-                asm("NOP");
-            }
             
             if (size <= 0) {
                 continue;

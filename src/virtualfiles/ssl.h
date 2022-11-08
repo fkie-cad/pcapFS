@@ -50,13 +50,13 @@ namespace pcapfs {
     	static bool isTLSTraffic(const FilePtr &filePtr, bool isTLSTraffic);
 
         //ssl decrypt functions
-        static Bytes createKeyMaterial(char *masterSecret, char *clientRandom, char *serverRandom, uint16_t sslVersion);
+        static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion);
 
         //Bytes decryptData(uint64_t virtual_file_offset, size_t length, char* data, char* key_material, bool isClientMessage);
         //The new implementation of decryptData, we return nothing but change the values in the PlainTextElement *output parameter via call-by-reference.
         void decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output);
         
-        static Bytes searchCorrectMasterSecret(char *clientRandom, const Index &idx);
+        static Bytes searchCorrectMasterSecret(const Bytes &clientRandom, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;
 
