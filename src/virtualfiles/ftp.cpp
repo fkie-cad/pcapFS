@@ -87,9 +87,9 @@ pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::Fi
     size_t numElements = filePtr->connectionBreaks.size();
     uint64_t &offset = filePtr->connectionBreaks.at(i).first;
     size_t size = calculateSize(filePtr, numElements, i, offset);
-    SimpleOffset soffset = parseOffset(filePtr, offset, size);
+    Fragment fragment = parseOffset(filePtr, offset, size);
 
-    result->offsets.push_back(soffset);
+    result->fragments.push_back(fragment);
     result->setFilesizeRaw(result->getFilesizeRaw() + size);
 
     //We assume the processed file size does not change in this protocol in cmp to the raw file size
@@ -110,12 +110,12 @@ pcapfs::FtpFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size
 }
 
 
-SimpleOffset pcapfs::FtpFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
-    SimpleOffset soffset;
-    soffset.id = filePtr->getIdInIndex();
-    soffset.start = offset;
-    soffset.length = size;
-    return soffset;
+Fragment pcapfs::FtpFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
+    Fragment fragment;
+    fragment.id = filePtr->getIdInIndex();
+    fragment.start = offset;
+    fragment.length = size;
+    return fragment;
 }
 
 
@@ -132,9 +132,9 @@ void pcapfs::FtpFile::fillGlobalProperties(std::shared_ptr<pcapfs::FtpFile> &res
 
 
 size_t pcapfs::FtpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    SimpleOffset &offset = offsets.at(0);
-    FilePtr filePtr = idx.get({offsetType, offset.id});
-    return filePtr->read(offset.start + startOffset, length, idx, buf);
+    Fragment &fragment = fragments.at(0);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    return filePtr->read(fragment.start + startOffset, length, idx, buf);
 }
 
 

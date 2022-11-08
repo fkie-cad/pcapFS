@@ -58,7 +58,7 @@ namespace pcapfs {
 
         static bool isLastElement(size_t numElements, size_t i);
 
-        static SimpleOffset parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size);
+        static Fragment parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size);
 
         static bool isResponse(char *raw_data);
 
@@ -102,7 +102,7 @@ namespace pcapfs {
         handleDataTransferCommand(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd,
                                   const TimeSlot &time_slot);
 
-        Bytes readRawData(const pcapfs::Index &idx, const SimpleOffset &offset) const;
+        Bytes readRawData(const pcapfs::Index &idx, const Fragment &fragment) const;
 
         uint8_t insertDirectionPrefixes(pcapfs::Bytes &rawData, size_t i) const;
     };

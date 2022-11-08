@@ -7,7 +7,7 @@
 #include <boost/archive/text_iarchive.hpp>
 
 
-struct SimpleOffset {
+struct Fragment {
     uint64_t id = 0L;
     uint64_t start = 0L;
     uint64_t length = 0L;

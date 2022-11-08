@@ -132,20 +132,20 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
     //right now, assume one udp virtual file contains one dns request/response
     pcpp::Packet packet;
     pcpp::DnsLayer dns;
-    SimpleOffset soffset{};
+    Fragment fragment{};
     std::shared_ptr<pcapfs::DnsFile> resultPtr = std::make_shared<pcapfs::DnsFile>();
 
     if ((filePtr->getProperty(prop::dstPort) == "53" || filePtr->getProperty(prop::srcPort) == "53") &&
         filePtr->getProperty(prop::proto) == "udp") {
         dns = pcpp::DnsLayer(data.data(), data.size(), nullptr, &packet);
-        soffset.id = filePtr->getIdInIndex();
-        soffset.start = 0;
-        soffset.length = filePtr->getFilesizeRaw();
-        resultPtr->offsets.push_back(soffset);
-        resultPtr->setFilesizeRaw(soffset.length);
+        fragment.id = filePtr->getIdInIndex();
+        fragment.start = 0;
+        fragment.length = filePtr->getFilesizeRaw();
+        resultPtr->fragments.push_back(fragment);
+        resultPtr->setFilesizeRaw(fragment.length);
 
         //We assume the processed file size does not change in this protocol in cmp to the raw file size
-        resultPtr->setFilesizeProcessed(soffset.length);
+        resultPtr->setFilesizeProcessed(fragment.length);
 
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setFiletype(FILE_TYPE_NAME);
@@ -175,10 +175,10 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
 size_t pcapfs::DnsFile::calculateProcessedSize(const Index &idx) {
     Bytes rawData;
     rawData.resize(filesizeRaw);
-    SimpleOffset offset = offsets.at(0);
-    rawData.resize(offset.length);
-    FilePtr filePtr = idx.get({offsetType, offset.id});
-    filePtr->read(0 + offset.start, offset.length, idx, reinterpret_cast<char *>(rawData.data()));
+    Fragment fragment = fragments.at(0);
+    rawData.resize(fragment.length);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
     std::string output_string = parseDnsToJson(rawData);
     return output_string.size();
 }
@@ -186,10 +186,10 @@ size_t pcapfs::DnsFile::calculateProcessedSize(const Index &idx) {
 
 size_t pcapfs::DnsFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     Bytes rawData;
-    SimpleOffset offset = offsets.at(0);
-    rawData.resize(offset.length);
-    FilePtr filePtr = idx.get({offsetType, offset.id});
-    filePtr->read(0 + offset.start, offset.length, idx, reinterpret_cast<char *>(rawData.data()));
+    Fragment fragment = fragments.at(0);
+    rawData.resize(fragment.length);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
     const auto output_string = parseDnsToJson(rawData);
     size_t read_count = std::min((size_t) output_string.length() - startOffset, length);
     memcpy(buf, output_string.c_str() + startOffset, length);

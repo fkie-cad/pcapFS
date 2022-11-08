@@ -17,11 +17,11 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
     //TODO: segfault if this is appliead to metadata (why?)
     if (condition & !filePtr->flags.test(pcapfs::flags::IS_METADATA)) {
         std::shared_ptr<XorFile> resultPtr = std::make_shared<XorFile>();
-        SimpleOffset offset{};
-        offset.start = 0;
-        offset.id = filePtr->getIdInIndex();
-        offset.length = filePtr->getFilesizeProcessed();
-        resultPtr->offsets.push_back(offset);
+        Fragment fragment{};
+        fragment.start = 0;
+        fragment.id = filePtr->getIdInIndex();
+        fragment.length = filePtr->getFilesizeProcessed();
+        resultPtr->fragments.push_back(fragment);
         resultPtr->setFilesizeRaw(filePtr->getFilesizeRaw());
 
         // Filesize processed is equal to file size raw when XORed.
@@ -56,13 +56,13 @@ size_t pcapfs::XorFile::read(uint64_t startOffset, size_t length, const Index &i
     if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
         //TODO: how to without dynamic pointer cast?
         std::shared_ptr<XORKeyFile> keyPtr = std::dynamic_pointer_cast<XORKeyFile>(idx.get({"xorkey", keyIdInIndex}));
-        SimpleOffset offset = offsets.at(0);
-        FilePtr filePtr = idx.get({offsetType, offset.id});
-        Bytes rawData(offset.length);
-        filePtr->read(offset.start, length, idx, (char *) rawData.data());
+        Fragment fragment = fragments.at(0);
+        FilePtr filePtr = idx.get({offsetType, fragment.id});
+        Bytes rawData(fragment.length);
+        filePtr->read(fragment.start, length, idx, (char *) rawData.data());
         Bytes key = keyPtr->getXORKey();
         XOR(rawData, (char *) key.data(), key.size());
-        size_t read_count = std::min((size_t) offset.length - startOffset, length);
+        size_t read_count = std::min((size_t) fragment.length - startOffset, length);
         memcpy(buf, (char *) rawData.data() + startOffset, read_count);
         return read_count;
     }

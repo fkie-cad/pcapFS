@@ -54,10 +54,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
 
         //TODO: add connection breaks here!
-        SimpleOffset soffset;
-        SimpleOffset soffsetHeader;
-        soffset.id = filePtr->getIdInIndex();
-        soffsetHeader.id = filePtr->getIdInIndex();
+        Fragment fragment;
+        Fragment fragmentHeader;
+        fragment.id = filePtr->getIdInIndex();
+        fragmentHeader.id = filePtr->getIdInIndex();
 
         std::shared_ptr<HttpFile> resultPtr = std::make_shared<HttpFile>();
         std::shared_ptr<HttpFile> resultHeaderPtr = std::make_shared<HttpFile>();
@@ -78,12 +78,12 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             prevWasRequest = true;
 
             //create header of http request
-            soffsetHeader.start = offset;
-            soffsetHeader.length = firstLine + headerLength;
-            resultHeaderPtr->offsets.push_back(soffsetHeader);
+            fragmentHeader.start = offset;
+            fragmentHeader.length = firstLine + headerLength;
+            resultHeaderPtr->fragments.push_back(fragmentHeader);
             resultHeaderPtr->setOffsetType(filePtr->getFiletype());
 
-            resultHeaderPtr->setFilesizeRaw(soffsetHeader.length);
+            resultHeaderPtr->setFilesizeRaw(fragmentHeader.length);
             resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
 
             resultHeaderPtr->setFiletype("http");
@@ -96,7 +96,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             		<< " - requestedHost: " << requestedHost
         			<< " - requestedUri: " << requestedUri;
 
-            LOG_TRACE << "fileSizeRaw: " << soffsetHeader.length;
+            LOG_TRACE << "fileSizeRaw: " << fragmentHeader.length;
 
             resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
 
@@ -129,11 +129,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             //create http request body
             //TODO: make sure these values are set!!!!
-            soffset.start = offset + firstLine + headerLength;
-            soffset.length = size - firstLine - headerLength;
+            fragment.start = offset + firstLine + headerLength;
+            fragment.length = size - firstLine - headerLength;
 
-            resultPtr->offsets.push_back(soffset);
-            resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->fragments.push_back(fragment);
+            resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
             resultPtr->setOffsetType(filePtr->getFiletype());
@@ -166,12 +166,12 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
 
             //create header of http response
-            soffsetHeader.start = offset;
-            soffsetHeader.length = firstLine + headerLength;
-            resultHeaderPtr->offsets.push_back(soffsetHeader);
+            fragmentHeader.start = offset;
+            fragmentHeader.length = firstLine + headerLength;
+            resultHeaderPtr->fragments.push_back(fragmentHeader);
             resultHeaderPtr->setOffsetType(filePtr->getFiletype());
 
-            resultHeaderPtr->setFilesizeRaw(soffsetHeader.length);
+            resultHeaderPtr->setFilesizeRaw(fragmentHeader.length);
             resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
 
             resultHeaderPtr->setFiletype("http");
@@ -195,13 +195,13 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
 
             //create http response body
-            soffset.start = offset + firstLine + headerLength;
-            soffset.length = size - firstLine - headerLength;
+            fragment.start = offset + firstLine + headerLength;
+            fragment.length = size - firstLine - headerLength;
 
             //TODO:
             //Also Why?
-            resultPtr->offsets.push_back(soffset);
-            resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->fragments.push_back(fragment);
+            resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
 
@@ -257,11 +257,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
             
             //create http response body
-            soffset.start = offset;
-            soffset.length = size;
+            fragment.start = offset;
+            fragment.length = size;
             
-            resultPtr->offsets.push_back(soffset);
-            resultPtr->setFilesizeRaw(soffset.length);
+            resultPtr->fragments.push_back(fragment);
+            resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
             
             
@@ -333,11 +333,11 @@ size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &
 int pcapfs::HttpFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
-    SimpleOffset offset = offsets.at(0);
-    FilePtr filePtr = idx.get({offsetType, offset.id});
+    Fragment fragment = fragments.at(0);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
     //TODO: sanitizing length is done in filePtr->read!
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
-    return filePtr->read(startOffset + offset.start, length, idx, buf);
+    return filePtr->read(startOffset + fragment.start, length, idx, buf);
 }
 
 

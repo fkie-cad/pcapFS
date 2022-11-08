@@ -26,7 +26,7 @@ namespace {
 
     struct UdpIndexerState {
         std::unordered_map<std::string, std::shared_ptr<pcapfs::UdpFile>> files;
-        SimpleOffset currentOffset;
+        Fragment currentOffset;
         size_t nextUniqueId = 0;
         uint64_t currentPcapfileID;
         pcapfs::TimePoint currentTimestamp;
@@ -42,35 +42,35 @@ size_t pcapfs::UdpFile::read(uint64_t startOffset, size_t length, const Index &i
 
     // seek to start_offset
     while (position < startOffset) {
-        position += offsets[fragment].length;
+        position += fragments[fragment].length;
         fragment++;
     }
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
+        posInFragment = fragments[fragment].length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
     // start copying
-    while (position < startOffset + length && fragment < offsets.size()) {
-        /*if (!pcapfs::CONF.zero_padding && offsets[fragment].start == 0) {
+    while (position < startOffset + length && fragment < fragments.size()) {
+        /*if (!pcapfs::CONF.zero_padding && fragments[fragment].start == 0) {
             LOG_TRACE << "Skipping zero padded data";
             fragment++;
             continue;
         }*/
 
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+        size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
 
         //TODO: is start=0 really good for missing data?
-        if (offsets[fragment].start == 0) {
+        if (fragments[fragment].start == 0) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
             //LOG_ERROR << "filling data";
         } else {
             //TODO: offsets at which number?
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-            filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+            filePtr->read(fragments[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
 
         // set run variables in case next fragment is needed
@@ -144,7 +144,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
                 //TODO: create a new "udp stream" after a certain amount of time
                 if (state.files.count(conString) == 1) {
-                    state.files[conString]->offsets.push_back(state.currentOffset);
+                    state.files[conString]->fragments.push_back(state.currentOffset);
                 } else {
                     /*pcapfs::protocols::HTTP::reverseConnMeta(udpc.conn);
                     if( state.files.count(udpc) == 1 ) {
@@ -185,12 +185,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setProperty("srcPort", std::to_string(ntohs(udpLayer->getUdpHeader()->portSrc)));
                     udpPointer->setProperty("dstPort", std::to_string(ntohs(udpLayer->getUdpHeader()->portDst)));
                     udpPointer->setProperty("protocol", "udp");
-                    udpPointer->offsets.push_back(state.currentOffset);
+                    udpPointer->fragments.push_back(state.currentOffset);
                     ++state.nextUniqueId;
 
                     /*IndexFileInformation * file_template = new IndexFileInformation();
                     pcapfs::protocols::HTTP::initConnMeta(udpc.conn, file_template->conn);
-                    file_template->offsets.push_back(state.currentOffset);
+                    file_template->fragments.push_back(state.currentOffset);
                     file_template->flow_ID = state.nextUniqueId;
                     file_template->firstPacketNumber = i;
                     file_template->timestamp = rawPacket.getPacketTimeStamp().tv_sec;

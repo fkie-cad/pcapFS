@@ -7,16 +7,16 @@
 
 std::string pcapfs::VirtualFile::getFilename() {
     std::string temp;
-    if (offsets.empty()) {
-        LOG_ERROR << "found no offsets in file " << filename << " with index "
+    if (fragments.empty()) {
+        LOG_ERROR << "found no fragment in file " << filename << " with index "
                   << filetype << std::to_string(this->getIdInIndex());
         exit(1);
     }
 
     if (filetype == "tcp" || filetype == "udp") {
-        temp = std::to_string(offsets.at(0).id) + "-" + std::to_string(firstPacketNumber);
+        temp = std::to_string(fragments.at(0).id) + "-" + std::to_string(firstPacketNumber);
     } else {
-        temp = std::to_string(offsets.at(0).id) + "-" + std::to_string(offsets.at(0).start);
+        temp = std::to_string(fragments.at(0).id) + "-" + std::to_string(fragments.at(0).start);
     }
 
     if (flags.test(pcapfs::flags::MISSING_DATA)) {
@@ -53,7 +53,7 @@ void pcapfs::VirtualFile::serialize(boost::archive::text_oarchive &archive) {
     File::serialize(archive);
     archive << offsetType;
     archive << firstPacketNumber;
-    archive << offsets;
+    archive << fragments;
 }
 
 
@@ -61,5 +61,5 @@ void pcapfs::VirtualFile::deserialize(boost::archive::text_iarchive &archive) {
     File::deserialize(archive);
     archive >> offsetType;
     archive >> firstPacketNumber;
-    archive >> offsets;
+    archive >> fragments;
 }

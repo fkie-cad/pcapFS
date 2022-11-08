@@ -55,16 +55,16 @@ namespace pcapfs {
             size_t operator()(const TCPContent &t) const;
         };
 
-        struct TCPOffset {
-            SimpleOffset soff;
+        struct TCPFragment {
+            Fragment fragment;
             uint64_t frameNr;
         };
 
         struct TCPIndexerState {
             TCPStreamMap files;
-            std::unordered_map<TCPContent, std::queue<TCPOffset>, TCPContentHasher> outOfOrderPackets;
+            std::unordered_map<TCPContent, std::queue<TCPFragment>, TCPContentHasher> outOfOrderPackets;
             bool gotCallback;
-            TCPOffset currentOffset;
+            TCPFragment currentFragment;
             size_t nextUniqueId = 0;
             uint64_t currentPcapFileId;
             TimePoint currentTimestamp;

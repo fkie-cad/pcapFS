@@ -137,9 +137,11 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 			offsetInLogicalFragment += serverHelloMessage->getMessageLength();
 			
             LOG_DEBUG << "found server hello message";
+
+            //TODO: Segfault in getCipherSuite(), some data is mistakenly classified as Server Hello 
 			
-            LOG_DEBUG << "chosen cipher suite: "
-					<< serverHelloMessage->getCipherSuite()->asString();
+            //LOG_DEBUG << "chosen cipher suite: "
+			//		<< serverHelloMessage->getCipherSuite()->asString();
 			if (serverHelloMessage->getCipherSuite()) {
 				/*
 				 * Those values are used for the decryption in decryptData() function
@@ -322,6 +324,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             if (recType == pcpp::SSL_HANDSHAKE) {
                 pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
 
+                LOG_DEBUG << filePtr->getProperty("dstIP");
+
 				processedSSLHandshake = processTLSHandshake(
 						processedSSLHandshake, i, clientChangeCipherSpec,
 						serverChangeCipherSpec, handshakeLayer, clientRandom,
@@ -410,21 +414,21 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
                 
                 //each application data is part of the stream
-                SimpleOffset soffset;
-                soffset.id = filePtr->getIdInIndex();
-                soffset.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
+                Fragment fragment;
+                fragment.id = filePtr->getIdInIndex();
+                fragment.start = offset + bytesBeforeEncryptedData + offsetInLogicalFragment;
                 
-                LOG_TRACE << "[SOFFSET.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << soffset.start;
+                LOG_TRACE << "[FRAGMENT.START: " << offset << " + " <<  bytesBeforeEncryptedData << " + " << offsetInLogicalFragment << "]: " << fragment.start;
                 
-                soffset.length = encryptedDataLen;
+                fragment.length = encryptedDataLen;
                 
                 // if size is a mismatch => ssl packet is malformed
                 // TODO: Better detection of malformed ssl packets
-                if (soffset.length > sslLayer->getDataLen()) {
+                if (fragment.length > sslLayer->getDataLen()) {
                     break;
                 }
                 
-                resultPtr->offsets.push_back(soffset);
+                resultPtr->fragments.push_back(fragment);
                 
                 LOG_DEBUG << "found server app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
@@ -1132,27 +1136,27 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
-	LOG_TRACE << "read_raw offset size: " << offsets.size();
+	LOG_TRACE << "read_raw offset size: " << fragments.size();
     size_t position = 0;
     size_t posInFragment = 0;
     size_t fragment = 0;
     
     while (position < startOffset) {
-        position += offsets[fragment].length;
+        position += fragments[fragment].length;
         fragment++;
     }
     
     if (position > startOffset) {
         fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
+        posInFragment = fragments[fragment].length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
         
-    while (position < startOffset + length && fragment < offsets.size()) {
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+    while (position < startOffset + length && fragment < fragments.size()) {
+        size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
         
-        pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-        filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+        pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+        filePtr->read(fragments[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
         
         // set run variables in case next fragment is needed
         position += toRead;
@@ -1430,15 +1434,15 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
     int counter = 0;
     
     
-    while (fragment < offsets.size()) {
+    while (fragment < fragments.size()) {
                 
         counter++;
-        size_t toRead = offsets[fragment].length;
+        size_t toRead = fragments[fragment].length;
         
         //TODO: is start=0 really good for missing data?
         // -> missing data should probably be handled in an exception?
         
-        if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (fragments[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
@@ -1447,9 +1451,9 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
             // After this step, toDecrypt is filled with bytes.
             
             // filePtr is a TCP file pointer at this position, the underlying file structure
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-            pcapfs::Bytes toDecrypt(this->offsets.at(fragment).length);
-            filePtr->read(offsets.at(fragment).start, offsets.at(fragment).length, idx, (char *) toDecrypt.data());
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+            pcapfs::Bytes toDecrypt(this->fragments.at(fragment).length);
+            filePtr->read(fragments.at(fragment).start, fragments.at(fragment).length, idx, (char *) toDecrypt.data());
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 pcapfs::Bytes decrypted;
@@ -1485,20 +1489,20 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
         ([&]() -> bool{
             if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                 size_t counter_for_bytes_output_ciphertext = 0;
-                size_t counter_for_simple_offsets = 0;
+                size_t counter_for_fragments = 0;
                 for (auto &element: outputCipherTextVector) {
                     counter_for_bytes_output_ciphertext += element->length;
                 }
-                for (auto offset: offsets) {
-                    counter_for_simple_offsets += offset.length;
+                for (auto fragment: fragments) {
+                    counter_for_fragments += fragment.length;
                 }
-                if (position == counter_for_bytes_output_ciphertext && position == counter_for_simple_offsets) {
+                if (position == counter_for_bytes_output_ciphertext && position == counter_for_fragments) {
                     return true;
                 } else {
                     LOG_ERROR << "+++ ASSERTION TRIGGERED +++";
                     LOG_ERROR << "position: " << position;
                     LOG_ERROR << "counter_for_bytes_output_ciphertext: " << counter_for_bytes_output_ciphertext;
-                    LOG_ERROR << "counter_for_simple_offsets: " << counter_for_simple_offsets;
+                    LOG_ERROR << "counter_for_fragments: " << counter_for_fragments;
                     return false;
                 }
             } else {

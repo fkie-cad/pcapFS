@@ -22,26 +22,26 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
 
     // seek to start_offset
     while (position < startOffset) {
-        position += offsets[fragment].length;
+        position += fragments[fragment].length;
         fragment++;
     }
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = offsets[fragment].length - (position - startOffset);
+        posInFragment = fragments[fragment].length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
-    while (position < startOffset + length && fragment < offsets.size()) {
-        size_t toRead = std::min(offsets[fragment].length - posInFragment, length - (position - startOffset));
+    while (position < startOffset + length && fragment < fragments.size()) {
+        size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
         //TODO: is start=0 really good for missing data?
-        if (offsets[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (fragments[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             //TODO: offsets at which number?
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->offsets.at(fragment).id});
-            filePtr->read(offsets[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+            filePtr->read(fragments[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
 
         // set run variables in case next fragment is needed
@@ -99,7 +99,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         state->currentSide.insert(std::pair<uint32_t, signed char>(flowkey, side));
         tcpPointer = state->files[flowkey];
 
-        tcpPointer->setFirstPacketNumber(state->currentOffset.frameNr);
+        tcpPointer->setFirstPacketNumber(state->currentFragment.frameNr);
         //tcp_file->fileinformation.flags = 0;
         tcpPointer->setTimestamp(state->currentTimestamp);
         tcpPointer->setFilename("tcp" + std::to_string(state->nextUniqueId));
@@ -144,21 +144,21 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
          * What if missing data at start of stream? -> No information, assuming(!!) first side seen after
          * Is the missing data spread over several HTTP-messages or even sides?! -> Assuming no
          */
-        SimpleOffset soff;
+        Fragment fragment;
         //TODO: check for missing data
 
-        if (!tcpPointer->offsets.empty()) {
-            soff = tcpPointer->offsets.back();
+        if (!tcpPointer->fragments.empty()) {
+            fragment = tcpPointer->fragments.back();
         } else {
-            //LOG_ERROR << std::to_string(state->currentOffset.frameNr) << " and flowkey " << std::to_string(flowkey);
+            //LOG_ERROR << std::to_string(state->currentFragment.frameNr) << " and flowkey " << std::to_string(flowkey);
             LOG_ERROR << "Missing data at begin of streaml!";
             //LOG_ERROR << "missing bytes: " << std::to_string(missing_count);
-            soff = state->currentOffset.soff;
+            fragment = state->currentFragment.fragment;
         }
 
-        soff.length = missing_count;
-        soff.start = 0;
-        tcpPointer->offsets.push_back(soff);
+        fragment.length = missing_count;
+        fragment.start = 0;
+        tcpPointer->fragments.push_back(fragment);
         tcpPointer->flags.set(pcapfs::flags::MISSING_DATA);
     }
 
@@ -167,16 +167,16 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         // Search for packet in stored out of order packets
         TCPContent tcpcontent{tcpData.getData() + missing_str_len, tcpData.getDataLength() - missing_str_len};
         if (state->outOfOrderPackets.count(tcpcontent) == 1) {
-            TCPOffset _offset = state->outOfOrderPackets.at(tcpcontent).front();
+            TCPFragment _fragment = state->outOfOrderPackets.at(tcpcontent).front();
             state->outOfOrderPackets.at(tcpcontent).pop();
-            tcpPointer->offsets.push_back(_offset.soff);
+            tcpPointer->fragments.push_back(_fragment.fragment);
             LOG_TRACE << "Found matching out of order packet";
             LOG_TRACE << "Size of out of order buffer: " << state->outOfOrderPackets.size();
         } else {
             LOG_WARNING << "Out of order packet not found!";
         }
     } else {
-        tcpPointer->offsets.push_back(state->currentOffset.soff);
+        tcpPointer->fragments.push_back(state->currentFragment.fragment);
     }
 
     state->gotCallback = true;
@@ -206,7 +206,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
 
             pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket, pcpp::TCP);
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
-            state.currentOffset.frameNr = i;
+            state.currentFragment.frameNr = i;
 
             pcapPosition += pcapPtr->getPacketHeaderLen();
 
@@ -216,25 +216,25 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
                 }
                 LOG_TRACE << "Found TCP packet, packet number: " << i;
                 state.gotCallback = false;
-                state.currentOffset.soff.id = state.currentPcapFileId;
-                state.currentOffset.soff.start = pcapPosition;
+                state.currentFragment.fragment.id = state.currentPcapFileId;
+                state.currentFragment.fragment.start = pcapPosition;
 
                 pcpp::Layer *l = parsedPacket.getFirstLayer();//->getDataLen();
-                state.currentOffset.soff.start += l->getHeaderLen();
+                state.currentFragment.fragment.start += l->getHeaderLen();
                 while (l->getProtocol() != pcpp::TCP) {
                     l = l->getNextLayer();
-                    state.currentOffset.soff.start += l->getHeaderLen();
+                    state.currentFragment.fragment.start += l->getHeaderLen();
                 }
                 pcpp::TcpLayer *tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
-                state.currentOffset.soff.length = calcIpPayload(parsedPacket) - tcpLayer->getHeaderLen();
+                state.currentFragment.fragment.length = calcIpPayload(parsedPacket) - tcpLayer->getHeaderLen();
 
                 reassembly.reassemblePacket(parsedPacket);
 
                 if (!state.gotCallback) {
                     if (tcpLayer->getLayerPayloadSize() > 0) {
-                        if (state.currentOffset.soff.length > 0) {
-                            TCPContent t(tcpLayer->getLayerPayload(), state.currentOffset.soff.length);
-                            state.outOfOrderPackets[t].push(state.currentOffset);
+                        if (state.currentFragment.fragment.length > 0) {
+                            TCPContent t(tcpLayer->getLayerPayload(), state.currentFragment.fragment.length);
+                            state.outOfOrderPackets[t].push(state.currentFragment);
                             LOG_TRACE << "Out of order packet found, buffer size: "
                                       << state.outOfOrderPackets.size();
                         }

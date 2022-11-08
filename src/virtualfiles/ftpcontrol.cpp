@@ -48,8 +48,8 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpControlFile::parse(FilePtr filePtr, Inde
         }
     }
 
-    if (!result->offsets.empty()) resultVector.push_back(result);
-    if (!credentials->offsets.empty()) resultVector.push_back(credentials);
+    if (!result->fragments.empty()) resultVector.push_back(result);
+    if (!credentials->fragments.empty()) resultVector.push_back(credentials);
 
     return resultVector;
 }
@@ -104,9 +104,9 @@ pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile>
     size_t numElements = filePtr->connectionBreaks.size();
     uint64_t &offset = filePtr->connectionBreaks.at(i).first;
     size_t size = calculateSize(filePtr, numElements, i, offset);
-    SimpleOffset soffset = parseOffset(filePtr, offset, size);
+    Fragment fragment = parseOffset(filePtr, offset, size);
 
-    result->offsets.push_back(soffset);
+    result->fragments.push_back(fragment);
     result->setFilesizeRaw(result->getFilesizeRaw() + size + DATA_DIRECTION_PREFIX_LN);
     result->setFilesizeProcessed(result->getFilesizeRaw());
 }
@@ -121,7 +121,7 @@ pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> resu
     size_t size = calculateSize(filePtr, numElements, i, offset);
     Bytes data = filePtr->getBuffer(); // copy of buffer ??
     char *raw_data = (char *) (data.data() + offset);
-    SimpleOffset soffset = parseOffset(filePtr, offset, size);
+    Fragment fragment = parseOffset(filePtr, offset, size);
 
     uint8_t nr_of_lines;
 
@@ -131,7 +131,7 @@ pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> resu
         nr_of_lines = handleCommand(result, filePtr, i, size);
     }
 
-    result->offsets.push_back(soffset);
+    result->fragments.push_back(fragment);
     result->setFilesizeRaw(result->getFilesizeRaw() + size + DATA_DIRECTION_PREFIX_LN * nr_of_lines);
     result->setFilesizeProcessed(result->getFilesizeRaw());
 
@@ -163,13 +163,13 @@ bool pcapfs::FtpControlFile::isLastElement(size_t numElements, size_t i) {
 }
 
 
-SimpleOffset pcapfs::FtpControlFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
-    SimpleOffset soffset;
-    soffset.id = filePtr->getIdInIndex();
-    soffset.start = offset;
-    soffset.length = size;
+Fragment pcapfs::FtpControlFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
+    Fragment fragment;
+    fragment.id = filePtr->getIdInIndex();
+    fragment.start = offset;
+    fragment.length = size;
 
-    return soffset;
+    return fragment;
 }
 
 
@@ -363,14 +363,14 @@ size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *bu
     size_t read_count = 0;
     uint16_t length_of_prefixes = 0;
 
-    for (SimpleOffset &offset : offsets) {
-        Bytes rawData = readRawData(idx, offset);
+    for (Fragment &fragment : fragments) {
+        Bytes rawData = readRawData(idx, fragment);
         uint8_t nr_of_lines = insertDirectionPrefixes(rawData, i);
         length_of_prefixes = nr_of_lines * DATA_DIRECTION_PREFIX_LN;
 
-        memcpy(&buf[read_count], (char *) rawData.data(), offset.length + length_of_prefixes);
+        memcpy(&buf[read_count], (char *) rawData.data(), fragment.length + length_of_prefixes);
 
-        read_count += offset.length + length_of_prefixes;
+        read_count += fragment.length + length_of_prefixes;
         i++;
     }
 
@@ -378,11 +378,11 @@ size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *bu
 }
 
 
-pcapfs::Bytes pcapfs::FtpControlFile::readRawData(const pcapfs::Index &idx, const SimpleOffset &offset) const {
+pcapfs::Bytes pcapfs::FtpControlFile::readRawData(const pcapfs::Index &idx, const Fragment &fragment) const {
     Bytes rawData;
-    rawData.resize(offset.length);
-    FilePtr filePtr = idx.get({this->offsetType, offset.id});
-    filePtr->read(offset.start, offset.length, idx, (char *) rawData.data());
+    rawData.resize(fragment.length);
+    FilePtr filePtr = idx.get({this->offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, (char *) rawData.data());
 
     return rawData;
 }

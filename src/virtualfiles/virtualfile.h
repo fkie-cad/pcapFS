@@ -36,8 +36,8 @@ namespace pcapfs {
 
         std::string getFilename() override;
 
-        //TODO: get iterator for offsets?
-        std::vector<SimpleOffset> offsets;
+        //TODO: get iterator for fragments?
+        std::vector<Fragment> fragments;
 
         void serialize(boost::archive::text_oarchive &archive) override;
 

@@ -35,7 +35,7 @@ namespace pcapfs {
 
         static void fillGlobalProperties(std::shared_ptr<FtpFile> &result, FilePtr &filePtr);
 
-        static SimpleOffset parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size);
+        static Fragment parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size);
     };
 }
 
