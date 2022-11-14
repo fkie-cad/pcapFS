@@ -114,7 +114,14 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 		Bytes &serverRandom, std::string &cipherSuite,
 		pcpp::SSLVersion &sslVersion, pcpp::SSLLayer *sslLayer,
 		uint64_t &clientEncryptedData, uint64_t &serverEncryptedData) {
-	for (uint64_t j = 0; j < handshakeLayer->getHandshakeMessagesCount(); ++j) {
+    
+    uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
+    if (numHandshakeMessages > 0){
+        // add length of ssl record header
+        offsetInLogicalFragment += 5;
+    }
+
+	for (uint64_t j = 0; j < numHandshakeMessages; ++j) {
 		pcpp::SSLHandshakeMessage *handshakeMessage =
 				handshakeLayer->getHandshakeMessageAt(j);
 		pcpp::SSLHandshakeType handshakeType =
@@ -126,6 +133,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 					clientHelloMessage->getClientHelloHeader()->random,
 					CLIENT_RANDOM_SIZE);
 			offsetInLogicalFragment += clientHelloMessage->getMessageLength();
+            LOG_DEBUG << "found client hello message";
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
 			pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
@@ -199,13 +207,43 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 			LOG_DEBUG
 			<< "found client key exchange with length "
 					<< clientKeyExchangeMessage->getClientKeyExchangeParamsLength();
+        } else if (handshakeType == pcpp::SSL_SERVER_KEY_EXCHANGE) {
+			pcpp::SSLServerKeyExchangeMessage *serverKeyExchangeMessage =
+					dynamic_cast<pcpp::SSLServerKeyExchangeMessage*>(handshakeMessage);
+			offsetInLogicalFragment +=
+					serverKeyExchangeMessage->getMessageLength();
+			LOG_DEBUG
+			<< "found server key exchange with length "
+					<< serverKeyExchangeMessage->getServerKeyExchangeParamsLength();
+        } else if (handshakeType == pcpp::SSL_NEW_SESSION_TICKET) {
+			pcpp::SSLNewSessionTicketMessage *newSessionTicketMessage =
+					dynamic_cast<pcpp::SSLNewSessionTicketMessage*>(handshakeMessage);
+			offsetInLogicalFragment +=
+					newSessionTicketMessage->getMessageLength();
+			LOG_DEBUG
+			<< "found new session ticket message with length "
+					<< newSessionTicketMessage->getSessionTicketDataLength();
 		} else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN) {
-			//TODO: right now assuming these are encrypted handshake messages;
+			//certificate status or encrypted handshake message
 			pcpp::SSLUnknownMessage *unknownMessage =
 					dynamic_cast<pcpp::SSLUnknownMessage*>(handshakeMessage);
-			offsetInLogicalFragment += unknownMessage->getMessageLength();
+
+            // getMessageLength() might give us the wrong length for an encrypted handshake message
+            // leading zero bytes in encrypted handshake messages are skipped by this function
+
+            /*if(numHandshakeMessages == 1){
+                // not complete workaround:
+                // when the encrypted handshake message is encapsulated in only one ssl record 
+                // we can take the sslLayer length (minus the 5 bytes we added previously)
+                offsetInLogicalFragment += sslLayer->getHeaderLen() - 5;
+            } else {
+                // when the encrypted handshake message is part of multiple handshake messages 
+                // contained in one ssl record, the calculation might get wrong (see above)
+			    offsetInLogicalFragment += unknownMessage->getMessageLength();
+            }*/
+            offsetInLogicalFragment += unknownMessage->getMessageLength();
 			LOG_DEBUG
-			<< "encrypted handshake message";
+			<< "certificate status or encrypted handshake message";
 			if (isClientMessage(i) && clientChangeCipherSpec) {
 				clientEncryptedData += unknownMessage->getMessageLength();
 				LOG_DEBUG
@@ -328,6 +366,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 						sslVersion, sslLayer, clientEncryptedData,
 						serverEncryptedData);
 
+                // assert(offsetInLogicalFragment == size)
+
                 //TODO: metadata followed by application data without connection break?!
 
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
@@ -340,9 +380,15 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
 
                 pcpp::SSLChangeCipherSpecLayer *changeCipherSpecLayer =
-                        dynamic_cast<pcpp::SSLChangeCipherSpecLayer *>(sslLayer);
-                offsetInLogicalFragment += (changeCipherSpecLayer->getDataLen() +
-                                            changeCipherSpecLayer->getHeaderLen());
+                        dynamic_cast<pcpp::SSLChangeCipherSpecLayer*>(sslLayer);
+                //offsetInLogicalFragment += (changeCipherSpecLayer->getDataLen() +
+                //                            changeCipherSpecLayer->getHeaderLen());
+                //LOG_DEBUG << "getDataLen():" << changeCipherSpecLayer->getDataLen();
+                //LOG_DEBUG << "getHeaderLen():" << changeCipherSpecLayer->getHeaderLen();
+
+                // length of change cipher spec is always 1, add ssl record layer header length
+                offsetInLogicalFragment += 6;
+
 
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
 
