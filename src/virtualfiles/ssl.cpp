@@ -138,16 +138,23 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 			offsetInLogicalFragment += clientHelloMessage->getMessageLength();
             LOG_DEBUG << "found client hello message";
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
-			pcpp::SSLServerHelloMessage *serverHelloMessage =
+
+            //Segfault in getCipherSuite() possible, encrypted handshake message can be mistakenly classified as Server Hello 
+            // => when we had a server hello before, just continue
+            if(processedSSLHandshake) {
+                offsetInLogicalFragment += sslLayer->getHeaderLen() - 5;
+                LOG_DEBUG << "found second server hello or wrong classification -> skip";
+                continue;
+            }
+
+            pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
-			memcpy(serverRandom.data(),
+
+            offsetInLogicalFragment += serverHelloMessage->getMessageLength();
+            LOG_DEBUG << "found server hello message";
+            memcpy(serverRandom.data(),
 					serverHelloMessage->getServerHelloHeader()->random,
 					SERVER_RANDOM_SIZE);
-			offsetInLogicalFragment += serverHelloMessage->getMessageLength();
-			
-            LOG_DEBUG << "found server hello message";
-
-            //TODO: Segfault in getCipherSuite(), some data is mistakenly classified as Server Hello 
 			
             //LOG_DEBUG << "chosen cipher suite: "
 			//		<< serverHelloMessage->getCipherSuite()->asString();
@@ -231,20 +238,23 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 			pcpp::SSLUnknownMessage *unknownMessage =
 					dynamic_cast<pcpp::SSLUnknownMessage*>(handshakeMessage);
 
-            // getMessageLength() might give us the wrong length for an encrypted handshake message
-            // leading zero bytes in encrypted handshake messages are skipped by this function
+            /* getMessageLength() might give us the wrong length for an encrypted handshake message
+             * leading zero bytes in encrypted handshake messages are skipped by this function
+             * not complete workaround:
+             * when the encrypted handshake message is encapsulated in only one ssl record 
+             * we can take the sslLayer length (minus the 5 bytes we added previously)
+             * the check numHandshakeMessages == 1 for that is unfortunately not reliable because 
+             * the message might get parsed wrongly by pcpp
+             * TODO: consider the case that the encrypted handshake message is part of multiple handshake messages 
+             * contained in one ssl record (this is only a problem when an application data record is immediately
+             * after that)
+             */
+            offsetInLogicalFragment += sslLayer->getHeaderLen() - 5;
+            //LOG_DEBUG << "Header Len: " << sslLayer->getHeaderLen();
+            //LOG_DEBUG << numHandshakeMessages;
 
-            /*if(numHandshakeMessages == 1){
-                // not complete workaround:
-                // when the encrypted handshake message is encapsulated in only one ssl record 
-                // we can take the sslLayer length (minus the 5 bytes we added previously)
-                offsetInLogicalFragment += sslLayer->getHeaderLen() - 5;
-            } else {
-                // when the encrypted handshake message is part of multiple handshake messages 
-                // contained in one ssl record, the calculation might get wrong (see above)
-			    offsetInLogicalFragment += unknownMessage->getMessageLength();
-            }*/
-            offsetInLogicalFragment += unknownMessage->getMessageLength();
+            //offsetInLogicalFragment += unknownMessage->getMessageLength();
+
 			LOG_DEBUG
 			<< "certificate status or encrypted handshake message";
 			if (isClientMessage(i) && clientChangeCipherSpec) {
