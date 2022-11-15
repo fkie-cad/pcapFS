@@ -245,7 +245,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
              * we can take the sslLayer length (minus the 5 bytes we added previously)
              * the check numHandshakeMessages == 1 for that is unfortunately not reliable because 
              * the message might get parsed wrongly by pcpp
-             * TODO: consider the case that the encrypted handshake message is part of multiple handshake messages 
+             * TODO: consider the case that certificates status or encrypted handshake message is part of multiple handshake messages 
              * contained in one ssl record (this is only a problem when an application data record is immediately
              * after that)
              */
@@ -253,6 +253,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
             //LOG_DEBUG << "Header Len: " << sslLayer->getHeaderLen();
             //LOG_DEBUG << numHandshakeMessages;
 
+            // when we are part of multiple handshake messages:
             //offsetInLogicalFragment += unknownMessage->getMessageLength();
 
 			LOG_DEBUG

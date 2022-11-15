@@ -25,8 +25,11 @@ Vagrant.configure("2") do |config|
   config.vm.define "ubuntu-18.04" do |bionic|
     bionic.vm.box = "ubuntu/bionic64"
   end
-  config.vm.define "ubuntu-20.04" do |eoan|
-    eoan.vm.box = "ubuntu/focal64"
+  config.vm.define "ubuntu-20.04" do |focal|
+    focal.vm.box = "ubuntu/focal64"
+  end
+  config.vm.define "ubuntu-22.04" do |jammy|
+      jammy.vm.box = "ubuntu/jammy64"
   end
 
   if Vagrant.has_plugin?("vagrant-proxyconf")

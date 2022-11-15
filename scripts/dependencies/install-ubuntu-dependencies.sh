@@ -54,7 +54,7 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
             cmake \
             meson \
 	    ninja
-    elif [[ "${release}" = '18.04' || "${release}" = '20.04' || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
+    elif [[ "${release}" = '18.04' || "${release}" =~ ^2[0-2]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
         sudo apt-get install -y \
                     ${boost_pkgs} \
                     cmake \

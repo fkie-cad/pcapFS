@@ -8,6 +8,8 @@ declare -A PLATFORMS=(
     ['ubuntu-14.04']="Ubuntu 14.04"
     ['ubuntu-16.04']="Ubuntu 16.04"
     ['ubuntu-18.04']="Ubuntu 18.04"
+    ['ubuntu-20.04']="Ubuntu 20.04"
+    ['ubuntu-22.04']="Ubuntu 22.04"
 )
 
 
