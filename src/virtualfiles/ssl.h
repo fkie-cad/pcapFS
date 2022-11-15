@@ -47,7 +47,7 @@ namespace pcapfs {
 
         static bool isClientMessage(uint64_t i);
 
-    	static bool isTLSTraffic(const FilePtr &filePtr, bool isTLSTraffic);
+    	static bool isTLSTraffic(const FilePtr &filePtr);
 
         //ssl decrypt functions
         static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion);

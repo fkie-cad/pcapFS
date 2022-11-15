@@ -30,6 +30,8 @@ namespace pcapfs {
 
 
         //functions used for http parsing
+        static bool isHttpTraffic(const FilePtr& filePtr);
+
         static bool isHTTPRequest(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);
 
         static size_t getRequestLineLength(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);

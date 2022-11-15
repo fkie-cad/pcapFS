@@ -97,14 +97,17 @@ size_t pcapfs::SslFile::calculateProcessedSize(Index &idx) {
 	return plaintext_size;
 }
 
-bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, bool tlsTrafficDetected) {
+
+bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
 	//Step 1: detect ssl stream by checking for dst Port 443
 	//TODO: other detection method -> config file vs heuristic?
-	tlsTrafficDetected = false;
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	if (filePtr->getProperty("dstPort") == "443") {
-		tlsTrafficDetected = true;
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+		return true;
 	}
-	return tlsTrafficDetected;
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+	return false;
 }
 
 bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
@@ -298,21 +301,19 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
-    bool tlsTrafficDetected = false;
-    bool visitedVirtualSslFile = false;
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
-    tlsTrafficDetected = isTLSTraffic(filePtr, tlsTrafficDetected);
-    if (!tlsTrafficDetected) {
-    	// No TLS Traffic found, continue with next.
-    	return resultVector;
+    if(!isTLSTraffic(filePtr)) {
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+        return resultVector;
     }
 
     //Step 2: Get key material for SSL stream
     size_t size = 0;
     size_t numElements = filePtr->connectionBreaks.size();
     bool processedSSLHandshake = false;
+    bool visitedVirtualSslFile = false;
     pcpp::Packet *packet = nullptr;
 
     Bytes clientRandom(CLIENT_RANDOM_SIZE);
@@ -1173,10 +1174,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 }
 
 
-/*
- * read_raw is called if a new 
- * 
- */
+
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream

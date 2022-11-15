@@ -28,6 +28,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
+    if(!isHttpTraffic(filePtr)){
+        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+        return resultVector;
+    }
+
     pcapfs::Configuration options;
     auto config = options.pcapfsOptions;
     
@@ -643,6 +648,15 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     return (int) read_count;
 }
 
+bool pcapfs::HttpFile::isHttpTraffic(const FilePtr& filePtr) {
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
+    // TODO: check for port 443, wether file has already decrypted content -> new flag?
+    if ((filePtr->getProperty("dstPort") == "80") || (filePtr->getProperty("dstPort") == "443")) {
+        return true;
+    }
+    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+    return false;
+}
 
 //functions for HTTP parsing
 bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, uint64_t length) {
