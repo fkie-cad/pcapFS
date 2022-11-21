@@ -89,7 +89,7 @@ std::string pcapfs::SslFile::toString() {
 }
 
 
-size_t pcapfs::SslFile::calculateProcessedSize(Index &idx) {
+size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
 	size_t plaintext_size = read_for_plaintext_size(idx);
@@ -275,7 +275,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 		pcpp::SSLVersion sslVersion, const std::shared_ptr<SslFile> &resultPtr,
 		const FilePtr &filePtr, const std::string &cipherSuite, unsigned int i,
-		Bytes &clientRandom, Index &idx, Bytes &serverRandom) {
+		const Bytes &clientRandom, Index &idx, const Bytes &serverRandom) {
 	//search for master secret in candidates
 	
     if (processedSSLHandshake) {
@@ -286,15 +286,15 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 			std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
 					keyMaterial);
 			idx.insert(keyPtr);
-			resultPtr->keyIDinIndex = keyPtr->getIdInIndex();
+			resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
 			resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
 		}
 	}
 	
 	resultPtr->setOffsetType(filePtr->getFiletype());
 	resultPtr->setFiletype("ssl");
-	resultPtr->cipherSuite = cipherSuite;
-	resultPtr->sslVersion = sslVersion.asUInt();
+	resultPtr->setCipherSuite(cipherSuite);
+	resultPtr->setSslVersion(sslVersion.asUInt());
 	resultPtr->setFilename("SSL");
 	resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
 	resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
@@ -369,8 +369,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             if (recType == pcpp::SSL_HANDSHAKE) {
                 pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
 
-                LOG_DEBUG << filePtr->getProperty("dstIP");
-
 				processedSSLHandshake = processTLSHandshake(
 						processedSSLHandshake, i, clientChangeCipherSpec,
 						serverChangeCipherSpec, handshakeLayer, clientRandom,
@@ -380,7 +378,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 // assert(offsetInLogicalFragment == size)
 
-                //TODO: metadata followed by application data without connection break?!
 
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
                 if (isClientMessage(i)) {
@@ -391,8 +388,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     serverChangeCipherSpec = true;
                 }
 
-                pcpp::SSLChangeCipherSpecLayer *changeCipherSpecLayer =
-                        dynamic_cast<pcpp::SSLChangeCipherSpecLayer*>(sslLayer);
+                //pcpp::SSLChangeCipherSpecLayer *changeCipherSpecLayer =
+                //        dynamic_cast<pcpp::SSLChangeCipherSpecLayer*>(sslLayer);
                 //offsetInLogicalFragment += (changeCipherSpecLayer->getDataLen() +
                 //                            changeCipherSpecLayer->getHeaderLen());
                 //LOG_DEBUG << "getDataLen():" << changeCipherSpecLayer->getDataLen();
@@ -587,7 +584,7 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
 
 void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(this->cipherSuite);
+	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
     switch (cipherSuite->getSymKeyAlg()) {
         
         /*
@@ -1285,12 +1282,12 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     if(buffer.empty() || buffer_needs_content) {
     
         // Init for the vectors with regular shared pointers
-        for(auto& c : cipherTextVector) {
+        /*for(auto& c : cipherTextVector) {
             c = std::make_shared<CipherTextElement>();
         }
         for(auto& p : plainTextVector) {
             p = std::make_shared<PlainTextElement>();
-        }
+        }*/
 
         getFullCipherText(idx, cipherTextVector);
 
@@ -1429,12 +1426,12 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
     // Init for the vectors with regular shared pointers
-    for(auto& c : cipherTextVector) {
+    /*for(auto& c : cipherTextVector) {
     	c = std::make_shared<CipherTextElement>();
     }
     for(auto& p : plainTextVector) {
 		p = std::make_shared<PlainTextElement>();
-	}
+	}*/
     
     getFullCipherText(idx, cipherTextVector);
     
@@ -1448,7 +1445,6 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
     size_t offset = 0;
     LOG_TRACE << "entering file writer..." << std::endl;
     std::vector<Bytes> result;
-    Bytes write_me_to_file;
 
     for(size_t i=0; i<plainTextVector.size(); i++) {
         PlainTextElement *elem = plainTextVector.at(i).get();
@@ -1457,7 +1453,6 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
         offset += elem->plaintextBlock.size();
     }
     
-    LOG_TRACE << "write_me_to_file.size(): " << write_me_to_file.size();
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return offset;
@@ -1509,12 +1504,13 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
             filePtr->read(fragments.at(fragment).start, fragments.at(fragment).length, idx, (char *) toDecrypt.data());
             
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
-                pcapfs::Bytes decrypted;
                 
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
-                    idx.get({"sslkey", keyIDinIndex}));
+                    idx.get({"sslkey", getKeyIDinIndex()}));
                 
-                std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+                //std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
+
+                std::shared_ptr<CipherTextElement> cte = std::make_shared<CipherTextElement>();
                 cte->virtual_file_offset = previousBytes[fragment];
                 cte->cipherSuite = this->cipherSuite;
                 cte->sslVersion = this->sslVersion;
@@ -1589,7 +1585,8 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         CipherTextElement *element = cipherTextVector.at(i).get();
-        std::shared_ptr<PlainTextElement> output( new PlainTextElement());
+        //std::shared_ptr<PlainTextElement> output( new PlainTextElement());
+        std::shared_ptr<PlainTextElement> output = std::make_shared<PlainTextElement>();
 
         decryptDataNew(element->virtual_file_offset,
                         element->cipherBlock.size(),

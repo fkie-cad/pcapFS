@@ -1,5 +1,5 @@
-#ifndef PLAINTEXTELEMENT_H
-#define PLAINTEXTELEMENT_H
+#ifndef PCAPFS_CRYPTO_PLAINTEXTELEMENT_H
+#define PCAPFS_CRYPTO_PLAINTEXTELEMENT_H
 
 #include <string>
 #include "../commontypes.h"
@@ -14,9 +14,12 @@
  */
 namespace pcapfs {
 
-	class PlainTextElement
-	{
+	class PlainTextElement {
 	public:
+		//PlainTextElement();
+
+		//~PlainTextElement();
+
 		pcapfs::Bytes plaintextBlock;
 		pcapfs::Bytes hmac;
 		uint64_t virtual_file_offset;
@@ -32,4 +35,4 @@ namespace pcapfs {
 	};
 
 }
-#endif // PLAINTEXTELEMENT_H
+#endif // PCAPFS_CRYPTO_PLAINTEXTELEMENT_H

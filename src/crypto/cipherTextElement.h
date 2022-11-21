@@ -1,6 +1,6 @@
 
-#ifndef CIPHERTEXTELEMENT_H
-#define CIPHERTEXTELEMENT_H
+#ifndef PCAPFS_CRYPTO_CIPHERTEXTELEMENT_H
+#define PCAPFS_CRYPTO_CIPHERTEXTELEMENT_H
 
 #include "../commontypes.h"
 #include <pcapplusplus/SSLLayer.h>
@@ -11,9 +11,12 @@
  */
 namespace pcapfs {
 
-	class CipherTextElement
-	{
+	class CipherTextElement {
 	public:
+		//CipherTextElement();
+
+		//~CipherTextElement();
+
 		std::string cipherSuite = "";
 		uint16_t sslVersion = 0;
 		size_t length = 0;
@@ -27,4 +30,4 @@ namespace pcapfs {
 	};
 
 }
-#endif // CIPHERTEXTELEMENT_H
+#endif // PCAPFS_CRYPTO_CIPHERTEXTELEMENT_H

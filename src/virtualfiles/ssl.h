@@ -43,7 +43,7 @@ namespace pcapfs {
             std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
         );
         
-        size_t calculateProcessedSize(Index& idx);
+        size_t calculateProcessedSize(const Index& idx);
 
         static bool isClientMessage(uint64_t i);
 
@@ -64,6 +64,18 @@ namespace pcapfs {
 
         std::string toString();
 
+        uint64_t getKeyIDinIndex() { return keyIDinIndex; };
+        
+        std::string getCipherSuite() { return cipherSuite; };
+
+        uint16_t getSslVersion() { return sslVersion; };
+
+        void setKeyIDinIndex(uint64_t keyIDinIndex) { this->keyIDinIndex = keyIDinIndex; };
+
+        void setCipherSuite(const std::string &cipherSuite) { this->cipherSuite = cipherSuite; };
+
+        void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
+
     private:
         std::string cipherSuite;
         uint16_t sslVersion;
@@ -83,8 +95,8 @@ namespace pcapfs {
 	static void resultPtrInit(bool processedSSLHandshake,
 			pcpp::SSLVersion sslVersion,
 			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
-			const std::string &cipherSuite, unsigned int i, Bytes &clientRandom,
-			Index &idx, Bytes &serverRandom);
+			const std::string &cipherSuite, unsigned int i, const Bytes &clientRandom,
+			Index &idx, const Bytes &serverRandom);
 };
 }
 

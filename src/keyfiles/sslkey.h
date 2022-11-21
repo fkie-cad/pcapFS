@@ -22,7 +22,7 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parseCandidates(const Paths &keyFiles);
 
-        static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(Bytes &keyMaterial);
+        static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(const Bytes &keyMaterial);
 
         //TODO: remove key and mac size from arguments?
         Bytes getClientWriteKey(uint64_t keySize, uint64_t macSize);

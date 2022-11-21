@@ -43,7 +43,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
 }
 
 
-std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::createKeyFile(Bytes &keyMaterial) {
+std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::createKeyFile(const Bytes &keyMaterial) {
     std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
     keyPtr->keyMaterial = keyMaterial;
     keyPtr->setFiletype("sslkey");
