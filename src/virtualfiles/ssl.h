@@ -24,6 +24,9 @@
 
 namespace pcapfs {
 
+    size_t const CLIENT_RANDOM_SIZE = 32;
+    size_t const SERVER_RANDOM_SIZE = 32;
+
     class SslFile : public VirtualFile {
     public:
 

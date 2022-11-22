@@ -22,14 +22,7 @@
 #include "../crypto/plainTextElement.h"
 #include "../crypto/decryptSymmetric.h"
 
-namespace {
-    //TODO: variable size get them in static functions?
-    size_t const CLIENT_RANDOM_SIZE = 32;
-    size_t const SERVER_RANDOM_SIZE = 32;
-    //MAC size may vary? AES_CBC should have 20 Bytes MAC 
-    //size_t const MAC_SIZE = 16;
-    //size_t const KEY_SIZE = 16;
-}
+
 
 std::string pcapfs::SslFile::toString() {
 	/*
@@ -282,12 +275,15 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 		Bytes masterSecret = searchCorrectMasterSecret(clientRandom, idx);
 		if (!masterSecret.empty()) {
 			Bytes keyMaterial = createKeyMaterial(masterSecret, clientRandom, serverRandom, sslVersion.asUInt());
-			//TODO: not good to add sslkey file directly into index!!!
-			std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
-					keyMaterial);
-			idx.insert(keyPtr);
-			resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
-			resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+            if(!keyMaterial.empty()) {
+			    //TODO: not good to add sslkey file directly into index!!!
+			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
+			    		keyMaterial);
+			    idx.insert(keyPtr);
+			    resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
+			    resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+            } else
+                LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
 		}
 	}
 	
@@ -300,7 +296,6 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
 	resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
 	resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-	//resultPtr->setProperty("ciphersuite", cipherSuite);
 	resultPtr->setProperty("protocol", "ssl");
 	resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
     
@@ -904,43 +899,23 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      * https://tools.ietf.org/html/rfc6101#section-6.2.1
      * 
      * 
-     * TLS 1.0 Page 11, 12, 13
-     * 
+     * TLS 1.0 and TLS 1.1:
      *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
      *                                      P_SHA-1(S2, label + seed);
      * 
-     * 
-     * 
-     * TLS 1.1 Page 13 and Page 14
-     * 
-     *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
-     *                                      P _SHA-1(S2, label + seed);
-     * 
-     * 
-     * TLS 1.2 
-     * 
-     * 
-     *  1.2.  Major Differences from TLS 1.1
-     * 
-     *  This document is a revision of th*e TLS 1.1 [TLS1.1] protocol which
-     *  contains improved flexibility, particularly for negotiation of
-     *  cryptographic algorithms.  The major changes are:
-     * 
-     *  -   The MD5/SHA-1 combination in the pseudorandom function (PRF) has
+     * TLS 1.2 :
+     *      "The MD5/SHA-1 combination in the pseudorandom function (PRF) has
      *      been replaced with cipher-suite-specified PRFs.  All cipher suites
-     *      in this document use P_SHA256.
+     *      in this document use P_SHA256.""
+     * 
+     *       PRF(secret, label, seed) = P_SHA256(secret, label + seed)
      * 
      * 
      * 
-     *       PRF(secret, label, seed) = P_<hash>(secret, label + seed)
-     * 
-     *       key_block = PRF(SecurityParameters.master_secret,
-     *                      " key expansion",                  
-     *                      SecurityParameters.server_random +
-     *                      SecurityParameters.client_random);
-     * 
-     * 
-     * 
+     * key_block = PRF(SecurityParameters.master_secret,
+     *                 "key expansion",                  
+     *                 SecurityParameters.server_random +
+     *                 SecurityParameters.client_random);
      * 
      * KEY MATERIAL (TLS 1.0/1.1/1.2):
      * 
@@ -951,125 +926,73 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      *          client_write_IV[SecurityParameters.IV_size]
      *          server_write_IV[SecurityParameters.IV_size]
      * 
-     */
-    
-    
-    /*
      * The concrete openssl doc for this section:
      * 
-     * https://www.openssl.org/docs/man1.1.0/man3/EVP_PKEY_CTX_set_tls1_prf_md.html
+     * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_CTX_set_tls1_prf_md.html
+     * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_derive.html
      */
     
     size_t KEY_MATERIAL_SIZE = 128;
     size_t const LABEL_SIZE = 13;
-    size_t const SERVER_RANDOM_SIZE = 32;
-    size_t const CLIENT_RANDOM_SIZE = 32;
     char const LABEL[14] = "key expansion";
-    size_t seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
+    size_t const seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
     Bytes seed(seedSize);
     memcpy(&seed[0], LABEL, LABEL_SIZE);
     memcpy(&seed[LABEL_SIZE], serverRandom.data(), SERVER_RANDOM_SIZE);
     memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom.data(), CLIENT_RANDOM_SIZE);
     
-    Bytes keyMaterial(KEY_MATERIAL_SIZE);
+    Bytes keyMaterial(0);
     EVP_PKEY_CTX *pctx;
-    
-    
-    switch(sslVersion) {
+
+    if((sslVersion == pcpp::SSLVersion::TLS1_0) || (sslVersion == pcpp::SSLVersion::TLS1_1) ||
+        (sslVersion == pcpp::SSLVersion::TLS1_2)) {
         
-        /*
-         * https://tools.ietf.org/html/rfc2246
-         * 
-         * 
-         * 
-         * 
-         */
-        
-        case pcpp::SSLVersion::SSL2:
-        {
-            LOG_ERROR << "ssl2 is currently not supported\n";
-            break;
+        unsigned char error = 0;
+        pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+        if(!pctx) {
+            LOG_ERROR << "Openssl: Failed to allocate public key algorithm context" << std::endl;
+            error = 1;
         }
-        case pcpp::SSLVersion::SSL3:
-        {
-            LOG_ERROR << "ssl3 is currently not supported\n";
-            break;
+        if (EVP_PKEY_derive_init(pctx) <= 0) {
+            LOG_ERROR << "Openssl: Failed to initialize public key algorithm context" << std::endl;
+            error = 1;
         }
-        case pcpp::SSLVersion::TLS1_0:
-        {
-            LOG_INFO << "tls 1.0 detected\n";
-            
-            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
-            if (EVP_PKEY_derive_init(pctx) <= 0)
-                LOG_ERROR << "Error1!" << std::endl;
-            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
-            	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
-            	LOG_ERROR << "Error3!" << std::endl;
-            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-            	LOG_ERROR << "Error4!" << std::endl;
-            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-            	LOG_ERROR << "Error5!" << std::endl;
-            ERR_print_errors_fp(stderr);
-            
-            EVP_PKEY_CTX_free(pctx);
-            
-            break;
+
+        if(sslVersion == pcpp::SSLVersion::TLS1_2) {
+            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
+                LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
+                error = 1;
+            }
+        } else if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0) {
+            LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.0 or 1.1" << std::endl;
+            error = 1;
         }
-        case pcpp::SSLVersion::TLS1_1:
-        {
-            LOG_INFO << "tls 1.1 detected\n";
-            
-            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
-            if (EVP_PKEY_derive_init(pctx) <= 0)
-            	LOG_ERROR << "Error1!" << std::endl;
-            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0)
-            	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
-            	LOG_ERROR << "Error3!" << std::endl;
-            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-            	LOG_ERROR << "Error4!" << std::endl;
-            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-            	LOG_ERROR << "Error5!" << std::endl;
-            ERR_print_errors_fp(stderr);
-            
-            EVP_PKEY_CTX_free(pctx);
-            
-            break;
+
+        if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0) {
+        	LOG_ERROR << "Openssl: PRF key derivation failed" << std::endl;
+            error = 1;
         }
-        case pcpp::SSLVersion::TLS1_2:
-        {
-            LOG_INFO << "tls 1.2 detected\n";
-            
-            pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
-            if (EVP_PKEY_derive_init(pctx) <= 0)
-            	LOG_ERROR << "Error1!" << std::endl;
-            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0)
-            	LOG_ERROR << "Error2!" << std::endl;
-            if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0)
-            	LOG_ERROR << "Error3!" << std::endl;
-            if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0)
-            	LOG_ERROR << "Error4!" << std::endl;
-            if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0)
-            	LOG_ERROR << "Error5!" << std::endl;
-            ERR_print_errors_fp(stderr);
-            
-            EVP_PKEY_CTX_free(pctx);
-            
-            break;
+        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0) {
+        	LOG_ERROR << "Openssl: Failed to set the seed" << std::endl;
+            error = 1;
         }
-        case pcpp::SSLVersion::TLS1_3:
-        {
-        	LOG_INFO << "TLS 1.3 detected, currently not supported!";
-        	break;
+
+        keyMaterial.resize(KEY_MATERIAL_SIZE);
+        if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0) {
+        	LOG_ERROR << "Openssl: Failed to derive the shared secret" << std::endl;
+            error = 1;
         }
-        default:
-        	pcpp::SSLVersion version(sslVersion);
-            LOG_ERROR << "This type of TLS/SSL is not supported yet, we detected the ssl version code: " << version.toString() << std::endl;
+        ERR_print_errors_fp(stderr);   
+        EVP_PKEY_CTX_free(pctx);
+
+        if(error)
+            keyMaterial.clear();
+
+    } else {
+        pcpp::SSLVersion version(sslVersion);
+        LOG_ERROR << "TLS/SSL version not supported, we detected the ssl version code: " << version.toString() << std::endl;
     }
-    
-    LOG_INFO << "Key Material Size: " << KEY_MATERIAL_SIZE << std::endl;
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
+
     return keyMaterial;
 }
 
