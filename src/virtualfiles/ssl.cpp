@@ -304,6 +304,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	}
 }
 
+
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
@@ -570,10 +571,6 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
  * AES GCM mode has 40 byte key material - we will see if it still works.
  * 
  */
-
-
-
-
 
 
 

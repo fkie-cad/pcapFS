@@ -213,6 +213,8 @@ void pcapfs::Crypto::decrypt_RC4_128(
     //printf("plaintext:\n");
     //BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
+    // TODO: here, only MD5 is considered as hmac (-> 16 byte) but SHA1 (20 byte) is also possible
+    // -> check hmac length in ciphersuites priorly!
     Bytes hmac_value(decryptedData);
     hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
     output->hmac = hmac_value;
@@ -258,6 +260,8 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(
     
     int cbc128_padding = 0;
     const int iv_len = 16;
+    // TODO: here, only SHA is considered as hmac (-> 20 byte) but many other lengths are possible (SHA256/384)
+    // -> check hmac length in ciphersuites priorly!
     int mac_len = 20;
     const int ciphertext_len_calculated = length - mac_len;
 
@@ -395,6 +399,8 @@ void pcapfs::Crypto::decrypt_AES_256_CBC(
     
     Bytes decryptedData(virtual_file_offset + length);
     Bytes dataToDecrypt(virtual_file_offset);
+
+    //TODO: what about the hmac?
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
