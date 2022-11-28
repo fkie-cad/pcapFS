@@ -39,58 +39,17 @@ namespace pcapfs {
 
             
             //new stuff:
-            void decrypt_RC4_128(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					bool isClientMessage,
-					PlainTextElement *output);
+            void decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
-            void decrypt_AES_128_CBC(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					unsigned char *iv,
-					bool isClientMessage,
-					PlainTextElement *output);
+            void decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
-            void decrypt_AES_256_CBC(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					unsigned char *iv,
-					bool isClientMessage,
-					PlainTextElement *output);
+            void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
             
             // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)
-            void decrypt_AES_128_GCM(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					unsigned char *iv,
-					unsigned char *additional_data,
-					bool isClientMessage,
-					PlainTextElement *output);
+            void decrypt_AES_128_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
-            void decrypt_AES_256_GCM(
-            		uint64_t virtual_file_offset,
-					size_t length,
-					char *ciphertext,
-					unsigned char *mac,
-					unsigned char *key,
-					unsigned char *iv,
-					unsigned char *additional_data,
-					bool isClientMessage,
-					PlainTextElement *output);
+            void decrypt_AES_256_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
             
     }
 

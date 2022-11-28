@@ -650,7 +650,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
 bool pcapfs::HttpFile::isHttpTraffic(const FilePtr& filePtr) {
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
-    // TODO: check for port 443, wether file has already decrypted content -> new flag?
+    // TODO: check for port 443, whether file has already decrypted content -> new flag?
     if ((filePtr->getProperty("dstPort") == "80") || (filePtr->getProperty("dstPort") == "443")) {
         return true;
     }

@@ -20,18 +20,34 @@ namespace pcapfs {
 
 		//~PlainTextElement();
 
-		pcapfs::Bytes plaintextBlock;
-		pcapfs::Bytes hmac;
-		uint64_t virtual_file_offset;
-
-		uint64_t padding;
+		uint16_t const getVirtualFileOffset() { return virtualFileOffset; };
+		std::string const &getCipherSuite() { return cipherSuite; };
+		uint16_t const getSslVersion(){ return sslVersion; };
+		Bytes const &getPlaintextBlock(){ return plaintextBlock; };
+		Bytes const &getHmac(){ return hmac; };
+		uint64_t const getPadding(){ return padding; };
+		
+		void setVirtualFileOffset(const uint16_t offset) { virtualFileOffset = offset; };
+		void setCipherSuite(const std::string &cipherSuite) {this->cipherSuite = cipherSuite; };
+		void setSslVersion(const uint16_t sslVersion) { this->sslVersion = sslVersion; };
+		void setPlaintextBlock(const Bytes& newPlaintextBlock) {plaintextBlock = newPlaintextBlock; };
+		void setHmac(const Bytes& newHmac) {hmac = newHmac; };
+		void setPadding(const uint64_t pad) {padding = pad; };
 
 		bool isClientBlock;
+
+		void printMe(void);
+	
+	private:
+		Bytes plaintextBlock;
+		Bytes hmac;
+		uint64_t virtualFileOffset;
+
+		uint64_t padding;
 
 		uint16_t sslVersion;
 		std::string cipherSuite;
 
-		void printMe(void);
 	};
 
 }

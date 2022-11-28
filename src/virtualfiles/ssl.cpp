@@ -40,6 +40,7 @@ std::string pcapfs::SslFile::toString() {
 
 	ret.append("ciphersuite: ");
 	ret.append(cipherSuite);
+    ret.append("\n");
 
 	ret.append("sslVersion: ");
 	pcpp::SSLVersion v = sslVersion;
@@ -534,9 +535,6 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
     for (auto &keyFile: keyFiles) {
         std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
 
-        /*if (memcmp((char *) sslKeyFile->getClientRandom().data(), clientRandom, sslKeyFile->getClientRandom().size()) == 0) {
-            return sslKeyFile->getMasterSecret();
-        }*/
         if(sslKeyFile->getClientRandom() == clientRandom){
             return sslKeyFile->getMasterSecret();
         }
@@ -574,9 +572,10 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
 
 
 
-void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length, char *cipherText, char* key_material, bool isClientMessage, PlainTextElement* output) {
+void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
+
     switch (cipherSuite->getSymKeyAlg()) {
         
         /*
@@ -628,254 +627,33 @@ void pcapfs::SslFile::decryptDataNew(uint64_t virtual_file_offset, size_t length
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */            
 
-            const int mac_size = 16;
-            const int key_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            
-
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-
-                Crypto::decrypt_RC4_128(
-                		virtual_file_offset,
-    					length,
-    					cipherText,
-						client_write_MAC_key,
-						client_write_key,
-						isClientMessage,
-						output);
-
-
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-            	Crypto::decrypt_RC4_128(
-            			virtual_file_offset,
-						length,
-						cipherText,
-						server_write_MAC_key,
-						server_write_key,
-						isClientMessage,
-						output);
-
-            }
-            
+            Crypto::decrypt_RC4_128(input, output);
             break;
         }
         
         case pcpp::SSL_SYM_AES_128_CBC:
         {
-            /*
-             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
-             * 
-             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
-             */
-            
-            unsigned char client_write_MAC_key[20];
-            unsigned char server_write_MAC_key[20];
-            unsigned char client_write_key[16];
-            unsigned char server_write_key[16];
-            unsigned char client_write_IV[16];
-            unsigned char server_write_IV[16];
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_MAC_key,    key_material,           20);
-            memcpy(server_write_MAC_key,    key_material+20,        20);
-            memcpy(client_write_key,        key_material+40,        16);
-            memcpy(server_write_key,        key_material+40+16,     16);
-            memcpy(client_write_IV,         key_material+40+32,     16);
-            memcpy(server_write_IV,         key_material+72+16,     16);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						client_write_MAC_key,
-						client_write_key,
-						client_write_IV,
-						isClientMessage,
-						output);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_CBC(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						server_write_MAC_key,
-						server_write_key,
-						server_write_IV,
-						isClientMessage,
-						output);
-                
-            }
+            Crypto::decrypt_AES_128_CBC(input, output);
             break;
         }
 
         case pcpp::SSL_SYM_AES_256_CBC:
         {
-            /*
-             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
-             * 
-             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
-             */
-            
-            const int mac_size = 16;
-            const int key_size = 32;
-            const int iv_size = 16;
-            
-            unsigned char client_write_MAC_key[mac_size];
-            unsigned char server_write_MAC_key[mac_size];
-            unsigned char client_write_key[key_size];
-            unsigned char server_write_key[key_size];
-            unsigned char client_write_IV[iv_size];
-            unsigned char server_write_IV[iv_size];
-            
-            memcpy(client_write_MAC_key,    key_material,                                   mac_size);
-            memcpy(server_write_MAC_key,    key_material + mac_size,                        mac_size);
-            memcpy(client_write_key,        key_material + 2*mac_size,                      key_size);
-            memcpy(server_write_key,        key_material + 2*mac_size+key_size,             key_size);
-            memcpy(client_write_IV,         key_material + 2*mac_size+2*key_size,           iv_size);
-            memcpy(server_write_IV,         key_material + 2*mac_size+2*key_size+iv_size,   iv_size);
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_256_CBC(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						client_write_MAC_key,
-						client_write_key,
-						client_write_IV,
-						isClientMessage,
-						output);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_256_CBC_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_256_CBC(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						server_write_MAC_key,
-						server_write_key,
-						server_write_IV,
-						isClientMessage,
-						output);
-                
-            }
+            Crypto::decrypt_AES_256_CBC(input, output);
             break;
         }
         
         case pcpp::SSL_SYM_AES_128_GCM:
         {
-            /*
-             * See https://www.ietf.org/rfc/rfc5246.txt, Page 26
-             * 
-             * 256_CBC should have the same except key material, 32 instead of 16, IV should be 16 bytes. (Page 84)
-             */
-            
-            unsigned char client_write_key[16];
-            unsigned char server_write_key[16];
-            unsigned char client_write_IV[4];
-            unsigned char server_write_IV[4];
-            
-            
-            /*
-             * Copy all bytes from the key material into our split key material.
-             */
-            
-            memcpy(client_write_key,        key_material+0,         16);
-            memcpy(server_write_key,        key_material+16,        16);
-            memcpy(client_write_IV,         key_material+32,         4);
-            memcpy(server_write_IV,         key_material+32+4,       4);
-            
-            
-            //static for testing
-            //unsigned char public_nonce[12] = {0xd1 ,0xc9 ,0xc3 ,0x3f ,0x9d ,0x30 ,0x2f ,0x94 ,0x47 ,0xe2 ,0x1b ,0x9d};
-            
-            //static for testing
-            unsigned char aad[13] = {0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x01 ,0x17 ,0x03 ,0x03 ,0x00 ,0x18};
-            
-            if(isClientMessage) {
-                /*
-                 * This is a client message
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a client packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						NULL,
-						client_write_key,
-						client_write_IV,
-						aad,
-						isClientMessage,
-						output);
-                
-            } else {
-                /*
-                 * This is a server message, so we use server key etc.
-                 */
-                
-                LOG_DEBUG << "decrypt_AES_128_GCM_NEW called with a server packet" << std::endl;
-                Crypto::decrypt_AES_128_GCM(
-                		virtual_file_offset,
-						length,
-						cipherText,
-						NULL,
-						server_write_key,
-						server_write_IV,
-						aad,
-						isClientMessage,
-						output);
-                
-            }
+            Crypto::decrypt_AES_128_GCM(input, output);
             break;
         }
-        
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
-
-
 
 
 
@@ -1200,31 +978,23 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     }
     
     if(buffer.empty() || buffer_needs_content) {
-    
-        // Init for the vectors with regular shared pointers
-        /*for(auto& c : cipherTextVector) {
-            c = std::make_shared<CipherTextElement>();
-        }
-        for(auto& p : plainTextVector) {
-            p = std::make_shared<PlainTextElement>();
-        }*/
 
         getFullCipherText(idx, cipherTextVector);
 
-        for(size_t i=0; i< cipherTextVector.size(); i++) {
+        /*for(size_t i=0; i< cipherTextVector.size(); i++) {
             CipherTextElement *elem = cipherTextVector.at(i).get();
             elem->printMe();
-        }
+        }*/
 
         decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
 
 
         for(size_t i=0; i<plainTextVector.size(); i++) {
             PlainTextElement *elem = plainTextVector.at(i).get();
-            elem->printMe();
-            result.push_back(elem->plaintextBlock);
+            //elem->printMe();
+            result.push_back(elem->getPlaintextBlock());
             write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-            offset += elem->plaintextBlock.size();
+            offset += elem->getPlaintextBlock().size();
         }
     }
 	
@@ -1344,21 +1114,13 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
-
-    // Init for the vectors with regular shared pointers
-    /*for(auto& c : cipherTextVector) {
-    	c = std::make_shared<CipherTextElement>();
-    }
-    for(auto& p : plainTextVector) {
-		p = std::make_shared<PlainTextElement>();
-	}*/
     
     getFullCipherText(idx, cipherTextVector);
     
-    for(size_t i=0; i< cipherTextVector.size(); i++) {
+    /*for(size_t i=0; i< cipherTextVector.size(); i++) {
         CipherTextElement *elem = cipherTextVector.at(i).get();
         elem->printMe();
-    }
+    }*/
     
     decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
     
@@ -1368,9 +1130,9 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
 
     for(size_t i=0; i<plainTextVector.size(); i++) {
         PlainTextElement *elem = plainTextVector.at(i).get();
-        elem->printMe();
-        result.push_back(elem->plaintextBlock);
-        offset += elem->plaintextBlock.size();
+        //elem->printMe();
+        result.push_back(elem->getPlaintextBlock());
+        offset += elem->getPlaintextBlock().size();
     }
     
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
@@ -1427,17 +1189,14 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                     idx.get({"sslkey", getKeyIDinIndex()}));
-                
-                //std::shared_ptr<CipherTextElement> cte( new CipherTextElement());
 
                 std::shared_ptr<CipherTextElement> cte = std::make_shared<CipherTextElement>();
-                cte->virtual_file_offset = previousBytes[fragment];
-                cte->cipherSuite = this->cipherSuite;
-                cte->sslVersion = this->sslVersion;
-                cte->cipherBlock = toDecrypt;
-                cte->length = toRead;
-                cte->keyMaterial.end();
-                cte->keyMaterial = keyPtr->getKeyMaterial();
+                cte->setVirtualFileOffset(previousBytes[fragment]);
+                cte->setCipherSuite(this->cipherSuite);
+                cte->setSslVersion(this->sslVersion);
+                cte->setCipherBlock(toDecrypt);
+                cte->setLength(toRead);
+                cte->setKeyMaterial(keyPtr->getKeyMaterial());
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
                 outputCipherTextVector.push_back(cte);
             } else {
@@ -1460,7 +1219,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 size_t counter_for_bytes_output_ciphertext = 0;
                 size_t counter_for_fragments = 0;
                 for (auto &element: outputCipherTextVector) {
-                    counter_for_bytes_output_ciphertext += element->length;
+                    counter_for_bytes_output_ciphertext += element->getLength();
                 }
                 for (auto fragment: fragments) {
                     counter_for_fragments += fragment.length;
@@ -1504,21 +1263,15 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
     for (size_t i=0; i<cipherTextVector.size(); i++) {
-        CipherTextElement *element = cipherTextVector.at(i).get();
-        //std::shared_ptr<PlainTextElement> output( new PlainTextElement());
+        std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
         std::shared_ptr<PlainTextElement> output = std::make_shared<PlainTextElement>();
 
-        decryptDataNew(element->virtual_file_offset,
-                        element->cipherBlock.size(),
-                        (char *) element->cipherBlock.data(),
-                        (char *) element->keyMaterial.data(),
-                        element->isClientBlock,
-                        output.get());
+        decryptData(element, output);
         
-        output->virtual_file_offset = element->virtual_file_offset;
+        output->setVirtualFileOffset(element->getVirtualFileOffset());
         output->isClientBlock = element->isClientBlock;
-        output->cipherSuite = element->cipherSuite;
-        output->sslVersion = element->sslVersion;
+        output->setCipherSuite(element->getCipherSuite());
+        output->setSslVersion(element->getSslVersion());
         
         outputPlainTextVector.push_back(output);
     }
