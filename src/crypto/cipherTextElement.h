@@ -18,9 +18,9 @@ namespace pcapfs {
 		//~CipherTextElement();
 
 		std::string const &getCipherSuite() { return cipherSuite; };
-		uint16_t const getSslVersion() { return sslVersion; };
-		size_t const getLength() { return length; };
-		uint64_t const getVirtualFileOffset(){ return virtualFileOffset; };
+		uint16_t getSslVersion() { return sslVersion; };
+		size_t getLength() { return length; };
+		uint64_t getVirtualFileOffset(){ return virtualFileOffset; };
 		Bytes const &getCipherBlock(){ return cipherBlock; };
 		Bytes const &getKeyMaterial(){ return keyMaterial; };
 
@@ -34,6 +34,7 @@ namespace pcapfs {
 		void printMe(void);
 
 		bool isClientBlock;
+		bool encryptThenMacEnabled;
 		
 
 	private:

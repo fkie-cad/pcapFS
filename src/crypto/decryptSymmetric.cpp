@@ -72,29 +72,30 @@ size_t pcapfs::Crypto::getMacSize(std::string cipherSuite) {
 }
 
 
-void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
+void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {
 
     uint64_t virtual_file_offset = input->getVirtualFileOffset();
     size_t length = input->getCipherBlock().size();
     char* ciphertext = (char*) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    const int mac_size = 16;
-    const int key_size = 16;
+    // we have either md5 or sha
+    const int mac_len = (macAlg == pcpp::SSLHashingAlgorithm::SSL_HASH_MD5) ? 16 : 20;
+    const int key_len = 16;
 
     //unsigned char mac_key[mac_size];
-    unsigned char rc4_key[key_size];
+    unsigned char rc4_key[key_len];
 
     if(input->isClientBlock) {
         //client_write_mac_key
         //memcpy(mac_key, key_material, mac_size);
         //client_write_key
-        memcpy(rc4_key, key_material + 2*mac_size, key_size);
+        memcpy(rc4_key, key_material + 2*mac_len, key_len);
     } else {
         //server_write_mac_key
         //memcpy(mac_key, key_material + mac_size, mac_size);
         //server_write_key
-        memcpy(rc4_key, key_material + 2*mac_size+key_size, key_size);
+        memcpy(rc4_key, key_material + 2*mac_len+key_len, key_len);
     }
     
     
@@ -117,12 +118,18 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
 
     Bytes decryptedData(virtual_file_offset + length);
     Bytes dataToDecrypt(virtual_file_offset);
-    dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
+
+    if(input->encryptThenMacEnabled)
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
+    else
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
+    
     LOG_TRACE << "decrypting with padding: " << std::to_string(virtual_file_offset) << " and cipher text length: "
               << dataToDecrypt.size();
 
     //decrypt data using keys and RC4
     unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+
 
 
     EVP_CIPHER_CTX *ctx;
@@ -198,21 +205,22 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     //printf("plaintext:\n");
     //BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
-    // TODO: here, only MD5 is considered as hmac (-> 16 byte) but SHA1 (20 byte) is also possible
-    // -> check hmac length in ciphersuites priorly!
-    Bytes hmac_value(decryptedData);
-    hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
-    output->setHmac(hmac_value);
+    //Bytes hmac_value(decryptedData);
+    //hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
+    //output->setHmac(hmac_value);
 
-    Bytes plaintext(decryptedData);
-    plaintext.erase(plaintext.begin() + plaintext.size() - 16, plaintext.begin() + plaintext.size());
-    output->setPlaintextBlock(plaintext);
+    //Bytes plaintext(decryptedData);
+
+    if(!input->encryptThenMacEnabled)
+        //plaintext.erase(plaintext.begin() + plaintext.size() - mac_len, plaintext.begin() + plaintext.size());
+        decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
+    output->setPlaintextBlock(decryptedData);
 
     EVP_CIPHER_CTX_cleanup(ctx);
 }
 
 
-void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
+void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {
     
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
@@ -239,7 +247,10 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
 
     LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
-    int mac_len = 20;
+    // we have either sha or sha256
+    const int mac_len = (macAlg == pcpp::SSLHashingAlgorithm::SSL_HASH_SHA) ? 20 : 32;
+
+    const int key_len = 16;
     const int iv_len = 16;
 
     //unsigned char mac_key[mac_len];
@@ -257,22 +268,21 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
     }
     
     int cbc128_padding = 0;
-    // TODO: here, only SHA is considered as hmac (-> 20 byte) but many other lengths are possible (SHA256/384)
-    // -> check hmac length in ciphersuites priorly!
-    const int ciphertext_len_calculated = length - mac_len;
-
     int return_code, len, plaintext_len;
     
-    Bytes decryptedData(ciphertext_len_calculated);
-    std::fill(decryptedData.begin(), decryptedData.end(), 0);
-
-    Bytes mac_from_ciphertext(0);
-    mac_from_ciphertext.insert(mac_from_ciphertext.end(), ciphertext + ciphertext_len_calculated, ciphertext + ciphertext_len_calculated + mac_len);
-
+    // Bytes decryptedData(0) leads to segfault?
+    Bytes decryptedData;
     Bytes dataToDecrypt(0);
-    
 
-    dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + ciphertext_len_calculated);
+
+    if(input->encryptThenMacEnabled) {
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
+        decryptedData.resize(length - mac_len);
+    }
+    else {
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
+        decryptedData.resize(length);
+    }
     
     LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
     
@@ -354,13 +364,10 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
     cbc128_padding = decryptedData.back() + 1;
     LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
 
-    /*
-     * Warning: This hmac is actually useless, it should verify the ciphertext only!
-     */
-    output->setHmac(mac_from_ciphertext);
-
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + iv_len);
     decryptedData.erase(decryptedData.end() - cbc128_padding, decryptedData.end());
+    if(!input->encryptThenMacEnabled)
+        decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
 
     output->isClientBlock = input->isClientBlock;
     output->setPadding(cbc128_padding);

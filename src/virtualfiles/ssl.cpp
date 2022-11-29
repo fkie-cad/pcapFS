@@ -110,7 +110,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 		Bytes &clientRandom, uint64_t &offsetInLogicalFragment,
 		Bytes &serverRandom, std::string &cipherSuite,
 		pcpp::SSLVersion &sslVersion, pcpp::SSLLayer *sslLayer,
-		uint64_t &clientEncryptedData, uint64_t &serverEncryptedData) {
+		uint64_t &clientEncryptedData, uint64_t &serverEncryptedData, bool &encryptThenMac) {
     
     uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
     if (numHandshakeMessages > 0){
@@ -185,6 +185,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 					pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
 				LOG_INFO
 				<< "Encrypt-Then-Mac Extension IS ENABLED!";
+                encryptThenMac = true;
 			} else {
 				LOG_INFO
 				<< "Encrypt-Then-Mac Extension IS NOT ENABLED";
@@ -269,7 +270,7 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 		pcpp::SSLVersion sslVersion, const std::shared_ptr<SslFile> &resultPtr,
 		const FilePtr &filePtr, const std::string &cipherSuite, unsigned int i,
-		const Bytes &clientRandom, Index &idx, const Bytes &serverRandom) {
+		const Bytes &clientRandom, Index &idx, const Bytes &serverRandom, const bool encryptThenMac) {
 	//search for master secret in candidates
 	
     if (processedSSLHandshake) {
@@ -291,6 +292,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	resultPtr->setOffsetType(filePtr->getFiletype());
 	resultPtr->setFiletype("ssl");
 	resultPtr->setCipherSuite(cipherSuite);
+    resultPtr->encryptThenMacEnabled = encryptThenMac;
 	resultPtr->setSslVersion(sslVersion.asUInt());
 	resultPtr->setFilename("SSL");
 	resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
@@ -330,6 +332,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     uint64_t clientEncryptedData = 0;
     uint64_t serverEncryptedData = 0;
     std::string cipherSuite = "";
+    bool encryptThenMac = false;
     pcpp::SSLVersion sslVersion = pcpp::SSLVersion::SSL2; // init with a predefined value.
     bool clientChangeCipherSpec = false;
     bool serverChangeCipherSpec = false;
@@ -371,10 +374,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 						serverChangeCipherSpec, handshakeLayer, clientRandom,
 						offsetInLogicalFragment, serverRandom, cipherSuite,
 						sslVersion, sslLayer, clientEncryptedData,
-						serverEncryptedData);
+						serverEncryptedData, encryptThenMac);
 
                 // assert(offsetInLogicalFragment == size)
-
 
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
                 if (isClientMessage(i)) {
@@ -418,7 +420,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     //search for master secret in candidates
 					resultPtrInit(processedSSLHandshake,
 							sslVersion, resultPtr, filePtr, cipherSuite, i,
-							clientRandom, idx, serverRandom);
+							clientRandom, idx, serverRandom, encryptThenMac);
                     
                     //TODO
                     //init with 0, unsure where we init this right now
@@ -576,6 +578,17 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
 	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
+    if(cipherSuite == NULL){
+        LOG_ERROR << "decryption failed: unsupported cipher suite " << getCipherSuite();
+        return;
+    }
+
+    // TODO: make those checks earlier
+    if(cipherSuite->getKeyExchangeAlg() != pcpp::SSLKeyExchangeAlgorithm::SSL_KEYX_RSA) {
+        LOG_ERROR << "currently, only RSA key exchange is supported";
+        return;
+    }
+
     switch (cipherSuite->getSymKeyAlg()) {
         
         /*
@@ -627,13 +640,13 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
              * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
              */            
 
-            Crypto::decrypt_RC4_128(input, output);
+            Crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
             break;
         }
         
         case pcpp::SSL_SYM_AES_128_CBC:
         {
-            Crypto::decrypt_AES_128_CBC(input, output);
+            Crypto::decrypt_AES_128_CBC(input, output, cipherSuite->getMACAlg());
             break;
         }
 
@@ -650,7 +663,7 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
         }
         
         default:
-            LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite;
+            LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
@@ -1198,6 +1211,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 cte->setLength(toRead);
                 cte->setKeyMaterial(keyPtr->getKeyMaterial());
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
+                cte->encryptThenMacEnabled = this->encryptThenMacEnabled;
                 outputCipherTextVector.push_back(cte);
             } else {
                 LOG_INFO << "NO KEYS FOUND FOR " << counter;
@@ -1277,6 +1291,7 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
     }
     pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
+
 
 bool pcapfs::SslFile::isClientMessage(uint64_t i) {
     if (i % 2 == 0) {

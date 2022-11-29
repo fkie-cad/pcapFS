@@ -39,9 +39,13 @@ namespace pcapfs {
 
             
             //new stuff:
-            void decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+            void decrypt_RC4_128(std::shared_ptr<CipherTextElement> input,
+                                std::shared_ptr<PlainTextElement> output,
+                                pcpp::SSLHashingAlgorithm macAlg);
 
-            void decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+            void decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input,
+                                std::shared_ptr<PlainTextElement> output,
+                                pcpp::SSLHashingAlgorithm macAlg);
 
             void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 

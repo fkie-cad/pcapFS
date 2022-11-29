@@ -77,6 +77,8 @@ namespace pcapfs {
 
         void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
 
+        bool encryptThenMacEnabled;
+
     private:
         std::string cipherSuite;
         uint16_t sslVersion;
@@ -91,13 +93,13 @@ namespace pcapfs {
 			uint64_t &offsetInLogicalFragment, Bytes &serverRandom,
 			std::string &cipherSuite, pcpp::SSLVersion &sslVersion,
 			pcpp::SSLLayer *sslLayer, uint64_t &clientEncryptedData,
-			uint64_t &serverEncryptedData);
+			uint64_t &serverEncryptedData, bool &encryptThenMac);
 
 	static void resultPtrInit(bool processedSSLHandshake,
 			pcpp::SSLVersion sslVersion,
 			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
 			const std::string &cipherSuite, unsigned int i, const Bytes &clientRandom,
-			Index &idx, const Bytes &serverRandom);
+			Index &idx, const Bytes &serverRandom, const bool encryptThenMac);
 };
 }
 
