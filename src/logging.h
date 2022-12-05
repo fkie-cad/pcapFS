@@ -28,13 +28,7 @@ namespace pcapfs {
             fatal
         };
 
-        static bool handed_to_fuse = false;
-
         void init(severity log_level);
-
-        void profilerFunction(const char* file, const char* function, const char* msg);
-        void initProfilerFunction();
-        void fuseIsActive();
     }
 }
 

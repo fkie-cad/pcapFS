@@ -17,7 +17,6 @@ void pcapfs::File::setProperty(const std::string &a, const std::string &b) {
 }
 
 void pcapfs::File::fillBuffer(const Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
     if(filesizeProcessed == 0 || !flags.test(pcapfs::flags::PROCESSED)) {
         LOG_TRACE << "current buffer size: " << buffer.size();
@@ -30,8 +29,6 @@ void pcapfs::File::fillBuffer(const Index &idx) {
         read(0, filesizeProcessed, idx, (char *) buffer.data());
         LOG_TRACE << "new filesizeProcessed: " << filesizeProcessed;
     }
-	
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
 
 

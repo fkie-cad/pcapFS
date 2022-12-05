@@ -84,10 +84,8 @@ std::string pcapfs::SslFile::toString() {
 
 
 size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
 	size_t plaintext_size = read_for_plaintext_size(idx);
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	return plaintext_size;
 }
 
@@ -95,12 +93,9 @@ size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
 bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
 	//Step 1: detect ssl stream by checking for dst Port 443
 	//TODO: other detection method -> config file vs heuristic?
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	if (filePtr->getProperty("dstPort") == "443") {
-        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 		return true;
 	}
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	return false;
 }
 
@@ -309,13 +304,11 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 
 
 std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
     //Step 1: detect ssl stream by checking for dst Port 443
     if(!isTLSTraffic(filePtr)) {
-        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         return resultVector;
     }
 
@@ -525,7 +518,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         resultVector.push_back(resultPtr);
     }
 
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return resultVector;
 }
 
@@ -575,7 +567,6 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
 
 
 void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     if(cipherSuite == NULL){
@@ -665,7 +656,6 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
     }
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
 
 
@@ -896,7 +886,6 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
 
 size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
 	LOG_TRACE << "read_raw offset size: " << fragments.size();
     size_t position = 0;
@@ -945,7 +934,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
     size_t posInFragment = 0;
     size_t fragment = 0;
 
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
 
@@ -976,7 +964,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
         
         memcpy(buf, (const char*) buffer.data() + startOffset, length);
         
-        pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
         if (startOffset + length < filesizeProcessed) {
             //read till length is ended
             LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
@@ -1087,7 +1074,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 	
     
 	/*
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	if (startOffset + length < filesizeRaw) {
 		//read till length is ended
 		LOG_TRACE << "File is not done yet. (filesizeraw: " << filesizeRaw << ")";
@@ -1100,7 +1086,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		return filesizeRaw - startOffset;
 	}
 	*/
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 	if (startOffset + length < filesizeProcessed) {
 		//read till length is ended
 		LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
@@ -1125,7 +1110,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
  * the respective plaintext length. Then you need only one decryption.
  */
 size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
     std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
     
@@ -1150,7 +1134,6 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
     }
     
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     return offset;
 }
 
@@ -1172,7 +1155,6 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
  * 
  */
 size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
     size_t fragment = 0;
     size_t position = 0;
     int counter = 0;
@@ -1224,7 +1206,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
         fragment++;
     }
     
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
     
     // Assertion for checking if we really read everything from the buffer.
     // Constructed as assertion because only active in debug mode.
@@ -1275,7 +1256,6 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
 	) {
 
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
@@ -1290,7 +1270,6 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
         
         outputPlainTextVector.push_back(output);
     }
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "left");
 }
 
 
