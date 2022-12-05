@@ -117,16 +117,18 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     const int iv_len = 16;
 
     //unsigned char mac_key[mac_len];
-    unsigned char aes_key[key_len];
+    //unsigned char aes_key[key_len];
+
+    Bytes aes_key(key_len);
     unsigned char iv[iv_len];
 
     if(input->isClientBlock) {
         //memcpy(mac_key, key_material, mac_len);
-        memcpy(aes_key, key_material+2*mac_len, key_len);
+        memcpy(aes_key.data(), key_material+2*mac_len, key_len);
         memcpy(iv, key_material+2*mac_len+2*key_len, iv_len);
     } else {
         //memcpy(mac_key, key_material+20, mac_len);
-        memcpy(aes_key, key_material+2*mac_len+key_len, key_len);
+        memcpy(aes_key.data(), key_material+2*mac_len+key_len, key_len);
         memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
     }
     
@@ -142,7 +144,7 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
         decryptedData.resize(length);
     }
 
-    opensslDecrypt(key_len == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
+    opensslDecrypt(key_len == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc(), aes_key.data(), iv, dataToDecrypt, decryptedData);
 
     // PKCS#7 padding + 1 byte for padding_length field
     // https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2
@@ -202,7 +204,6 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     if(error)
         decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
  }
-
 
 
 
