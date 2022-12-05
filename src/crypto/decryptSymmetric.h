@@ -29,27 +29,20 @@ namespace pcapfs {
 
     namespace Crypto {
             
-            /*
-             * 
-             * TODO: pass to each function only key, padding, hmac, iv, etc. Do the filtering if client and server as well as parsing the information before that step.
-             * 
-             */
-
     		int getMacSize(const pcpp::SSLHashingAlgorithm macAlg);
 
-            
-            //new stuff:
             void decrypt_RC4_128(std::shared_ptr<CipherTextElement> input,
                                 std::shared_ptr<PlainTextElement> output,
                                 pcpp::SSLHashingAlgorithm macAlg);
 
-            void decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input,
+            void decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input,
                                 std::shared_ptr<PlainTextElement> output,
-                                pcpp::SSLHashingAlgorithm macAlg);
+                                pcpp::SSLHashingAlgorithm macAlg,
+                                const int key_len);
 
-            void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input,
+            /*void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input,
                                 std::shared_ptr<PlainTextElement> output,
-                                pcpp::SSLHashingAlgorithm macAlg);
+                                pcpp::SSLHashingAlgorithm macAlg);*/
 
             
             // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)

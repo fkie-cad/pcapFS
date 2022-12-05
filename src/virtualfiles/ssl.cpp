@@ -646,21 +646,21 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
         
         case pcpp::SSL_SYM_AES_128_CBC:
         {
-            Crypto::decrypt_AES_128_CBC(input, output, cipherSuite->getMACAlg());
+            Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 16);
             break;
         }
 
         case pcpp::SSL_SYM_AES_256_CBC:
         {
-            Crypto::decrypt_AES_256_CBC(input, output, cipherSuite->getMACAlg());
+            Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 32);
             break;
         }
         
-        case pcpp::SSL_SYM_AES_128_GCM:
+        /*case pcpp::SSL_SYM_AES_128_GCM:
         {
             Crypto::decrypt_AES_128_GCM(input, output);
             break;
-        }
+        }*/
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();

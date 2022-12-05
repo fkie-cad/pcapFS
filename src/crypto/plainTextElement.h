@@ -42,12 +42,9 @@ namespace pcapfs {
 		Bytes plaintextBlock;
 		//Bytes hmac;
 		uint64_t virtualFileOffset;
-
 		uint64_t padding;
-
 		uint16_t sslVersion;
 		std::string cipherSuite;
-
 	};
 
 }

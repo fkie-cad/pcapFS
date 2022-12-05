@@ -20,7 +20,6 @@
 
 #include "../commontypes.h"
 
-using namespace pcapfs;
 
 int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 
@@ -106,18 +105,15 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
 }
 
 
-void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {
+void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg, const int key_len) {
 
-    //uint64_t virtual_file_offset = input->getVirtualFileOffset();
+    LOG_DEBUG << "entering decrypt_AES_CBC" << std::endl;
+
     size_t length = input->getLength();
     char* ciphertext = (char *) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    //LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
-    
-    // we have either sha or sha256
     const int mac_len = getMacSize(macAlg);
-    const int key_len = 16;
     const int iv_len = 16;
 
     //unsigned char mac_key[mac_len];
@@ -134,11 +130,8 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
         memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
     }
     
-    int cbc128_padding = 0;
-    
     Bytes decryptedData;
     Bytes dataToDecrypt(0);
-
 
     if(input->encryptThenMacEnabled) {
         dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
@@ -148,89 +141,24 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
         dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
         decryptedData.resize(length);
     }
-    
-    //LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
 
-    opensslDecrypt(EVP_aes_128_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
+    opensslDecrypt(key_len == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
 
-    cbc128_padding = decryptedData.back() + 1;
-    LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
+    // PKCS#7 padding + 1 byte for padding_length field
+    // https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2
+    int padding_len = decryptedData.back() + 1;
+    LOG_TRACE << "AES CBC 128 padding len (max 16): " << padding_len;
 
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + iv_len);
-    decryptedData.erase(decryptedData.end() - cbc128_padding, decryptedData.end());
+    decryptedData.erase(decryptedData.end() - padding_len, decryptedData.end());
     if(!input->encryptThenMacEnabled)
         decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
 
-    output->isClientBlock = input->isClientBlock;
-    output->setPadding(cbc128_padding);
+    //output->isClientBlock = input->isClientBlock;
+    //output->setPadding(padding_len);
     output->setPlaintextBlock(decryptedData);
 }
 
-
-void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {    
-
-    uint64_t virtual_file_offset = input->getVirtualFileOffset();
-    size_t length = input->getLength();
-    char* ciphertext = (char *) input->getCipherBlock().data();
-    char* key_material = (char *) input->getKeyMaterial().data();
-
-    LOG_DEBUG << "entering decrypt_AES_256_CBC - virtual_file_offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
-    
-    const int mac_len = getMacSize(macAlg);
-    const int key_len = 32;
-    const int iv_len = 16;
-
-    unsigned char aes_key[key_len];
-    unsigned char iv[iv_len];
-
-    if(input->isClientBlock) {
-        memcpy(aes_key, key_material+ 2*mac_len, key_len);
-        memcpy(iv, key_material + 2*mac_len+2*key_len, iv_len);
-    } else {
-        memcpy(aes_key, key_material + 2*mac_len+key_len, key_len);
-        memcpy(iv, key_material + 2*mac_len+2*key_len+iv_len, iv_len);
-    }
-    
-    Bytes decryptedData;
-    Bytes dataToDecrypt(0);
-
-    if(input->encryptThenMacEnabled) {
-        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
-        decryptedData.resize(length - mac_len);
-    }
-    else {
-        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-        decryptedData.resize(length);
-    }
-
-    //TODO: what about the hmac?
-    
-    dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-    
-    LOG_TRACE << "decrypting with virtual_file_offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
-
-    opensslDecrypt(EVP_aes_256_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
-
-    //TODO: padding?
-
-    if(!input->encryptThenMacEnabled)
-        decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
-    
-    //remove the padding
-    //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
-    
-    //decryptedData.erase(decryptedData.begin()+ plaintext_len-virtual_file_offset - 20 - 1, decryptedData.end());
-    /*
-    std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-
-    printf("plaintext:\n");
-    //BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset);
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset, plaintext_len-virtual_file_offset);
-    printf("\n\n");
-    BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset - 20 - 1);
-    */
-    
-}
 
  void pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
     
@@ -238,15 +166,13 @@ void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> inpu
     unsigned char error = 0;
     int len;
 
+    // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if(!ctx) {
         LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
         error = 1;
     }
-    
-    /*
-     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     */
 
     // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
     if(EVP_CipherInit_ex(ctx, cipher, NULL, key, iv, 0) != 1) {
@@ -276,6 +202,8 @@ void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> inpu
     if(error)
         decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
  }
+
+
 
 
 void pcapfs::Crypto::decrypt_AES_256_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
