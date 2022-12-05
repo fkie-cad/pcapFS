@@ -35,7 +35,7 @@ namespace pcapfs {
              * 
              */
 
-    		size_t getMacSize(std::string cipherSuite);
+    		int getMacSize(const pcpp::SSLHashingAlgorithm macAlg);
 
             
             //new stuff:
@@ -47,13 +47,17 @@ namespace pcapfs {
                                 std::shared_ptr<PlainTextElement> output,
                                 pcpp::SSLHashingAlgorithm macAlg);
 
-            void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+            void decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input,
+                                std::shared_ptr<PlainTextElement> output,
+                                pcpp::SSLHashingAlgorithm macAlg);
 
             
             // GCM needs "additional data", see section 6.2.3.3 RFC 5246 (hint-> the sequence number is built by +1 for each new TLS record (and NOT FOR EACH APPLICATION DATA PACKET!) and client and server keep their counters separately.)
             void decrypt_AES_128_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
             void decrypt_AES_256_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+
+            void opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData);
             
     }
 

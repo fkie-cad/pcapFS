@@ -652,7 +652,7 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
 
         case pcpp::SSL_SYM_AES_256_CBC:
         {
-            Crypto::decrypt_AES_256_CBC(input, output);
+            Crypto::decrypt_AES_256_CBC(input, output, cipherSuite->getMACAlg());
             break;
         }
         
@@ -720,7 +720,8 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_derive.html
      */
     
-    size_t KEY_MATERIAL_SIZE = 128;
+    // current max key material size for AES_256_CBC_SHA384: 2*48 + 2*32 + 2*16 Byte
+    size_t KEY_MATERIAL_SIZE = 192;
     size_t const LABEL_SIZE = 13;
     char const LABEL[14] = "key expansion";
     size_t const seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;

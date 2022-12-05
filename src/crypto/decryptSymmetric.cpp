@@ -22,15 +22,7 @@
 
 using namespace pcapfs;
 
-size_t pcapfs::Crypto::getMacSize(std::string cipherSuite) {
-
-	pcpp::SSLCipherSuite *cipher_suite = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
-
-	if(cipher_suite == NULL) {
-		return -1;
-	}
-
-	pcpp::SSLHashingAlgorithm hash_algorithm = cipher_suite->getMACAlg();
+int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 
 	/*
 	 * From https://tools.ietf.org/html/rfc5246#appendix-A.5
@@ -46,7 +38,7 @@ size_t pcapfs::Crypto::getMacSize(std::string cipherSuite) {
 		See
 	 */
 
-	switch(hash_algorithm) {
+	switch(macAlg) {
 		case pcpp::SSL_HASH_NULL: return 0;
 
 		case pcpp::SSL_HASH_MD5: return 16;
@@ -55,20 +47,8 @@ size_t pcapfs::Crypto::getMacSize(std::string cipherSuite) {
 		case pcpp::SSL_HASH_SHA256: return 32;
 		case pcpp::SSL_HASH_SHA384: return 48;
 
-		/*
-		 * Unsupported yet
-		 */
-
-		case pcpp::SSL_HASH_GOST28147: throw "Unsupported Authentication type";
-		case pcpp::SSL_HASH_GOSTR3411: throw "Unsupported Authentication type";
-
-		case pcpp::SSL_HASH_CCM: throw "Unsupported Authentication type";
-		case pcpp::SSL_HASH_CCM_8: throw "Unsupported Authentication type";
-
-		case pcpp::SSL_HASH_Unknown: throw "Unsupported Authentication type";
+		default: throw "Unsupported Authentication type";
 	}
-
-	throw "Unsupported Authentication type";
 }
 
 
@@ -80,41 +60,21 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     char* key_material = (char*) input->getKeyMaterial().data();
 
     // we have either md5 or sha
-    const int mac_len = (macAlg == pcpp::SSLHashingAlgorithm::SSL_HASH_MD5) ? 16 : 20;
+    const int mac_len = getMacSize(macAlg);
     const int key_len = 16;
 
     //unsigned char mac_key[mac_size];
     unsigned char rc4_key[key_len];
 
     if(input->isClientBlock) {
-        //client_write_mac_key
         //memcpy(mac_key, key_material, mac_size);
-        //client_write_key
         memcpy(rc4_key, key_material + 2*mac_len, key_len);
     } else {
-        //server_write_mac_key
         //memcpy(mac_key, key_material + mac_size, mac_size);
-        //server_write_key
         memcpy(rc4_key, key_material + 2*mac_len+key_len, key_len);
     }
     
-    
 	LOG_DEBUG << "entering decrypt_RC4_128 - padding: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
-
-    /*
-     * https://wiki.openssl.org/index.php/EVP_Symmetric_Encryption_and_Decryption
-     * 
-     * This is basically the key idea when using symmetric decryption in openssl
-     * 
-     * And this manpage contains additional information about the API:
-     * https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     * 
-     */
-
-    int return_code = 0;
-
-    int len = 0;
-    int plaintext_len = 0;
 
     Bytes decryptedData(virtual_file_offset + length);
     Bytes dataToDecrypt(virtual_file_offset);
@@ -127,83 +87,11 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     LOG_TRACE << "decrypting with padding: " << std::to_string(virtual_file_offset) << " and cipher text length: "
               << dataToDecrypt.size();
 
-    //decrypt data using keys and RC4
-    unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
 
-
-
-    EVP_CIPHER_CTX *ctx;
-
-    ctx = EVP_CIPHER_CTX_new();
-
-    if (ctx == NULL) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
-    }
-
-
-    /*
-     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     *
-     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
-     * The operation performed depends on the value of the enc parameter.
-     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
-     * (the actual value of 'enc' being supplied in a previous call).
-     *
-     */
-
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    return_code = EVP_CipherInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL, 0);
-
-    if (return_code != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code
-                  << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
-    }
-
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_rc4(), NULL, rc4_key, NULL);
-
-    if (return_code != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code
-                  << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
-    }
-
-    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
-
-    if (return_code != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code
-                  << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-
-    plaintext_len = len;
-
-    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data() + len, &len);
-
-    if (return_code != 1) {
-        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code
-                  << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-
-    plaintext_len += len;
-
-    LOG_DEBUG << "plaintext_len after decrypt_final decryption: " << plaintext_len << std::endl;
+    opensslDecrypt(EVP_rc4(), rc4_key, NULL, dataToDecrypt, decryptedData);
 
     //remove the padding
     decryptedData.erase(decryptedData.begin(), decryptedData.begin() + virtual_file_offset);
-
-    //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-
-    //printf("plaintext:\n");
-    //BIO_dump_fp(stdout, (const char *) decryptedData.data(), plaintext_len - padding );
 
     //Bytes hmac_value(decryptedData);
     //hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
@@ -215,62 +103,39 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
         //plaintext.erase(plaintext.begin() + plaintext.size() - mac_len, plaintext.begin() + plaintext.size());
         decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
     output->setPlaintextBlock(decryptedData);
-
-    EVP_CIPHER_CTX_cleanup(ctx);
 }
 
 
 void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {
-    
-	pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 
-	/*
-	 * AES CBC Mode for TLS 1.1:
-	 *
-	 * ciphertext has this structure:
-	 *
-	 * actual ciphertext
-	 * MAC (20 bytes)
-	 *
-	 * The mac is used to check the ciphertext!
-	 *
-	 * The decrypted stuff looks like this:
-	 *
-	 * 16 byte IV (? not sure if these bytes are actually the IV for next packets)
-	 *
-	 */
-
-    uint64_t virtual_file_offset = input->getVirtualFileOffset();
+    //uint64_t virtual_file_offset = input->getVirtualFileOffset();
     size_t length = input->getLength();
     char* ciphertext = (char *) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
+    //LOG_DEBUG << "entering decrypt_AES_128_CBC - virtual file offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
     // we have either sha or sha256
-    const int mac_len = (macAlg == pcpp::SSLHashingAlgorithm::SSL_HASH_SHA) ? 20 : 32;
-
+    const int mac_len = getMacSize(macAlg);
     const int key_len = 16;
     const int iv_len = 16;
 
     //unsigned char mac_key[mac_len];
-    unsigned char aes_key[16];
+    unsigned char aes_key[key_len];
     unsigned char iv[iv_len];
 
     if(input->isClientBlock) {
         //memcpy(mac_key, key_material, mac_len);
-        memcpy(aes_key, key_material+40, 20);
-        memcpy(iv, key_material+40+32, iv_len);
+        memcpy(aes_key, key_material+2*mac_len, key_len);
+        memcpy(iv, key_material+2*mac_len+2*key_len, iv_len);
     } else {
         //memcpy(mac_key, key_material+20, mac_len);
-        memcpy(aes_key, key_material+40+16, 20);
-        memcpy(iv, key_material+72+16, iv_len);
+        memcpy(aes_key, key_material+2*mac_len+key_len, key_len);
+        memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
     }
     
     int cbc128_padding = 0;
-    int return_code, len, plaintext_len;
     
-    // Bytes decryptedData(0) leads to segfault?
     Bytes decryptedData;
     Bytes dataToDecrypt(0);
 
@@ -284,82 +149,9 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
         decryptedData.resize(length);
     }
     
-    LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
-    
-    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    //LOG_TRACE << "decrypting with virtual file offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
 
-    EVP_CIPHER_CTX *ctx;
-    
-    ctx = EVP_CIPHER_CTX_new();
-    
-    if(ctx == NULL) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
-    }
-    
-    
-    /*
-     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     * 
-     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
-     * The operation performed depends on the value of the enc parameter.
-     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
-     * (the actual value of 'enc' being supplied in a previous call).
-     * 
-     */
-    
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    return_code = EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), NULL, aes_key, iv, 0);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
-    }
-    
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, aes_key, iv);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
-    }
-    
-    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len = len;
-    
-    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data()+ len, &len);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len += len;
-    
-    //remove the virtual_file_offset
-    //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
-
-    //decryptedData.erase(decryptedData.begin()+ plaintext_len-padding - 20 - 1, decryptedData.end());
-
-    //std::string decryptedContent(decryptedData.begin(), decryptedData.end());
-
-    /*
-     * get last byte, contains the padding length.
-     * you need to add one to the byte. when padding would not be necessary we add 16 (0x0f) (plus one, -> 16).
-     */
-
-    // MAC SIZE IS 20 byte
+    opensslDecrypt(EVP_aes_128_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
 
     cbc128_padding = decryptedData.back() + 1;
     LOG_TRACE << "AES CBC 128 padding len (max 16): " << cbc128_padding;
@@ -372,13 +164,10 @@ void pcapfs::Crypto::decrypt_AES_128_CBC(std::shared_ptr<CipherTextElement> inpu
     output->isClientBlock = input->isClientBlock;
     output->setPadding(cbc128_padding);
     output->setPlaintextBlock(decryptedData);
-
-    EVP_CIPHER_CTX_cleanup(ctx);
-    pcapfs::logging::profilerFunction(__FILE__, __FUNCTION__, "entered");
 }
 
 
-void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {    
+void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {    
 
     uint64_t virtual_file_offset = input->getVirtualFileOffset();
     size_t length = input->getLength();
@@ -387,93 +176,45 @@ void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> inpu
 
     LOG_DEBUG << "entering decrypt_AES_256_CBC - virtual_file_offset: " << std::to_string(virtual_file_offset) << " length: " << std::to_string(length)  << std::endl;
     
-    const int mac_size = 16;
-    const int key_size = 32;
-    const int iv_size = 16;
+    const int mac_len = getMacSize(macAlg);
+    const int key_len = 32;
+    const int iv_len = 16;
 
-    unsigned char aes_key[key_size];
-    unsigned char iv[iv_size];
+    unsigned char aes_key[key_len];
+    unsigned char iv[iv_len];
 
     if(input->isClientBlock) {
-        memcpy(aes_key, key_material+ 2*mac_size, key_size);
-        memcpy(iv, key_material + 2*mac_size+2*key_size, iv_size);
+        memcpy(aes_key, key_material+ 2*mac_len, key_len);
+        memcpy(iv, key_material + 2*mac_len+2*key_len, iv_len);
     } else {
-        memcpy(aes_key, key_material + 2*mac_size+key_size, key_size);
-        memcpy(iv, key_material + 2*mac_size+2*key_size+iv_size, iv_size);
+        memcpy(aes_key, key_material + 2*mac_len+key_len, key_len);
+        memcpy(iv, key_material + 2*mac_len+2*key_len+iv_len, iv_len);
     }
-
-    int return_code, len, plaintext_len;
     
-    Bytes decryptedData(virtual_file_offset + length);
-    Bytes dataToDecrypt(virtual_file_offset);
+    Bytes decryptedData;
+    Bytes dataToDecrypt(0);
+
+    if(input->encryptThenMacEnabled) {
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
+        decryptedData.resize(length - mac_len);
+    }
+    else {
+        dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
+        decryptedData.resize(length);
+    }
 
     //TODO: what about the hmac?
     
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
     
     LOG_TRACE << "decrypting with virtual_file_offset " << std::to_string(virtual_file_offset) << " of length " << dataToDecrypt.size();
-    
-    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    
-    
-    EVP_CIPHER_CTX *ctx;
-    
-    ctx = EVP_CIPHER_CTX_new();
-    
-    if(ctx == NULL) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
-    }
-    
-    
-    /*
-     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     * 
-     * EVP_CipherInit_ex(), EVP_CipherUpdate() and EVP_CipherFinal_ex() are functions that can be used for decryption or encryption.
-     * The operation performed depends on the value of the enc parameter.
-     * It should be set to 1 for encryption, 0 for decryption and -1 to leave the value unchanged
-     * (the actual value of 'enc' being supplied in a previous call).
-     * 
-     */
-    
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    return_code = EVP_CipherInit_ex(ctx, EVP_aes_256_cbc(), NULL, aes_key, iv, 0);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_CipherInit_ex() returned: " << return_code << std::endl;
-    }
-    
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
-    return_code = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, aes_key, iv);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptInit_ex() return code: " << return_code << std::endl;
-    }
-    
-    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    return_code = EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size());
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptUpdate() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len = len;
-    
-    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    return_code = EVP_DecryptFinal_ex(ctx, decryptedData.data()+ len, &len);
-    
-    if(return_code != 1) {
-        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1, 1 means success. It returned: " << return_code << std::endl;
-    } else {
-    	LOG_TRACE << "EVP_DecryptFinal_ex() return code: " << return_code << " , len now: " << len << std::endl;
-    }
-    
-    plaintext_len += len;
+
+    opensslDecrypt(EVP_aes_256_cbc(), aes_key, iv, dataToDecrypt, decryptedData);
+
+    //TODO: padding?
+
+    if(!input->encryptThenMacEnabled)
+        decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
     
     //remove the padding
     //decryptedData.erase(decryptedData.begin(), decryptedData.begin() + padding + 16);
@@ -489,9 +230,52 @@ void pcapfs::Crypto::decrypt_AES_256_CBC(std::shared_ptr<CipherTextElement> inpu
     BIO_dump_fp (stdout, (const char *)decryptedData.data() + virtual_file_offset+16, plaintext_len-virtual_file_offset - 20 - 1);
     */
     
-    
-    EVP_CIPHER_CTX_cleanup(ctx);
 }
+
+ void pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
+    
+    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
+    unsigned char error = 0;
+    int len;
+
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if(!ctx) {
+        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
+        error = 1;
+    }
+    
+    /*
+     * From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
+     */
+
+    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
+    if(EVP_CipherInit_ex(ctx, cipher, NULL, key, iv, 0) != 1) {
+        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1" << std::endl;
+        error = 1;
+    }
+    
+    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);    
+    if(EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv) != 1) {
+        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1" << std::endl;
+        error = 1;
+    }
+    
+    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
+    if(EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size()) != 1) {
+        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1" << std::endl;
+        error = 1;
+    }
+    
+    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
+    if(EVP_DecryptFinal_ex(ctx, decryptedData.data()+len, &len) != 1) {
+        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1" << std::endl;
+        error = 1;
+    }
+
+    EVP_CIPHER_CTX_cleanup(ctx);
+    if(error)
+        decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
+ }
 
 
 void pcapfs::Crypto::decrypt_AES_256_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
