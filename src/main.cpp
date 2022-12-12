@@ -92,8 +92,15 @@ int main(int argc, const char *argv[]) {
         if (options.showVersion) { pcapfs::options::commandline::printVersion(); }
         return EXIT_SUCCESS;
     }
-
-    pcapfs::assertValidOptions(options);
+    
+    try {
+        pcapfs::assertValidOptions(options);
+    } catch (pcapfs::ArgumentError &e) {
+        pcapfs::options::commandline::printHelp();
+        std::cerr << e.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+        std::cerr << "See help message above for usage information." << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+        return 1;
+    }
     auto config = options.pcapfsOptions;
     pcapfs::logging::init(config.verbosity);
     pcapfs::File::setConfig(config);
