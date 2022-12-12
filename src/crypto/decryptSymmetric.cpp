@@ -58,18 +58,13 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     char* ciphertext = (char*) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    // we have either md5 or sha
     const int mac_len = getMacSize(macAlg);
     const int key_len = 16;
-
-    //unsigned char mac_key[mac_size];
     unsigned char rc4_key[key_len];
 
     if(input->isClientBlock) {
-        //memcpy(mac_key, key_material, mac_size);
         memcpy(rc4_key, key_material + 2*mac_len, key_len);
     } else {
-        //memcpy(mac_key, key_material + mac_size, mac_size);
         memcpy(rc4_key, key_material + 2*mac_len+key_len, key_len);
     }
     
@@ -86,21 +81,16 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     LOG_TRACE << "decrypting with padding: " << std::to_string(virtual_file_offset) << " and cipher text length: "
               << dataToDecrypt.size();
 
+    if(opensslDecrypt(EVP_rc4(), rc4_key, NULL, dataToDecrypt, decryptedData)) {
+        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+        decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
+    } else {
+        //remove the padding
+        decryptedData.erase(decryptedData.begin(), decryptedData.begin() + virtual_file_offset);
 
-    opensslDecrypt(EVP_rc4(), rc4_key, NULL, dataToDecrypt, decryptedData);
-
-    //remove the padding
-    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + virtual_file_offset);
-
-    //Bytes hmac_value(decryptedData);
-    //hmac_value.erase(hmac_value.begin(), hmac_value.begin() + hmac_value.size() - 16);
-    //output->setHmac(hmac_value);
-
-    //Bytes plaintext(decryptedData);
-
-    if(!input->encryptThenMacEnabled)
-        //plaintext.erase(plaintext.begin() + plaintext.size() - mac_len, plaintext.begin() + plaintext.size());
+        if(!input->encryptThenMacEnabled)
         decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
+    }
     output->setPlaintextBlock(decryptedData);
 }
 
@@ -116,18 +106,13 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     const int mac_len = getMacSize(macAlg);
     const int iv_len = 16;
 
-    //unsigned char mac_key[mac_len];
-    //unsigned char aes_key[key_len];
-
     Bytes aes_key(key_len);
     unsigned char iv[iv_len];
 
     if(input->isClientBlock) {
-        //memcpy(mac_key, key_material, mac_len);
         memcpy(aes_key.data(), key_material+2*mac_len, key_len);
         memcpy(iv, key_material+2*mac_len+2*key_len, iv_len);
     } else {
-        //memcpy(mac_key, key_material+20, mac_len);
         memcpy(aes_key.data(), key_material+2*mac_len+key_len, key_len);
         memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
     }
@@ -144,29 +129,27 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
         decryptedData.resize(length);
     }
 
-    opensslDecrypt(key_len == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc(), aes_key.data(), iv, dataToDecrypt, decryptedData);
+    if(opensslDecrypt(key_len == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc(), aes_key.data(), iv, dataToDecrypt, decryptedData)) {
+        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+        decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
+    } else {
+        // PKCS#7 padding + 1 byte
+        // https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2
+        int padding_len = decryptedData.back() + 1;
+        LOG_TRACE << "AES CBC 128 padding len: " << padding_len;
 
-    // PKCS#7 padding + 1 byte for padding_length field
-    // https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2
-    int padding_len = decryptedData.back() + 1;
-    LOG_TRACE << "AES CBC 128 padding len (max 16): " << padding_len;
-
-    decryptedData.erase(decryptedData.begin(), decryptedData.begin() + iv_len);
-    decryptedData.erase(decryptedData.end() - padding_len, decryptedData.end());
-    if(!input->encryptThenMacEnabled)
-        decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
-
-    //output->isClientBlock = input->isClientBlock;
-    //output->setPadding(padding_len);
+        decryptedData.erase(decryptedData.begin(), decryptedData.begin() + iv_len);
+        decryptedData.erase(decryptedData.end() - padding_len, decryptedData.end());
+        if(!input->encryptThenMacEnabled)
+            decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
+    }
     output->setPlaintextBlock(decryptedData);
 }
 
 
- void pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
+int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
     
-    const unsigned char *dataToDecryptPtr = reinterpret_cast<unsigned char *>(dataToDecrypt.data());
-    unsigned char error = 0;
-    int len;
+    int error = 0;
 
     // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
      
@@ -188,21 +171,29 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
         error = 1;
     }
     
+    int outlen, tmplen;
     // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
-    if(EVP_DecryptUpdate(ctx, decryptedData.data(), &len, dataToDecryptPtr, dataToDecrypt.size()) != 1) {
+    if(EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
         LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1" << std::endl;
         error = 1;
     }
     
     //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
-    if(EVP_DecryptFinal_ex(ctx, decryptedData.data()+len, &len) != 1) {
-        LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1" << std::endl;
-        error = 1;
+    if(EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &tmplen) != 1) {
+        // weird case: for 1 byte padding, the only padding byte is 0, which causes the padding to be seen as not correctly formatted
+        // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct 
+        // (see https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2)
+        // => handle this case separately
+        if(decryptedData.back() != 0) {
+            LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1" << std::endl;
+            error = 1;
+        }
     }
+    if(error)
+        ERR_print_errors_fp(stderr);
 
     EVP_CIPHER_CTX_cleanup(ctx);
-    if(error)
-        decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
+    return error; 
  }
 
 
