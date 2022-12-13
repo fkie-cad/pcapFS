@@ -250,11 +250,18 @@ hand provides these properties leading to the `server.test` and `image` subdirec
 
 ## Decrypting and Decoding Traffic
 It is possible for pcapFS to decrypt and decode certain protocols on the fly if you provide it with the corresponding 
-key material. Right now, we have prototypical support for SSL (just cipher suites based on RC4 and AES-CBC with RSA key exchange) and 
+key material. Right now, we have prototypical support for SSL/TLS and 
 XOR. Both need a key file containing the key material which can be provided either via the command line (`-k` or 
 `--keys`) or via the [configuration file](#configuration-file). The argument can be a single file or a directory 
 containing multiple key files. Example key files can be found in the [tests folder](tests/system/keyfiles). Note that 
-we are still in the process of deciding on an adequate file format, so be prepared for changes here.
+we are still in the process of deciding on an adequate file format, so be prepared for changes here.\
+Currently supported cipher suites are:
+- `TLS_RSA_WITH_RC4_128_MD5`
+- `TLS_RSA_WITH_RC4_128_SHA`
+- `TLS_RSA_WITH_AES_128_CBC_SHA`
+- `TLS_RSA_WITH_AES_128_CBC_SHA256`
+- `TLS_RSA_WITH_AES_256_CBC_SHA`
+- `TLS_RSA_WITH_AES_256_CBC_SHA256`
 
 ## Configuration File
 pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file 

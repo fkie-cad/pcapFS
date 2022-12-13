@@ -11,10 +11,10 @@ import pytest
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 
-class TestRc4:
+class TestAes128CbcSha:
 
     def test_with_key_file(self, test_pcap, expected_files_with_ssl):
-        with mount_pcap(test_pcap, params=['-k', '{here}/keyfiles/aes128-cbc.key'.format(here=HERE)]) as mountpoint:
+        with mount_pcap(test_pcap, params=['-k', '{here}/keyfiles/aes128-cbc-sha.key'.format(here=HERE)]) as mountpoint:
             assert get_file_list(mountpoint) == expected_files_with_ssl
 
 
@@ -35,7 +35,7 @@ class TestRc4:
 
 
     def test_read_processed_ssl_appdata(self, test_pcap, content_tls_appdata_all_plain):
-        with mount_pcap(test_pcap, params=['--show-all', '-k', '{here}/keyfiles/aes128-cbc.key'.format(here=HERE)]) as mountpoint:
+        with mount_pcap(test_pcap, params=['--show-all', '-k', '{here}/keyfiles/aes128-cbc-sha.key'.format(here=HERE)]) as mountpoint:
             files = get_file_list(mountpoint)
             assert('ssl/0-2758_SSL' in files)
             with open(os.path.join(mountpoint, 'ssl/0-2758_SSL'), 'rb') as f:
@@ -94,7 +94,7 @@ def generate_random_string(length):
 
 @pytest.fixture
 def test_pcap():
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pcaps/aes128-cbc.pcap')
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pcaps/aes128-cbc-sha.pcap')
 
 
 @pytest.fixture

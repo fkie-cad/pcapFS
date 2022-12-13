@@ -35,5 +35,9 @@ set +u
 source "${venv}/bin/activate"
 set -u
 
-py.test "${here}/pcapfs-crypto-tests-aes-128-cbc.py" -vv
-py.test "${here}/pcapfs-crypto-tests-rc4.py" -vv
+py.test "${here}/pcapfs-crypto-tests-rc4-md5.py" -vv
+py.test "${here}/pcapfs-crypto-tests-aes128-cbc-sha.py" -vv
+py.test "${here}/pcapfs-crypto-tests-aes128-cbc-sha256.py" -vv
+py.test "${here}/pcapfs-crypto-tests-aes256-cbc-sha.py" -vv
+py.test "${here}/pcapfs-crypto-tests-aes256-cbc-sha256.py" -vv
+
