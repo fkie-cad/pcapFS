@@ -155,11 +155,6 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 				sslVersion = sslLayer->getRecordVersion();
 			} else {
 				cipherSuite = "UNKNOWN_CIPHER_SUITE";
-				/*
-				 * TODO: handle this exception properly
-				 * 
-				 */
-				throw "unsupported cipher detected";
 			}
 			processedSSLHandshake = true;
 			LOG_DEBUG
@@ -566,18 +561,18 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
 
 
 
-void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
+int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     if(cipherSuite == NULL){
         LOG_ERROR << "decryption failed: unsupported cipher suite " << getCipherSuite();
-        return;
+        return 1;
     }
 
     // TODO: make those checks earlier
     if(cipherSuite->getKeyExchangeAlg() != pcpp::SSLKeyExchangeAlgorithm::SSL_KEYX_RSA) {
-        LOG_ERROR << "currently, only RSA key exchange is supported";
-        return;
+        LOG_ERROR << "decryption failed: only RSA key exchange is supported";
+        return 1;
     }
 
     switch (cipherSuite->getSymKeyAlg()) {
@@ -592,45 +587,8 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
          * https://tools.ietf.org/html/rfc5246#section-5
          */
         
-        /*
-         * RC4 in SSL/TLS implemented cipher suites are decrypted here:
-         */
-        
-        
-        /*
-         * Important note for export keys:
-         * 
-         * https://tools.ietf.org/html/rfc2246#section-6.3.1
-         * 
-         * they use the PRF for the IV!
-         * 
-         * 
-         */
         case pcpp::SSL_SYM_RC4_128:
         {
-            /*
-             * This cipher flag SSL_SYM_RC4_128 in pcap plus plus should be able to decrypt the following cipher suites (all ciphers with RC4_128 bit keys):
-             * Hint: Although this is correct in theory, in practice some of the ciphers are not supported by pcap++ nor openssl
-             * 
-             * Cipher Suite     Name (OpenSSL)              KeyExch.        Encryption 	    Bits        Cipher Suite Name (IANA)
-             * [0x05]           RC4-SHA                     RSA             RC4             128         TLS_RSA_WITH_RC4_128_SHA
-             * [0x18]           ADH-RC4-MD5                 DH              RC4             128         TLS_DH_anon_WITH_RC4_128_MD5
-             * [0x1e]                                       FORTEZZA        FORTEZZA_RC4    128         SSL_FORTEZZA_KEA_WITH_RC4_128_SHA
-             * [0x20]           KRB5-RC4-SHA                KRB5            RC4             128         TLS_KRB5_WITH_RC4_128_SHA
-             * [0x24]           KRB5-RC4-MD5                KRB5            RC4             128         TLS_KRB5_WITH_RC4_128_MD5
-             * [0x66]           DHE-DSS-RC4-SHA             DH              RC4             128         TLS_DHE_DSS_WITH_RC4_128_SHA
-             * [0x8a]           PSK-RC4-SHA                 PSK             RC4             128         TLS_PSK_WITH_RC4_128_SHA
-             * [0x8e]                                       PSK/DHE         RC4             128         TLS_DHE_PSK_WITH_RC4_128_SHA
-             * [0x92]                                       PSK/RSA         RC4             128         TLS_RSA_PSK_WITH_RC4_128_SHA
-             * [0xc002]         ECDH-ECDSA-RC4-SHA          ECDH/ECDSA      RC4             128         TLS_ECDH_ECDSA_WITH_RC4_128_SHA
-             * [0xc007]         ECDHE-ECDSA-RC4-SHA         ECDH            RC4             128         TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
-             * [0xc00c]         ECDH-RSA-RC4-SHA            ECDH/RSA        RC4             128         TLS_ECDH_RSA_WITH_RC4_128_SHA
-             * [0xc011]         ECDHE-RSA-RC4-SHA           ECDH            RC4             128         TLS_ECDHE_RSA_WITH_RC4_128_SHA
-             * [0xc016]         AECDH-RC4-SHA               ECDH            RC4             128         TLS_ECDH_anon_WITH_RC4_128_SHA
-             * [0xc033]         ECDHE-PSK-RC4-SHA           PSK/ECDHE       RC4             128         TLS_ECDHE_PSK_WITH_RC4_128_SHA
-             * [0x010080]       RC4-MD5                     RSA             RC4             128         SSL_CK_RC4_128_WITH_MD5
-             */            
-
             Crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
             break;
         }
@@ -655,7 +613,9 @@ void pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std:
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
+            return 1;
     }
+    return 0;
 }
 
 
@@ -710,7 +670,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_derive.html
      */
     
-    // current max key material size for AES_256_CBC_SHA384: 2*48 + 2*32 + 2*16 Byte
+    // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
     size_t KEY_MATERIAL_SIZE = 192;
     size_t const LABEL_SIZE = 13;
     char const LABEL[14] = "key expansion";
@@ -1261,7 +1221,9 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
         std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
         std::shared_ptr<PlainTextElement> output = std::make_shared<PlainTextElement>();
 
-        decryptData(element, output);
+        if(decryptData(element, output))
+            // decryption failed
+            output->setPlaintextBlock(element->getCipherBlock());
         
         output->setVirtualFileOffset(element->getVirtualFileOffset());
         output->isClientBlock = element->isClientBlock;

@@ -55,7 +55,7 @@ namespace pcapfs {
         //ssl decrypt functions
         static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion);
 
-        void decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+        int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
         static Bytes searchCorrectMasterSecret(const Bytes &clientRandom, const Index &idx);
 

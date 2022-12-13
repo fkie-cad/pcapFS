@@ -32,9 +32,14 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
                 continue;
             }
             if (splitInput.at(0) == CLIENT_RANDOM_STRING) {
-                keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
-                keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
-                keyPtr->setFiletype("sslkey");
+                try {
+                    keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
+                    keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
+                    keyPtr->setFiletype("sslkey");
+                } catch (std::out_of_range &e) {
+                    LOG_ERROR << "invalid key file format of " << keyFile.string();
+                    continue;
+                }
             }
             resultVector.push_back(keyPtr);
         }
