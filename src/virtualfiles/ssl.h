@@ -87,8 +87,8 @@ namespace pcapfs {
         std::vector<uint64_t> previousBytes;
         std::vector<uint64_t> keyForFragment;
 
-	static bool processTLSHandshake(bool processedSSLHandshake, unsigned int i,
-			bool clientChangeCipherSpec, bool serverChangeCipherSpec,
+	static void processTLSHandshake(bool &processedSSLHandshake, const bool clientMessage,
+			const bool clientChangeCipherSpec, const bool serverChangeCipherSpec,
 			pcpp::SSLHandshakeLayer *handshakeLayer, Bytes &clientRandom,
 			uint64_t &offsetInLogicalFragment, Bytes &serverRandom,
 			std::string &cipherSuite, pcpp::SSLVersion &sslVersion,
@@ -98,7 +98,7 @@ namespace pcapfs {
 	static void resultPtrInit(bool processedSSLHandshake,
 			pcpp::SSLVersion sslVersion,
 			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
-			const std::string &cipherSuite, unsigned int i, const Bytes &clientRandom,
+			const std::string &cipherSuite, const TimePoint timestamp, const Bytes &clientRandom,
 			Index &idx, const Bytes &serverRandom, const bool encryptThenMac);
 };
 }

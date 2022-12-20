@@ -99,33 +99,38 @@ bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
 	return false;
 }
 
-bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
-		unsigned int i, bool clientChangeCipherSpec,
-		bool serverChangeCipherSpec, pcpp::SSLHandshakeLayer *handshakeLayer,
+
+void pcapfs::SslFile::processTLSHandshake(bool &processedSSLHandshake,
+		const bool clientMessage, const bool clientChangeCipherSpec,
+		const bool serverChangeCipherSpec, pcpp::SSLHandshakeLayer *handshakeLayer,
 		Bytes &clientRandom, uint64_t &offsetInLogicalFragment,
 		Bytes &serverRandom, std::string &cipherSuite,
 		pcpp::SSLVersion &sslVersion, pcpp::SSLLayer *sslLayer,
 		uint64_t &clientEncryptedData, uint64_t &serverEncryptedData, bool &encryptThenMac) {
     
+    size_t messageLength = 0;
     uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
+    LOG_DEBUG << "numHandshakeMessages: " << numHandshakeMessages;
     if (numHandshakeMessages > 0){
         // add length of ssl record header
         offsetInLogicalFragment += 5;
     }
 
 	for (uint64_t j = 0; j < numHandshakeMessages; ++j) {
-		pcpp::SSLHandshakeMessage *handshakeMessage =
-				handshakeLayer->getHandshakeMessageAt(j);
-		pcpp::SSLHandshakeType handshakeType =
-				handshakeMessage->getHandshakeType();
+		pcpp::SSLHandshakeMessage *handshakeMessage = handshakeLayer->getHandshakeMessageAt(j);
+        messageLength = handshakeMessage->getMessageLength();
+		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
+
 		if (handshakeType == pcpp::SSL_CLIENT_HELLO) {
 			pcpp::SSLClientHelloMessage *clientHelloMessage =
 					dynamic_cast<pcpp::SSLClientHelloMessage*>(handshakeMessage);
 			memcpy(clientRandom.data(),
 					clientHelloMessage->getClientHelloHeader()->random,
 					CLIENT_RANDOM_SIZE);
-			offsetInLogicalFragment += clientHelloMessage->getMessageLength();
+			//offsetInLogicalFragment += clientHelloMessage->getMessageLength();
+            offsetInLogicalFragment += messageLength;
             LOG_DEBUG << "found client hello message";
+
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
 
             //Segfault in getCipherSuite() possible, encrypted handshake message can be mistakenly classified as Server Hello 
@@ -139,7 +144,8 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
             pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
 
-            offsetInLogicalFragment += serverHelloMessage->getMessageLength();
+            //offsetInLogicalFragment += serverHelloMessage->getMessageLength();
+            offsetInLogicalFragment += messageLength;
             LOG_DEBUG << "found server hello message";
             memcpy(serverRandom.data(),
 					serverHelloMessage->getServerHelloHeader()->random,
@@ -157,109 +163,53 @@ bool pcapfs::SslFile::processTLSHandshake(bool processedSSLHandshake,
 				cipherSuite = "UNKNOWN_CIPHER_SUITE";
 			}
 			processedSSLHandshake = true;
-			LOG_DEBUG
-			<< "handshake completed";
 			/*
 			 * TLS Extension for HMAC truncation activated? Eventually then HMAC is always 10 bytes only.
 			 */
-			LOG_TRACE
-			<< "We have " << serverHelloMessage->getExtensionCount()
-					<< " extensions!";
-			if (serverHelloMessage->getExtensionOfType(
-					pcpp::SSL_EXT_TRUNCATED_HMAC) != NULL) {
-				LOG_INFO
-				<< "Truncated HMAC extension was enabled!";
+			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
+			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != NULL) {
+				LOG_INFO << "Truncated HMAC extension was enabled!";
 				throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
 			}
-			if (serverHelloMessage->getExtensionOfType(
-					pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
-				LOG_INFO
-				<< "Encrypt-Then-Mac Extension IS ENABLED!";
+			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
+				LOG_INFO << "Encrypt-Then-Mac Extension IS ENABLED!";
                 encryptThenMac = true;
 			} else {
-				LOG_INFO
-				<< "Encrypt-Then-Mac Extension IS NOT ENABLED";
+				LOG_INFO << "Encrypt-Then-Mac Extension IS NOT ENABLED";
 			}
-		} else if (handshakeType == pcpp::SSL_CERTIFICATE) {
-			pcpp::SSLCertificateMessage *certificateMessage =
-					dynamic_cast<pcpp::SSLCertificateMessage*>(handshakeMessage);
-			offsetInLogicalFragment += certificateMessage->getMessageLength();
-			//TODO: sslcert as a virtual file
-			LOG_DEBUG
-			<< "found certificiate!";
-		} else if (handshakeType == pcpp::SSL_SERVER_DONE) {
-			pcpp::SSLServerHelloDoneMessage *serverHelloDoneMessage =
-					dynamic_cast<pcpp::SSLServerHelloDoneMessage*>(handshakeMessage);
-			offsetInLogicalFragment +=
-					serverHelloDoneMessage->getMessageLength();
-			LOG_DEBUG
-			<< "found server hello done!";
-		} else if (handshakeType == pcpp::SSL_CLIENT_KEY_EXCHANGE) {
-			pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage =
-					dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
-			offsetInLogicalFragment +=
-					clientKeyExchangeMessage->getMessageLength();
-			LOG_DEBUG
-			<< "found client key exchange with length "
-					<< clientKeyExchangeMessage->getClientKeyExchangeParamsLength();
-        } else if (handshakeType == pcpp::SSL_SERVER_KEY_EXCHANGE) {
-			pcpp::SSLServerKeyExchangeMessage *serverKeyExchangeMessage =
-					dynamic_cast<pcpp::SSLServerKeyExchangeMessage*>(handshakeMessage);
-			offsetInLogicalFragment +=
-					serverKeyExchangeMessage->getMessageLength();
-			LOG_DEBUG
-			<< "found server key exchange with length "
-					<< serverKeyExchangeMessage->getServerKeyExchangeParamsLength();
-        } else if (handshakeType == pcpp::SSL_NEW_SESSION_TICKET) {
-			pcpp::SSLNewSessionTicketMessage *newSessionTicketMessage =
-					dynamic_cast<pcpp::SSLNewSessionTicketMessage*>(handshakeMessage);
-			offsetInLogicalFragment +=
-					newSessionTicketMessage->getMessageLength();
-			LOG_DEBUG
-			<< "found new session ticket message with length "
-					<< newSessionTicketMessage->getSessionTicketDataLength();
-		} else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN) {
+
+		} else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN ||
+                    (handshakeType == 0 && (clientChangeCipherSpec || serverChangeCipherSpec))) {
 			//certificate status or encrypted handshake message
-			pcpp::SSLUnknownMessage *unknownMessage =
-					dynamic_cast<pcpp::SSLUnknownMessage*>(handshakeMessage);
 
-            /* getMessageLength() might give us the wrong length for an encrypted handshake message
-             * leading zero bytes in encrypted handshake messages are skipped by this function
-             * not complete workaround:
-             * when the encrypted handshake message is encapsulated in only one ssl record 
-             * we can take the sslLayer length (minus the 5 bytes we added previously)
-             * the check numHandshakeMessages == 1 for that is unfortunately not reliable because 
-             * the message might get parsed wrongly by pcpp
-             * TODO: consider the case that certificates status or encrypted handshake message is part of multiple handshake messages 
-             * contained in one ssl record (this is only a problem when an application data record is immediately
-             * after that)
-             */
-            offsetInLogicalFragment += sslLayer->getHeaderLen() - 5;
-            //LOG_DEBUG << "Header Len: " << sslLayer->getHeaderLen();
-            //LOG_DEBUG << numHandshakeMessages;
+            // when the encrypted handshake message start with leading zeros, it may get interpreted as
+            // multiple handshake messages of type 0 (Hello Request). Since we only want the correct offset,
+            // we aquiesce in that and just add the message length. In the end, this still results in the correct offset.
 
-            // when we are part of multiple handshake messages:
-            //offsetInLogicalFragment += unknownMessage->getMessageLength();
+            offsetInLogicalFragment += messageLength;
 
-			LOG_DEBUG
-			<< "certificate status or encrypted handshake message";
-			if (isClientMessage(i) && clientChangeCipherSpec) {
-				clientEncryptedData += unknownMessage->getMessageLength();
+			if (clientMessage && clientChangeCipherSpec) {
+                clientEncryptedData += messageLength;
 				LOG_DEBUG
-				<< "client encrypted " << std::to_string(clientEncryptedData);
+				<< "encrypted handshake message, client encrypted " << std::to_string(clientEncryptedData);
 			} else if (serverChangeCipherSpec) {
-				serverEncryptedData += unknownMessage->getMessageLength();
+                serverEncryptedData += messageLength;
 				LOG_DEBUG
-				<< "server encrypted " << std::to_string(serverEncryptedData);
+				<< "encrypted handshake message, server encrypted " << std::to_string(serverEncryptedData);
 			}
-		}
+
+		} else {
+            offsetInLogicalFragment += messageLength;
+            LOG_DEBUG << "handshake message type: " << handshakeMessage->getHandshakeType();
+            LOG_DEBUG << "handshake message length: " << messageLength;
+        }
 	}
-	return processedSSLHandshake;
 }
+
 
 void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 		pcpp::SSLVersion sslVersion, const std::shared_ptr<SslFile> &resultPtr,
-		const FilePtr &filePtr, const std::string &cipherSuite, unsigned int i,
+		const FilePtr &filePtr, const std::string &cipherSuite, const TimePoint timestamp,
 		const Bytes &clientRandom, Index &idx, const Bytes &serverRandom, const bool encryptThenMac) {
 	//search for master secret in candidates
 	
@@ -290,7 +240,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
 	resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
 	resultPtr->setProperty("protocol", "ssl");
-	resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+	resultPtr->setTimestamp(timestamp);
     
 	if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
 		resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
@@ -357,9 +307,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
             if (recType == pcpp::SSL_HANDSHAKE) {
                 pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
 
-				processedSSLHandshake = processTLSHandshake(
-						processedSSLHandshake, i, clientChangeCipherSpec,
-						serverChangeCipherSpec, handshakeLayer, clientRandom,
+				processTLSHandshake(processedSSLHandshake, isClientMessage(i), clientChangeCipherSpec,
+                        serverChangeCipherSpec, handshakeLayer, clientRandom,
 						offsetInLogicalFragment, serverRandom, cipherSuite,
 						sslVersion, sslLayer, clientEncryptedData,
 						serverEncryptedData, encryptThenMac);
@@ -407,7 +356,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                     //search for master secret in candidates
 					resultPtrInit(processedSSLHandshake,
-							sslVersion, resultPtr, filePtr, cipherSuite, i,
+							sslVersion, resultPtr, filePtr, cipherSuite, filePtr->connectionBreaks.at(i).second,
 							clientRandom, idx, serverRandom, encryptThenMac);
                     
                     //TODO
@@ -467,7 +416,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 
                 resultPtr->fragments.push_back(fragment);
                 
-                LOG_DEBUG << "found server app data";
+                LOG_DEBUG << "found app data";
                 if (isClientMessage(i) && clientChangeCipherSpec) {
                     resultPtr->previousBytes.push_back(clientEncryptedData);
                     clientEncryptedData += encryptedDataLen;
@@ -670,24 +619,23 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_derive.html
      */
     
-    // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
-    size_t KEY_MATERIAL_SIZE = 192;
-    size_t const LABEL_SIZE = 13;
-    char const LABEL[14] = "key expansion";
-    size_t const seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
-    Bytes seed(seedSize);
-    memcpy(&seed[0], LABEL, LABEL_SIZE);
-    memcpy(&seed[LABEL_SIZE], serverRandom.data(), SERVER_RANDOM_SIZE);
-    memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom.data(), CLIENT_RANDOM_SIZE);
-    
     Bytes keyMaterial(0);
-    EVP_PKEY_CTX *pctx;
 
     if((sslVersion == pcpp::SSLVersion::TLS1_0) || (sslVersion == pcpp::SSLVersion::TLS1_1) ||
         (sslVersion == pcpp::SSLVersion::TLS1_2)) {
+
+        // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
+        size_t KEY_MATERIAL_SIZE = 192;
+        size_t const LABEL_SIZE = 13;
+        char const LABEL[14] = "key expansion";
+        size_t const seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
+        Bytes seed(seedSize);
+        memcpy(&seed[0], LABEL, LABEL_SIZE);
+        memcpy(&seed[LABEL_SIZE], serverRandom.data(), SERVER_RANDOM_SIZE);
+        memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], clientRandom.data(), CLIENT_RANDOM_SIZE);
         
         unsigned char error = 0;
-        pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
+        EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
         if(!pctx) {
             LOG_ERROR << "Openssl: Failed to allocate public key algorithm context" << std::endl;
             error = 1;
@@ -721,11 +669,13 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
         	LOG_ERROR << "Openssl: Failed to derive the shared secret" << std::endl;
             error = 1;
         }
-        ERR_print_errors_fp(stderr);   
-        EVP_PKEY_CTX_free(pctx);
 
-        if(error)
+        if(error) {
+            ERR_print_errors_fp(stderr);  
             keyMaterial.clear();
+        }
+
+        EVP_PKEY_CTX_free(pctx);
 
     } else {
         pcpp::SSLVersion version(sslVersion);
