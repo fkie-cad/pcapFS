@@ -216,7 +216,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
     if (processedSSLHandshake) {
 		Bytes masterSecret = searchCorrectMasterSecret(clientRandom, idx);
 		if (!masterSecret.empty()) {
-			Bytes keyMaterial = createKeyMaterial(masterSecret, clientRandom, serverRandom, sslVersion.asUInt());
+			Bytes keyMaterial = createKeyMaterial(masterSecret, clientRandom, serverRandom, sslVersion.asUInt(), cipherSuite);
             if(!keyMaterial.empty()) {
 			    //TODO: not good to add sslkey file directly into index!!!
 			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
@@ -533,7 +533,8 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
          * keys = PRF(master_secret, "key expansion", server_random + client_random, 40)
          * 
          * and the PRF might even differ (SHA256 vs SHA384):
-         * https://tools.ietf.org/html/rfc5246#section-5
+         * 
+         * https://www.rfc-editor.org/rfc/rfc5246#section-6.2.3
          */
         
         case pcpp::SSL_SYM_RC4_128:
@@ -554,11 +555,17 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
             break;
         }
         
-        /*case pcpp::SSL_SYM_AES_128_GCM:
+        case pcpp::SSL_SYM_AES_128_GCM:
         {
-            Crypto::decrypt_AES_128_GCM(input, output);
+            Crypto::decrypt_AES_GCM(input, output, 16);
             break;
-        }*/
+        }
+
+        case pcpp::SSL_SYM_AES_256_GCM:
+        {
+            Crypto::decrypt_AES_GCM(input, output, 32);
+            break;
+        }
         
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
@@ -569,7 +576,8 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
 
 
 
-pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion) {
+pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom,
+                                                const uint16_t sslVersion, const std::string &cipherSuite) {
     //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
      * 
@@ -623,6 +631,9 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
 
     if((sslVersion == pcpp::SSLVersion::TLS1_0) || (sslVersion == pcpp::SSLVersion::TLS1_1) ||
         (sslVersion == pcpp::SSLVersion::TLS1_2)) {
+        
+        pcpp::SSLCipherSuite *usedCipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+        bool useSha384 = (usedCipherSuite->getSymKeyAlg() == pcpp::SSL_SYM_AES_256_GCM && usedCipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
 
         // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
         size_t KEY_MATERIAL_SIZE = 192;
@@ -645,14 +656,21 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
             error = 1;
         }
 
-        if(sslVersion == pcpp::SSLVersion::TLS1_2) {
-            if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
-                LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
+        if(useSha384) {
+             if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha384()) <= 0) {
+                    LOG_ERROR << "Openssl: Failed to set the master secret" << std::endl;
+                    error = 1;
+                }
+        } else {
+            if(sslVersion == pcpp::SSLVersion::TLS1_2) {
+                if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
+                    LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
+                    error = 1;
+                }
+            } else if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0) {
+                LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.0 or 1.1" << std::endl;
                 error = 1;
             }
-        } else if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0) {
-            LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.0 or 1.1" << std::endl;
-            error = 1;
         }
 
         if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0) {
@@ -678,8 +696,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
         EVP_PKEY_CTX_free(pctx);
 
     } else {
-        pcpp::SSLVersion version(sslVersion);
-        LOG_ERROR << "TLS/SSL version not supported, we detected the ssl version code: " << version.toString() << std::endl;
+        LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
     }
 
     return keyMaterial;

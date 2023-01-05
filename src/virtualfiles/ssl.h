@@ -53,7 +53,8 @@ namespace pcapfs {
     	static bool isTLSTraffic(const FilePtr &filePtr);
 
         //ssl decrypt functions
-        static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom, uint16_t sslVersion);
+        static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom,
+                                    const uint16_t sslVersion, const std::string &cipherSuite);
 
         int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
