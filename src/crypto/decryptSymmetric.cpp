@@ -9,17 +9,9 @@
 int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 
 	/*
-	 * From https://tools.ietf.org/html/rfc5246#appendix-A.5
-	 *
-	 * 	MAC       Algorithm    mac_length  mac_key_length
-		--------  -----------  ----------  --------------
-		NULL      N/A              0             0
-		MD5       HMAC-MD5        16            16
-		SHA       HMAC-SHA1       20            20
-		SHA256    HMAC-SHA256     32            32
-
-		Following problems might occur: HMAC truncation.
-		See
+	 * https://tools.ietf.org/html/rfc5246#appendix-A.5   
+     *
+	 * Following problem might occur: HMAC truncation.
 	 */
 
 	switch(macAlg) {
@@ -31,7 +23,7 @@ int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 		case pcpp::SSL_HASH_SHA256: return 32;
 		case pcpp::SSL_HASH_SHA384: return 48;
 
-		default: throw "Unsupported Authentication type";
+		default: return -1;
 	}
 }
 
@@ -44,6 +36,11 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     char* key_material = (char*) input->getKeyMaterial().data();
 
     const int mac_len = getMacSize(macAlg);
+    if(mac_len == -1) {
+        LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
+        output->setPlaintextBlock(input->getCipherBlock());
+        return;
+    }
     const int key_len = 16;
     unsigned char rc4_key[key_len];
 
@@ -88,8 +85,12 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     char* key_material = (char*) input->getKeyMaterial().data();
 
     const int mac_len = getMacSize(macAlg);
+    if(mac_len == -1) {
+        LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
+        output->setPlaintextBlock(input->getCipherBlock());
+        return;
+    }
     const int iv_len = 16;
-
     Bytes aes_key(key_len);
     unsigned char iv[iv_len];
 
@@ -151,7 +152,7 @@ void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, s
     }
 
     // 96 bit gcm iv (nonce): salt (4 byte client/server_write_IV) + explicit nonce (first 8 Byte of encrypted data)
-    unsigned char iv[16] = {0};
+    unsigned char iv[16];
     memcpy(iv, salt, 4);
     memcpy(iv+4, ciphertext, 8);
 
