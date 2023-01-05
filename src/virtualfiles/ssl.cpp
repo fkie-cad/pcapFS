@@ -215,7 +215,7 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	
     if (processedSSLHandshake) {
 		Bytes masterSecret = searchCorrectMasterSecret(clientRandom, idx);
-		if (!masterSecret.empty()) {
+		if (!masterSecret.empty() && isSupportedCipherSuite(cipherSuite)) {
 			Bytes keyMaterial = createKeyMaterial(masterSecret, clientRandom, serverRandom, sslVersion.asUInt(), cipherSuite);
             if(!keyMaterial.empty()) {
 			    //TODO: not good to add sslkey file directly into index!!!
@@ -245,6 +245,18 @@ void pcapfs::SslFile::resultPtrInit(bool processedSSLHandshake,
 	if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
 		resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
 	}
+}
+
+
+bool pcapfs::SslFile::isSupportedCipherSuite(const std::string &cipherSuite) {
+    pcpp::SSLCipherSuite *usedCipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+
+    if(usedCipherSuite == NULL ||
+        supportedCipherSuiteIds.find(usedCipherSuite->getID()) == supportedCipherSuiteIds.end()) {
+        LOG_ERROR << "unsupported cipher suite for decryption: " << cipherSuite;
+        return false;
+    }
+    return true;
 }
 
 
@@ -512,17 +524,6 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
 
 int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
-
-    if(cipherSuite == NULL){
-        LOG_ERROR << "decryption failed: unsupported cipher suite " << getCipherSuite();
-        return 1;
-    }
-
-    // TODO: make those checks earlier
-    if(cipherSuite->getKeyExchangeAlg() != pcpp::SSLKeyExchangeAlgorithm::SSL_KEYX_RSA) {
-        LOG_ERROR << "decryption failed: only RSA key exchange is supported";
-        return 1;
-    }
 
     switch (cipherSuite->getSymKeyAlg()) {
         

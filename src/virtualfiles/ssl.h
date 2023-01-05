@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
 #include <unordered_map>
 
 #include <boost/archive/text_iarchive.hpp>
@@ -27,6 +28,9 @@ namespace pcapfs {
     size_t const CLIENT_RANDOM_SIZE = 32;
     size_t const SERVER_RANDOM_SIZE = 32;
 
+    const std::set<uint16_t> supportedCipherSuiteIds = {
+        0x04, 0x05, 0x2F, 0x35, 0x3C, 0x3D, 0x9C, 0x9D }; 
+
     class SslFile : public VirtualFile {
     public:
 
@@ -43,8 +47,7 @@ namespace pcapfs {
         
         void decryptCiphertextVecToPlaintextVec(
             std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
-            std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
-        );
+            std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
         
         size_t calculateProcessedSize(const Index& idx);
 
@@ -55,6 +58,8 @@ namespace pcapfs {
         //ssl decrypt functions
         static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom,
                                     const uint16_t sslVersion, const std::string &cipherSuite);
+        
+        static bool isSupportedCipherSuite(const std::string &cipherSuite);
 
         int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
@@ -101,7 +106,7 @@ namespace pcapfs {
 			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
 			const std::string &cipherSuite, const TimePoint timestamp, const Bytes &clientRandom,
 			Index &idx, const Bytes &serverRandom, const bool encryptThenMac);
-};
+    };
 }
 
 #endif //PCAPFS_VIRTUAL_FILES_SSL_H
