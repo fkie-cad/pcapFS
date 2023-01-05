@@ -1,17 +1,14 @@
 #ifndef PCAPFS_VIRTUAL_FILES_SSL_H
 #define PCAPFS_VIRTUAL_FILES_SSL_H
 
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <set>
-#include <unordered_map>
 
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/shared_ptr.hpp>
 #include <pcapplusplus/SSLLayer.h>
 
 #include "../file.h"
@@ -19,9 +16,6 @@
 #include "virtualfile.h"
 #include "../crypto/cipherTextElement.h"
 #include "../crypto/plainTextElement.h"
-#include "../crypto/decryptSymmetric.h"
-
-
 
 namespace pcapfs {
 

@@ -1,28 +1,9 @@
 #ifndef DECRYPT_SYMMETRIC_H
 #define DECRYPT_SYMMETRIC_H
 
-#include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/serialization/vector.hpp>
-#include <pcapplusplus/SSLLayer.h>
-
-#include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/rc4.h>
-#include <openssl/aes.h>
-#include <openssl/ossl_typ.h>
-
-#include "../commontypes.h"
-#include "../virtualfiles/ssl.h"
-#include "../filefactory.h"
-#include "../logging.h"
+#include <pcapplusplus/SSLLayer.h>
+#include "cipherTextElement.h"
 #include "plainTextElement.h"
 
 namespace pcapfs {
@@ -44,7 +25,8 @@ namespace pcapfs {
                                 std::shared_ptr<PlainTextElement> output,
                                 const int key_len);
 
-            int opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData);
+            int opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key,
+                                const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData);
             
     }
 

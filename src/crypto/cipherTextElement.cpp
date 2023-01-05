@@ -1,8 +1,5 @@
 #include "cipherTextElement.h"
-#include <iostream>
-#include <cstdio>
 #include "../logging.h"
-
 #include <openssl/err.h>
 
 

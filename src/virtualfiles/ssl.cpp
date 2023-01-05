@@ -3,38 +3,18 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
-#include <openssl/rc4.h>
-#include <openssl/aes.h>
-#include <openssl/ossl_typ.h>
 
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
 
-#include <boost/shared_ptr.hpp>
-
 #include <assert.h>
-#include <unordered_set>
 
 #include "../filefactory.h"
 #include "../logging.h"
-
-#include "../crypto/cipherTextElement.h"
-#include "../crypto/plainTextElement.h"
 #include "../crypto/decryptSymmetric.h"
 
 
-
 std::string pcapfs::SslFile::toString() {
-	/*
-	 *  std::string cipherSuite;
-        uint16_t sslVersion;
-        static bool registeredAtFactory;
-        uint64_t keyIDinIndex;
-        std::vector<uint64_t> previousBytes;
-        std::vector<uint64_t> keyForFragment;
-	 *
-	 */
-
 	std::string ret;
 	ret.append("SslFile object content:\n");
 
@@ -325,8 +305,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 						sslVersion, sslLayer, clientEncryptedData,
 						serverEncryptedData, encryptThenMac);
 
-                // assert(offsetInLogicalFragment == size)
-
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
                 if (isClientMessage(i)) {
                     LOG_DEBUG << "client starting encryption now!";
@@ -335,13 +313,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     LOG_DEBUG << "server starting encryption now!";
                     serverChangeCipherSpec = true;
                 }
-
-                //pcpp::SSLChangeCipherSpecLayer *changeCipherSpecLayer =
-                //        dynamic_cast<pcpp::SSLChangeCipherSpecLayer*>(sslLayer);
-                //offsetInLogicalFragment += (changeCipherSpecLayer->getDataLen() +
-                //                            changeCipherSpecLayer->getHeaderLen());
-                //LOG_DEBUG << "getDataLen():" << changeCipherSpecLayer->getDataLen();
-                //LOG_DEBUG << "getHeaderLen():" << changeCipherSpecLayer->getHeaderLen();
 
                 // length of change cipher spec is always 1, add ssl record layer header length
                 offsetInLogicalFragment += 6;
@@ -511,32 +482,10 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRand
  */
 
 
-
-
-//TODO: not abstract enough to handle all ciphers?
-//TODO: check if the key material is accessible for all ciphers and protocols.
-/*
- * AES GCM mode has 40 byte key material - we will see if it still works.
- * 
- */
-
-
-
 int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     switch (cipherSuite->getSymKeyAlg()) {
-        
-        /*
-         * TODO: maybe redesign since some ciphers need different call to PRF:
-         * 
-         * AES GCM:
-         * keys = PRF(master_secret, "key expansion", server_random + client_random, 40)
-         * 
-         * and the PRF might even differ (SHA256 vs SHA384):
-         * 
-         * https://www.rfc-editor.org/rfc/rfc5246#section-6.2.3
-         */
         
         case pcpp::SSL_SYM_RC4_128:
         {
@@ -579,15 +528,7 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
 
 pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom,
                                                 const uint16_t sslVersion, const std::string &cipherSuite) {
-    //TODO: for some cipher suites this is done by using hmac and sha256 (need to specify these!)
     /*
-     * 
-     * Problems will occur:
-     * Different Hashes: SSLv3/TLS (most versions) differ, SSLv2 obviously too.
-     * They do not use always SHA256! This will be a problem at some point
-     * TLSv1.2 is the only one which uses this procedure *always* as far as I know.
-     * 
-     * 
      * SSLv3:
      * 
      * It is a bit longer, see this one:
@@ -599,11 +540,7 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
      *                                      P_SHA-1(S2, label + seed);
      * 
-     * TLS 1.2 :
-     *      "The MD5/SHA-1 combination in the pseudorandom function (PRF) has
-     *      been replaced with cipher-suite-specified PRFs.  All cipher suites
-     *      in this document use P_SHA256.""
-     * 
+     * TLS 1.2: 
      *       PRF(secret, label, seed) = P_SHA256(secret, label + seed)
      * 
      * 
@@ -614,18 +551,12 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
      *                 SecurityParameters.client_random);
      * 
      * KEY MATERIAL (TLS 1.0/1.1/1.2):
-     * 
      *          client_write_MAC_secret[SecurityParameters.hash_size]
      *          server_write_MAC_secret[SecurityParameters.hash_size]
      *          client_write_key[SecurityParameters.key_material_length]
      *          server_write_key[SecurityParameters.key_material_length]
      *          client_write_IV[SecurityParameters.IV_size]
      *          server_write_IV[SecurityParameters.IV_size]
-     * 
-     * The concrete openssl doc for this section:
-     * 
-     * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_CTX_set_tls1_prf_md.html
-     * https://www.openssl.org/docs/man1.1.1/man3/EVP_PKEY_derive.html
      */
     
     Bytes keyMaterial(0);
@@ -784,10 +715,6 @@ pcapfs::Bytes pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, cons
  * ### Cache the decrypted streams to prevent the decryption of the complete stream in requests which loop through
  *     all fields of a stream, refer inside a single stream or many recurring requests to a certain pool of
  *     TLS application data streams.
- * 
- * 
- * 
- * 
  */
 
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
@@ -857,6 +784,7 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
     }
 }
 
+
 size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     size_t position = 0;
     size_t posInFragment = 0;
@@ -883,12 +811,8 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
         
         LOG_DEBUG << "[BUFFER HIT] buffer is this:" << std::endl;
         std::string s(buffer.begin(), buffer.end());
-        // LOG_ERROR << s;
-        //_Exit(0);
-        
+
         assert(buffer.size() == filesizeProcessed);
-        
-        // BIO_dump_fp (stdout, (const char *) buffer.data(), buffer.size());
         
         memcpy(buf, (const char*) buffer.data() + startOffset, length);
         
@@ -1028,10 +952,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 }
 
 
-
-
-
-
 /*
  * This is the new function for the calculation of the plaintext:
  * Better: return a vector of std::pair of ciphertext length and
@@ -1064,7 +984,6 @@ size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
     LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
     return offset;
 }
-
 
 
 /*
@@ -1116,8 +1035,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
 
                 std::shared_ptr<CipherTextElement> cte = std::make_shared<CipherTextElement>();
                 cte->setVirtualFileOffset(previousBytes[fragment]);
-                cte->setCipherSuite(this->cipherSuite);
-                cte->setSslVersion(this->sslVersion);
                 cte->setCipherBlock(toDecrypt);
                 cte->setLength(toRead);
                 cte->setKeyMaterial(keyPtr->getKeyMaterial());
@@ -1164,8 +1081,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
         })()
     );
     
-    
-    
     // Filesize Raw is used, because we read the ciphertext aka the raw file.
     return filesizeRaw;
 }
@@ -1184,20 +1099,14 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
 	) {
 
-
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
         std::shared_ptr<PlainTextElement> output = std::make_shared<PlainTextElement>();
 
-        if(decryptData(element, output))
+        if(decryptData(element, output)) {
             // decryption failed
             output->setPlaintextBlock(element->getCipherBlock());
-        
-        output->setVirtualFileOffset(element->getVirtualFileOffset());
-        output->isClientBlock = element->isClientBlock;
-        output->setCipherSuite(element->getCipherSuite());
-        output->setSslVersion(element->getSslVersion());
-        
+        }
         outputPlainTextVector.push_back(output);
     }
 }

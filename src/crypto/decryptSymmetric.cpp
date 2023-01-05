@@ -1,24 +1,9 @@
 #include "decryptSymmetric.h"
-
-#include <fstream>
-#include <iostream>
 #include <string>
 #include <vector>
-#include <unordered_map>
-
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/serialization/vector.hpp>
-#include <pcapplusplus/SSLLayer.h>
-
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/rc4.h>
-#include <openssl/aes.h>
-#include <openssl/ossl_typ.h>
-
-#include "../commontypes.h"
+#include "../logging.h"
 
 
 int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
@@ -67,7 +52,6 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     } else {
         memcpy(rc4_key, key_material + 2*mac_len+key_len, key_len);
     }
-    
 	LOG_DEBUG << "entering decrypt_RC4_128" << std::endl;
 
     Bytes decryptedData(virtual_file_offset + length);
