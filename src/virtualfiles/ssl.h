@@ -24,6 +24,22 @@ namespace pcapfs {
 
     const std::set<uint16_t> supportedCipherSuiteIds = {
         0x04, 0x05, 0x2F, 0x35, 0x3C, 0x3D, 0x9C, 0x9D }; 
+    
+    struct TLSHandshakeData {
+        TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE) {}
+        bool processedTLSHandshake = false;
+        bool clientChangeCipherSpec = false;
+        bool serverChangeCipherSpec = false;
+        bool encryptThenMac = false;
+        uint64_t clientEncryptedData = 0;
+		uint64_t serverEncryptedData = 0;
+        uint16_t sslVersion = pcpp::SSLVersion::SSL2;
+        unsigned int iteration = 0;
+
+        Bytes clientRandom;
+        Bytes serverRandom;
+        std::string cipherSuite = ""; 
+    };
 
     class SslFile : public VirtualFile {
     public:
@@ -45,13 +61,16 @@ namespace pcapfs {
         
         size_t calculateProcessedSize(const Index& idx);
 
+        static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offsetInLogicalFragment);
+
+        static void initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
+                            const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx);   
+
         static bool isClientMessage(uint64_t i);
 
     	static bool isTLSTraffic(const FilePtr &filePtr);
 
-        //ssl decrypt functions
-        static Bytes createKeyMaterial(const Bytes &masterSecret, const Bytes &clientRandom, const Bytes &serverRandom,
-                                    const uint16_t sslVersion, const std::string &cipherSuite);
+        static Bytes const createKeyMaterial(const Bytes &masterSecret, const std::shared_ptr<TLSHandshakeData> &handshakeData);
         
         static bool isSupportedCipherSuite(const std::string &cipherSuite);
 
@@ -85,21 +104,7 @@ namespace pcapfs {
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;
-        std::vector<uint64_t> keyForFragment;
-
-	static void processTLSHandshake(bool &processedSSLHandshake, const bool clientMessage,
-			const bool clientChangeCipherSpec, const bool serverChangeCipherSpec,
-			pcpp::SSLHandshakeLayer *handshakeLayer, Bytes &clientRandom,
-			uint64_t &offsetInLogicalFragment, Bytes &serverRandom,
-			std::string &cipherSuite, pcpp::SSLVersion &sslVersion,
-			pcpp::SSLLayer *sslLayer, uint64_t &clientEncryptedData,
-			uint64_t &serverEncryptedData, bool &encryptThenMac);
-
-	static void resultPtrInit(bool processedSSLHandshake,
-			pcpp::SSLVersion sslVersion,
-			const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
-			const std::string &cipherSuite, const TimePoint timestamp, const Bytes &clientRandom,
-			Index &idx, const Bytes &serverRandom, const bool encryptThenMac);
+        std::vector<uint64_t> keyForFragment;    
     };
 }
 
