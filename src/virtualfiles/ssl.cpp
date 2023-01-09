@@ -141,8 +141,9 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 			 */
 			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != NULL) {
-				LOG_INFO << "Truncated HMAC extension was enabled!";
-				throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
+				LOG_INFO << "Truncated HMAC extension is enabled!";
+				//throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
+                handshakeData->truncatedHmac = true;
 			}
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
 				LOG_INFO << "Encrypt-Then-Mac Extension IS ENABLED!";
@@ -202,6 +203,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 	resultPtr->setFiletype("ssl");
 	resultPtr->setCipherSuite(handshakeData->cipherSuite);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
+    resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
 	resultPtr->setSslVersion(handshakeData->sslVersion);
 	resultPtr->setFilename("SSL");
 	resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
@@ -1004,6 +1006,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 cte->setKeyMaterial(keyPtr->getKeyMaterial());
                 cte->isClientBlock = isClientMessage(keyForFragment.at(fragment));
                 cte->encryptThenMacEnabled = this->encryptThenMacEnabled;
+                cte->truncatedHmacEnabled = this->truncatedHmacEnabled;
                 outputCipherTextVector.push_back(cte);
             } else {
                 LOG_INFO << "NO KEYS FOUND FOR " << counter;

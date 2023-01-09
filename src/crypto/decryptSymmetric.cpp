@@ -35,7 +35,7 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
     char* ciphertext = (char*) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    const int mac_len = getMacSize(macAlg);
+    const int mac_len = input->truncatedHmacEnabled ? 10 : getMacSize(macAlg);
     if(mac_len == -1) {
         LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
         output->setPlaintextBlock(input->getCipherBlock());
@@ -84,7 +84,7 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     char* ciphertext = (char *) input->getCipherBlock().data();
     char* key_material = (char*) input->getKeyMaterial().data();
 
-    const int mac_len = getMacSize(macAlg);
+    const int mac_len = input->truncatedHmacEnabled ? 10 : getMacSize(macAlg);
     if(mac_len == -1) {
         LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
         output->setPlaintextBlock(input->getCipherBlock());

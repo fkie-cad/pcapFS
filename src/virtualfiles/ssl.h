@@ -31,6 +31,7 @@ namespace pcapfs {
         bool clientChangeCipherSpec = false;
         bool serverChangeCipherSpec = false;
         bool encryptThenMac = false;
+        bool truncatedHmac = false;
         uint64_t clientEncryptedData = 0;
 		uint64_t serverEncryptedData = 0;
         uint16_t sslVersion = pcpp::SSLVersion::SSL2;
@@ -97,6 +98,7 @@ namespace pcapfs {
         void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
 
         bool encryptThenMacEnabled;
+        bool truncatedHmacEnabled;
 
     private:
         std::string cipherSuite;
