@@ -23,7 +23,7 @@ namespace pcapfs {
     size_t const SERVER_RANDOM_SIZE = 32;
 
     const std::set<uint16_t> supportedCipherSuiteIds = {
-        0x04, 0x05, 0x2F, 0x35, 0x3C, 0x3D, 0x9C, 0x9D }; 
+        0x0004, 0x0005, 0x002F, 0x0035, 0x003C, 0x003D, 0x009C, 0x009D, 0x0033, 0xc02f }; 
     
     struct TLSHandshakeData {
         TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE) {}

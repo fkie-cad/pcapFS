@@ -1096,6 +1096,8 @@ void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
     VirtualFile::serialize(archive);
     archive << cipherSuite;
     archive << sslVersion;
+    archive << (encryptThenMacEnabled ? 1 : 0);
+    archive << (truncatedHmacEnabled ? 1 : 0);
     archive << keyIDinIndex;
     archive << previousBytes;
     archive << keyForFragment;
@@ -1103,9 +1105,14 @@ void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
 
 
 void pcapfs::SslFile::deserialize(boost::archive::text_iarchive &archive) {
+    int i, j = 0;
     VirtualFile::deserialize(archive);
     archive >> cipherSuite;
     archive >> sslVersion;
+    archive >> i;
+    encryptThenMacEnabled = i ? true : false;
+    archive >> j;
+    truncatedHmacEnabled = j ? true : false;
     archive >> keyIDinIndex;
     archive >> previousBytes;
     archive >> keyForFragment;
