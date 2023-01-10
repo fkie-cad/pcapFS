@@ -531,7 +531,7 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret
         (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
         
         pcpp::SSLCipherSuite *usedCipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(handshakeData->cipherSuite);
-        bool useSha384 = (usedCipherSuite->getSymKeyAlg() == pcpp::SSL_SYM_AES_256_GCM && usedCipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
+        bool useSha384 = (usedCipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
 
         // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
         size_t KEY_MATERIAL_SIZE = 192;
