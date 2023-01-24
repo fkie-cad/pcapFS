@@ -3,6 +3,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
+#include <openssl/sha.h>
 
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
@@ -81,8 +82,9 @@ bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
 
 
 void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offsetInLogicalFragment){
-    
+
     size_t messageLength = 0;
+    size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
     pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
     uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
     LOG_DEBUG << "numHandshakeMessages: " << numHandshakeMessages;
@@ -93,6 +95,8 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 
 	for (uint64_t j = 0; j < numHandshakeMessages; ++j) {
 		pcpp::SSLHandshakeMessage *handshakeMessage = handshakeLayer->getHandshakeMessageAt(j);
+        if (handshakeMessage == NULL)
+            break;
         messageLength = handshakeMessage->getMessageLength();
 		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
 
@@ -104,6 +108,14 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
                     CLIENT_RANDOM_SIZE);
             offsetInLogicalFragment += messageLength;
             LOG_DEBUG << "found client hello message";
+            if(numHandshakeMessages == 1) {
+                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                                                            sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+            } else {
+                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                                                            sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                currentHandshakeOffset += handshakeMessage->getMessageLength();
+            }
 
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
 
@@ -124,35 +136,68 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 					serverHelloMessage->getServerHelloHeader()->random,
 					SERVER_RANDOM_SIZE);
 			
-            //LOG_DEBUG << "chosen cipher suite: "
-			//		<< serverHelloMessage->getCipherSuite()->asString();
-			if (serverHelloMessage->getCipherSuite()) {
-				/*
-				 * Those values are used for the decryption in decryptData() function
-				 */
-				handshakeData->cipherSuite = serverHelloMessage->getCipherSuite()->asString();
-				handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
-			} else {
-				handshakeData->cipherSuite = "UNKNOWN_CIPHER_SUITE";
-			}
+            if(serverHelloMessage->getCipherSuite())
+                handshakeData->cipherSuite = serverHelloMessage->getCipherSuite();
+			handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
+
             handshakeData->processedTLSHandshake = true;
 			/*
 			 * TLS Extension for HMAC truncation activated? Eventually then HMAC is always 10 bytes only.
 			 */
 			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != NULL) {
-				LOG_INFO << "Truncated HMAC extension is enabled!";
-				//throw "unsupported extension SSL_EXT_TRUNCATED_HMAC was detected!";
+				LOG_INFO << "Truncated HMAC extension is enabled";
                 handshakeData->truncatedHmac = true;
 			}
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != NULL) {
-				LOG_INFO << "Encrypt-Then-Mac Extension IS ENABLED!";
+				LOG_INFO << "Encrypt-Then-Mac Extension is enabled";
                 handshakeData->encryptThenMac = true;
 			} else {
-				LOG_INFO << "Encrypt-Then-Mac Extension IS NOT ENABLED";
+				LOG_INFO << "Encrypt-Then-Mac Extension is not enabled";
 			}
+            if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_EXTENDED_MASTER_SECRET) != NULL) {
+                // TODO: this extension is often not noticed! sometimes, pcpp doesnot determine the correct amount of extensions
+                // https://github.com/seladb/PcapPlusPlus/issues/1039
+                // this will be patched in the new version soon
+                LOG_INFO << "Extended Master Secret Extension is enabled";
+                handshakeData->extendedMasterSecret = true;
+            } else {
+                LOG_INFO << "Extended Master Secret Extension is not enabled";
+            }
+            if (serverHelloMessage->getCipherSuite()->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
+                if(numHandshakeMessages == 1) {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                } else {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+                }
+            }
 
-		} else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN ||
+		} else if (handshakeType == pcpp::SSL_CLIENT_KEY_EXCHANGE) {
+            LOG_DEBUG << "found client key exchange message";
+            offsetInLogicalFragment += messageLength;
+
+            if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
+                pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
+                if (clientKeyExchangeMessage->getClientKeyExchangeParams() != NULL)
+                    memcpy(handshakeData->rsaIdentifier.data(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2, 8);
+                if(handshakeData->extendedMasterSecret) {
+                    if(numHandshakeMessages == 1) {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                                                                    sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                    } else {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                    }
+                    handshakeData->sessionHash = calculateSessionHash(handshakeData);
+                    if(handshakeData->sessionHash.empty())
+                        LOG_ERROR << "Failed to calculate session hash. Look above why";
+                }
+            }
+        
+        } else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN ||
                     (handshakeType == 0 && (handshakeData->clientChangeCipherSpec || handshakeData->serverChangeCipherSpec))) {
 			//certificate status or encrypted handshake message
 
@@ -171,8 +216,28 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 				LOG_DEBUG
 				<< "encrypted handshake message, server encrypted " << std::to_string(handshakeData->serverEncryptedData);
 			}
-
+            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
+                if(numHandshakeMessages == 1) {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                } else {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+                }
+            }
+            
 		} else {
+            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
+                if(numHandshakeMessages == 1) {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                } else {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+                }
+            }
             offsetInLogicalFragment += messageLength;
             LOG_DEBUG << "handshake message type: " << handshakeMessage->getHandshakeType();
             LOG_DEBUG << "handshake message length: " << messageLength;
@@ -181,12 +246,66 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 }
 
 
+pcapfs::Bytes const pcapfs::SslFile::calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData) {
+
+    Bytes digest(0);
+
+    if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
+        (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
+            
+        bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
+
+        EVP_MD_CTX *mdctx;
+        unsigned int digest_len = 0;
+        unsigned char error = 0;
+	    if((mdctx = EVP_MD_CTX_new()) == NULL)
+	    	error = 1;
+
+        if(useSha384){
+            digest.resize(48);
+            digest_len = 48;
+	        if(EVP_DigestInit_ex(mdctx, EVP_sha384(), NULL) != 1)
+	    	    error = 1;
+        } else {
+            if(handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2){
+                digest.resize(32);
+                digest_len = 32;
+                if(EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1)
+	    	        error = 1;
+            } else {
+                digest.resize(36);
+                digest_len = 36;
+                if(EVP_DigestInit_ex(mdctx, EVP_md5_sha1(), NULL) != 1)
+                    error = 1;
+            }
+        }
+
+	    if(EVP_DigestUpdate(mdctx, handshakeData->handshakeMessagesRaw.data(), handshakeData->handshakeMessagesRaw.size()) != 1)
+	    	error = 1;
+
+	    if(EVP_DigestFinal_ex(mdctx, digest.data(), &digest_len) != 1)
+	    	error = 1;
+        
+        if(error) {
+            ERR_print_errors_fp(stderr);
+            digest.clear();
+        }
+
+	    EVP_MD_CTX_free(mdctx);
+    } else {
+        LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
+    }
+
+    return digest;
+}
+
+
 void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx){
 	//search for master secret in candidates
     if (handshakeData->processedTLSHandshake) {
-		Bytes masterSecret = searchCorrectMasterSecret(handshakeData->clientRandom, idx);
+		Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
-			Bytes keyMaterial = createKeyMaterial(masterSecret, handshakeData);
+			Bytes keyMaterial = createKeyMaterial(masterSecret, handshakeData, false);
             if(!keyMaterial.empty()) {
 			    //TODO: not good to add sslkey file directly into index!!!
 			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
@@ -198,10 +317,9 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
                 LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
 		}
 	}
-	
 	resultPtr->setOffsetType(filePtr->getFiletype());
 	resultPtr->setFiletype("ssl");
-	resultPtr->setCipherSuite(handshakeData->cipherSuite);
+	resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
 	resultPtr->setSslVersion(handshakeData->sslVersion);
@@ -219,12 +337,10 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 }
 
 
-bool pcapfs::SslFile::isSupportedCipherSuite(const std::string &cipherSuite) {
-    pcpp::SSLCipherSuite *usedCipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
-
-    if(usedCipherSuite == NULL ||
-        supportedCipherSuiteIds.find(usedCipherSuite->getID()) == supportedCipherSuiteIds.end()) {
-        LOG_ERROR << "unsupported cipher suite for decryption: " << cipherSuite;
+bool pcapfs::SslFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite) {
+    if(cipherSuite == NULL ||
+        supportedCipherSuiteIds.find(cipherSuite->getID()) == supportedCipherSuiteIds.end()) {
+        LOG_ERROR << "unsupported cipher suite for decryption: " << cipherSuite->asString();
         return false;
     }
     return true;
@@ -417,21 +533,23 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 }
 
 //Returns the correct Master Secret out of a bunch of candidates
-pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const Bytes &clientRandom, const Index &idx) {
+pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
 
+    bool isRsaKeyX = (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA);
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
 
     for (auto &keyFile: keyFiles) {
         std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
 
-        if(sslKeyFile->getClientRandom() == clientRandom){
+        if(sslKeyFile->getClientRandom() == handshakeData->clientRandom){
             return sslKeyFile->getMasterSecret();
+        } else if(isRsaKeyX && sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
+            return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
         }
     }
 
     return Bytes();
 }
-
 
 
 /*
@@ -493,7 +611,9 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
 }
 
 
-pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret, const std::shared_ptr<TLSHandshakeData> &handshakeData) {
+pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const std::shared_ptr<TLSHandshakeData> &handshakeData, bool deriveMasterSecret) {
+
+    //function to derive the master secret from premaster secret and derive key material from master secret
     /*
      * SSLv3:
      * 
@@ -524,24 +644,42 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret
      *          client_write_IV[SecurityParameters.IV_size]
      *          server_write_IV[SecurityParameters.IV_size]
      */
-    
-    Bytes keyMaterial(0);
+
+
+    Bytes output(0);
 
     if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
         (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
         
-        pcpp::SSLCipherSuite *usedCipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(handshakeData->cipherSuite);
-        bool useSha384 = (usedCipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
+        bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
 
-        // current max key material size for AES256 with SHA384: 2*48 + 2*32 + 2*16 Byte
-        size_t KEY_MATERIAL_SIZE = 192;
-        size_t const LABEL_SIZE = 13;
-        char const LABEL[14] = "key expansion";
-        size_t const seedSize = LABEL_SIZE + SERVER_RANDOM_SIZE + CLIENT_RANDOM_SIZE;
-        Bytes seed(seedSize);
-        memcpy(&seed[0], LABEL, LABEL_SIZE);
-        memcpy(&seed[LABEL_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
-        memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
+        size_t LABEL_SIZE = 13;
+        size_t SEED_SIZE = LABEL_SIZE + CLIENT_RANDOM_SIZE + SERVER_RANDOM_SIZE;
+        Bytes seed(SEED_SIZE);
+
+        size_t OUTPUT_SIZE;
+        if(deriveMasterSecret){
+            OUTPUT_SIZE = 48;
+            if(handshakeData->extendedMasterSecret) {
+                if (handshakeData->sessionHash.empty()) {
+                    return output;
+                }
+                LABEL_SIZE = 22;
+                SEED_SIZE = LABEL_SIZE + handshakeData->sessionHash.size();
+                seed.resize(SEED_SIZE);
+                memcpy(&seed[0], "extended master secret", LABEL_SIZE);
+                memcpy(&seed[LABEL_SIZE], handshakeData->sessionHash.data(), handshakeData->sessionHash.size());
+            } else {
+                memcpy(&seed[0], "master secret", LABEL_SIZE);
+                memcpy(&seed[LABEL_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
+                memcpy(&seed[LABEL_SIZE + CLIENT_RANDOM_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
+            }
+        } else {
+            OUTPUT_SIZE = 192;
+            memcpy(&seed[0], "key expansion", LABEL_SIZE);
+            memcpy(&seed[LABEL_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
+            memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
+        }
         
         unsigned char error = 0;
         EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, NULL);
@@ -571,33 +709,31 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &masterSecret
             }
         }
 
-        if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, masterSecret.data(), 48) <= 0) {
+        if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, input.data(), 48) <= 0) {
         	LOG_ERROR << "Openssl: PRF key derivation failed" << std::endl;
             error = 1;
         }
-        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), seedSize) <= 0) {
+        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), SEED_SIZE) <= 0) {
         	LOG_ERROR << "Openssl: Failed to set the seed" << std::endl;
             error = 1;
         }
 
-        keyMaterial.resize(KEY_MATERIAL_SIZE);
-        if (EVP_PKEY_derive(pctx, keyMaterial.data(), &KEY_MATERIAL_SIZE) <= 0) {
+        output.resize(OUTPUT_SIZE);
+        if (EVP_PKEY_derive(pctx, output.data(), &OUTPUT_SIZE) <= 0) {
         	LOG_ERROR << "Openssl: Failed to derive the shared secret" << std::endl;
             error = 1;
         }
 
         if(error) {
             ERR_print_errors_fp(stderr);  
-            keyMaterial.clear();
+            output.clear();
         }
-
-        EVP_PKEY_CTX_free(pctx);
 
     } else {
         LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
     }
 
-    return keyMaterial;
+    return output;
 }
 
 

@@ -13,6 +13,7 @@
 
 namespace {
     const char *CLIENT_RANDOM_STRING = "CLIENT_RANDOM";
+    const char *RSA_STRING = "RSA";
 }
 
 
@@ -35,6 +36,15 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
                 try {
                     keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
                     keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
+                    keyPtr->setFiletype("sslkey");
+                } catch (std::out_of_range &e) {
+                    LOG_ERROR << "invalid key file format of " << keyFile.string();
+                    continue;
+                }
+            } else if (splitInput.at(0) == RSA_STRING) {
+                try {
+                    keyPtr->rsaIdentifier = utils::hexStringToBytes(splitInput.at(1));
+                    keyPtr->preMasterSecret = utils::hexStringToBytes(splitInput.at(2));
                     keyPtr->setFiletype("sslkey");
                 } catch (std::out_of_range &e) {
                     LOG_ERROR << "invalid key file format of " << keyFile.string();

@@ -57,12 +57,15 @@ namespace pcapfs {
         }; 
     
     struct TLSHandshakeData {
-        TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE) {}
+        TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8), handshakeMessagesRaw(0), sessionHash(0) {}
         bool processedTLSHandshake = false;
         bool clientChangeCipherSpec = false;
         bool serverChangeCipherSpec = false;
         bool encryptThenMac = false;
         bool truncatedHmac = false;
+        // TODO: this has to be set to false, after pcapplusplus fix
+        // right now, adjust manually according to pcap file
+        bool extendedMasterSecret = true;
         uint64_t clientEncryptedData = 0;
 		uint64_t serverEncryptedData = 0;
         uint16_t sslVersion = pcpp::SSLVersion::SSL2;
@@ -70,7 +73,10 @@ namespace pcapfs {
 
         Bytes clientRandom;
         Bytes serverRandom;
-        std::string cipherSuite = ""; 
+        Bytes rsaIdentifier;
+        Bytes handshakeMessagesRaw;
+        Bytes sessionHash;
+        pcpp::SSLCipherSuite* cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByID(0);
     };
 
     class SslFile : public VirtualFile {
@@ -95,6 +101,8 @@ namespace pcapfs {
 
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offsetInLogicalFragment);
 
+        static Bytes const calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData);
+
         static void initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
                             const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx);   
 
@@ -102,13 +110,13 @@ namespace pcapfs {
 
     	static bool isTLSTraffic(const FilePtr &filePtr);
 
-        static Bytes const createKeyMaterial(const Bytes &masterSecret, const std::shared_ptr<TLSHandshakeData> &handshakeData);
+        static Bytes const createKeyMaterial(const Bytes &input, const std::shared_ptr<TLSHandshakeData> &handshakeData, bool deriveMasterSecret);
         
-        static bool isSupportedCipherSuite(const std::string &cipherSuite);
+        static bool isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite);
 
         int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
-        static Bytes searchCorrectMasterSecret(const Bytes &clientRandom, const Index &idx);
+        static Bytes searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
 
         void serialize(boost::archive::text_oarchive &archive) override;
 
