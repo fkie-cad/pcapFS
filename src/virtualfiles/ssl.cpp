@@ -4,6 +4,8 @@
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/sha.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
 
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
@@ -181,8 +183,12 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 
             if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
                 pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
-                if (clientKeyExchangeMessage->getClientKeyExchangeParams() != NULL)
+                if (clientKeyExchangeMessage->getClientKeyExchangeParams() != NULL) {
                     memcpy(handshakeData->rsaIdentifier.data(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2, 8);
+                
+                    handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
+                                                                clientKeyExchangeMessage->getClientKeyExchangeParams()+clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
+                }
                 if(handshakeData->extendedMasterSecret) {
                     if(numHandshakeMessages == 1) {
                         handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
@@ -543,12 +549,58 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<T
 
         if(sslKeyFile->getClientRandom() == handshakeData->clientRandom){
             return sslKeyFile->getMasterSecret();
-        } else if(isRsaKeyX && sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
-            return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
+        } else if(isRsaKeyX) {
+            if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
+                return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
+            } else if (!sslKeyFile->getRsaPrivateKey().empty()) {
+                return createKeyMaterial(decryptPreMasterSecret(handshakeData->encryptedPremasterSecret, sslKeyFile->getRsaPrivateKey()),
+                                        handshakeData, true);
+            }
         }
     }
 
     return Bytes();
+}
+
+
+pcapfs::Bytes pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey) {
+
+    Bytes result(0);
+
+    if(encryptedPremasterSecret.empty() || rsaPrivateKey.empty())
+        return result;
+
+    BIO* bio = BIO_new(BIO_s_mem());
+    BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
+    if(bio == NULL) {
+        LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
+        BIO_free(bio);
+        return result;
+    }
+    
+    RSA* rsa = PEM_read_bio_RSAPrivateKey(bio, NULL, NULL, NULL);
+    if(rsa == NULL) {
+        LOG_ERROR << "Openssl: Failed to read in rsa private key";
+        BIO_free(bio);
+        return result;
+    }
+
+    BIO_free(bio);
+
+    result.resize(RSA_size(rsa));
+    std::vector<int> possible_padding = {RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_NO_PADDING};
+    for(size_t i = 0; i < possible_padding.size(); ++i) {
+        if(RSA_private_decrypt(encryptedPremasterSecret.size(), encryptedPremasterSecret.data(),
+                                result.data(), rsa, possible_padding[i]) != -1) {
+            break;
+
+        } else if(i == possible_padding.size() - 1) {
+            LOG_ERROR << "Openssl: Failed to decrypt encrypted premaster secret";
+            result.clear();
+        }
+    }
+
+    return result;
 }
 
 
@@ -647,6 +699,9 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
 
 
     Bytes output(0);
+
+    if(input.empty())
+        return output;
 
     if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
         (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {

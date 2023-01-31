@@ -39,6 +39,8 @@ namespace pcapfs {
         
         Bytes getKeyMaterial() { return keyMaterial; };
 
+        Bytes getRsaPrivateKey() {return rsaPrivateKey; };
+
         size_t read(uint64_t, size_t, const Index &, char *) override { return 0; };
 
         bool showFile() override { return false; };
@@ -55,6 +57,7 @@ namespace pcapfs {
         Bytes rsaIdentifier;
         Bytes preMasterSecret;
         Bytes keyMaterial;
+        Bytes rsaPrivateKey;
 
     };
 

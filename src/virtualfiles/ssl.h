@@ -57,7 +57,8 @@ namespace pcapfs {
         }; 
     
     struct TLSHandshakeData {
-        TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8), handshakeMessagesRaw(0), sessionHash(0) {}
+        TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),
+                             handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0) {}
         bool processedTLSHandshake = false;
         bool clientChangeCipherSpec = false;
         bool serverChangeCipherSpec = false;
@@ -76,6 +77,7 @@ namespace pcapfs {
         Bytes rsaIdentifier;
         Bytes handshakeMessagesRaw;
         Bytes sessionHash;
+        Bytes encryptedPremasterSecret;
         pcpp::SSLCipherSuite* cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByID(0);
     };
 
@@ -117,6 +119,8 @@ namespace pcapfs {
         int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
 
         static Bytes searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
+
+        static Bytes decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey);
 
         void serialize(boost::archive::text_oarchive &archive) override;
 
