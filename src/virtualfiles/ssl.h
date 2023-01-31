@@ -64,9 +64,7 @@ namespace pcapfs {
         bool serverChangeCipherSpec = false;
         bool encryptThenMac = false;
         bool truncatedHmac = false;
-        // TODO: this has to be set to false, after pcapplusplus fix
-        // right now, adjust manually according to pcap file
-        bool extendedMasterSecret = true;
+        bool extendedMasterSecret = false;
         uint64_t clientEncryptedData = 0;
 		uint64_t serverEncryptedData = 0;
         uint16_t sslVersion = pcpp::SSLVersion::SSL2;

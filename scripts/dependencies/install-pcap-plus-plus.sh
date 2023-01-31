@@ -7,7 +7,8 @@ source "${HERE}/install-helpers.sh"
 
 URL='https://github.com/seladb/PcapPlusPlus.git'
 #COMMIT='14a418ed4f9b72a832877dc8330e01259f617bf3'
-COMMIT='b55cd7dc29b8c41712752552095b883ed21f64a8'
+#COMMIT='b55cd7dc29b8c41712752552095b883ed21f64a8'
+COMMIT='137fc51905f6598e6c796bf9ff7b622c1f51fd93'
 
 pkgdir="${LOCAL_REPO_PATH}/PcapPlusPlus"
 clone_or_update_git_repo "${URL}" "${pkgdir}" "${COMMIT}"
