@@ -58,7 +58,7 @@ namespace pcapfs {
     
     struct TLSHandshakeData {
         TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),
-                             handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0) {}
+                             handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0), certificates(0) {}
         bool processedTLSHandshake = false;
         bool clientChangeCipherSpec = false;
         bool serverChangeCipherSpec = false;
@@ -76,6 +76,7 @@ namespace pcapfs {
         Bytes handshakeMessagesRaw;
         Bytes sessionHash;
         Bytes encryptedPremasterSecret;
+        std::vector<FilePtr> certificates;
         pcpp::SSLCipherSuite* cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByID(0);
     };
 
@@ -90,6 +91,8 @@ namespace pcapfs {
         size_t read_for_plaintext_size(const Index &idx);
         size_t read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        size_t readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        std::string convertToPem(const Bytes& input);
 
         size_t getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
         
@@ -98,8 +101,12 @@ namespace pcapfs {
             std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
         
         size_t calculateProcessedSize(const Index& idx);
+        size_t calculateProcessedCertSize(const Index &idx);
 
-        static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offsetInLogicalFragment);
+        static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offset,
+                                        const FilePtr &fileptr, const Index &idx);
+
+        static std::vector<FilePtr> createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage, const Index &idx);
 
         static Bytes const calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData);
 

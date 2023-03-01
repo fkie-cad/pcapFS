@@ -39,7 +39,7 @@ namespace pcapfs {
         
         Bytes getKeyMaterial() { return keyMaterial; };
 
-        Bytes getRsaPrivateKey() {return rsaPrivateKey; };
+        Bytes getRsaPrivateKey() { return rsaPrivateKey; };
 
         size_t read(uint64_t, size_t, const Index &, char *) override { return 0; };
 
