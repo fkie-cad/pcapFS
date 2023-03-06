@@ -28,7 +28,7 @@ namespace pcapfs {
         0x0018, // TLS_DH_anon_WITH_RC4_128_MD5
         0x002F, // TLS_RSA_WITH_AES_128_CBC_SHA
         0x0033, // TLS_DHE_RSA_WITH_AES_128_CBC_SHA
-        0x0034, // TLS_DH_anon_WITH_AES_128_CBC_SHA 
+        0x0034, // TLS_DH_anon_WITH_AES_128_CBC_SHA
         0x0035, // TLS_RSA_WITH_AES_256_CBC_SHA
         0x0039, // TLS_DHE_RSA_WITH_AES_256_CBC_SHA
         0x003A, // TLS_DH_anon_WITH_AES_256_CBC_SHA
@@ -54,8 +54,8 @@ namespace pcapfs {
         0xC028, // TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
         0xC02F, // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         0xC030  // TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-        }; 
-    
+        };
+
     struct TLSHandshakeData {
         TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),
                              handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0), certificates(0) {}
@@ -95,11 +95,11 @@ namespace pcapfs {
         std::string convertToPem(const Bytes& input);
 
         size_t getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
-        
+
         void decryptCiphertextVecToPlaintextVec(
             std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
             std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
-        
+
         size_t calculateProcessedSize(const Index& idx);
         size_t calculateProcessedCertSize(const Index &idx);
 
@@ -111,14 +111,14 @@ namespace pcapfs {
         static Bytes const calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData);
 
         static void initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
-                            const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx);   
+                            const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx);
 
         static bool isClientMessage(uint64_t i);
 
     	static bool isTLSTraffic(const FilePtr &filePtr);
 
         static Bytes const createKeyMaterial(const Bytes &input, const std::shared_ptr<TLSHandshakeData> &handshakeData, bool deriveMasterSecret);
-        
+
         static bool isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite);
 
         int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
@@ -134,7 +134,7 @@ namespace pcapfs {
         std::string toString();
 
         uint64_t getKeyIDinIndex() { return keyIDinIndex; };
-        
+
         std::string getCipherSuite() { return cipherSuite; };
 
         uint16_t getSslVersion() { return sslVersion; };
@@ -148,13 +148,13 @@ namespace pcapfs {
         bool encryptThenMacEnabled;
         bool truncatedHmacEnabled;
 
-    private:
+    protected:
         std::string cipherSuite;
         uint16_t sslVersion;
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;
-        std::vector<uint64_t> keyForFragment;    
+        std::vector<uint64_t> keyForFragment;
     };
 }
 

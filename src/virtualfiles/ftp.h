@@ -22,7 +22,7 @@ namespace pcapfs {
 
         static std::vector<pcapfs::FileTransmissionData> getTransmissionDataForPort(pcapfs::FilePtr &filePtr);
 
-        static size_t calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, uint64_t &offset);
+        static size_t calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset);
 
         static void parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::FilePtr filePtr, size_t i);
 

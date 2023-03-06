@@ -318,9 +318,8 @@ int pcapfs::options::FuseOptions::argc() const {
 
 char **pcapfs::options::FuseOptions::argv() {
     argvVector.clear();
-    for (auto &s : args) {
-        argvVector.push_back(&s.front());
-    }
+    std::transform(args.begin(), args.end(), std::back_inserter(argvVector),
+                    [](auto &s){ return &s.front(); });
     return argvVector.data();
 }
 

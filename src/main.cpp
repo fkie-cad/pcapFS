@@ -36,15 +36,15 @@ namespace fs = boost::filesystem;
  */
 
 std::pair<std::vector<pcapfs::FilePtr>, std::vector<pcapfs::FilePtr>>
-getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx) {
+getNextVirtualFile(const std::vector<pcapfs::FilePtr> &files, pcapfs::Index &idx) {
     std::vector<pcapfs::FilePtr> filesToProcess;
     std::vector<pcapfs::FilePtr> newFiles;
-    
+
     for (auto &file: files) {
         if (file->flags.test(pcapfs::flags::IS_REAL_FILE)) {
             continue;
         }
-        
+
         file->fillBuffer(idx);
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
@@ -69,7 +69,7 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> files, pcapfs::Index &idx)
         }
         //file->clearBuffer();
     }
-    
+
     return std::make_pair(newFiles, filesToProcess);
 }
 
@@ -83,7 +83,7 @@ int main(int argc, const char *argv[]) {
         pcapfs::options::commandline::printHelp();
         std::cerr << e.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
         std::cerr << "See help message above for usage information." << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
-        
+
         return 1;
     }
 
@@ -92,7 +92,7 @@ int main(int argc, const char *argv[]) {
         if (options.showVersion) { pcapfs::options::commandline::printVersion(); }
         return EXIT_SUCCESS;
     }
-    
+
     try {
         pcapfs::assertValidOptions(options);
     } catch (pcapfs::ArgumentError &e) {
@@ -138,12 +138,16 @@ int main(int argc, const char *argv[]) {
     if (!fs::is_regular_file(config.indexFilePath) ||
         (fs::is_regular_file(config.indexFilePath) && (fs::is_empty(config.indexFilePath) || config.rewrite))) {
         LOG_TRACE << "Creating index";
-
-        index.insertPcaps(pcapFiles);
-        std::vector<pcapfs::FilePtr> tcpFiles = pcapfs::TcpFile::createVirtualFilesFromPcaps(pcapFiles);
-        index.insert(tcpFiles);
-        std::vector<pcapfs::FilePtr> udpFiles = pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(pcapFiles);
-        index.insert(udpFiles);
+        try {
+            index.insertPcaps(pcapFiles);
+            std::vector<pcapfs::FilePtr> tcpFiles = pcapfs::TcpFile::createVirtualFilesFromPcaps(pcapFiles);
+            index.insert(tcpFiles);
+            std::vector<pcapfs::FilePtr> udpFiles = pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(pcapFiles);
+            index.insert(udpFiles);
+        } catch (const pcapfs::PcapFsException &err) {
+            std::cerr << "Error: " << err.what() << std::endl;
+            return 2;
+        }
         std::vector<pcapfs::FilePtr> filesToProcess = index.getFiles();
         std::vector<pcapfs::FilePtr> newFiles;
 
@@ -181,7 +185,7 @@ int main(int argc, const char *argv[]) {
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
             std::cerr << "Error: " << err.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
-            return 2;
+            return 3;
         }
     }
 

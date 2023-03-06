@@ -41,7 +41,7 @@ std::vector<pcapfs::FilePtr> pcapfs::XORKeyFile::parseCandidates(const Paths &ke
 }
 
 
-std::shared_ptr<pcapfs::XORKeyFile> pcapfs::XORKeyFile::createKeyFile(Bytes &key) {
+std::shared_ptr<pcapfs::XORKeyFile> pcapfs::XORKeyFile::createKeyFile(const Bytes &key) {
     std::shared_ptr<XORKeyFile> keyPtr = std::make_shared<XORKeyFile>();
     keyPtr->XORKey = key;
     keyPtr->setFiletype("xorkey");

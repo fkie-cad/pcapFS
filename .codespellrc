@@ -1,0 +1,3 @@
+[codespell]
+skip = *.index,*.pcap,*.key,.git,./3rdparty,./build,./dependencies,./*/venv
+ignore-words-list = ans

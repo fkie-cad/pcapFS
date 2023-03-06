@@ -30,13 +30,13 @@ namespace pcapfs {
         Bytes getServerWriteKey(uint64_t keySize, uint64_t macSize);
 
         Bytes getMasterSecret() { return masterSecret; };
-        
+
         Bytes getPreMasterSecret() { return preMasterSecret; };
 
         Bytes getRsaIdentifier() { return rsaIdentifier; };
 
         Bytes getClientRandom() { return clientRandom; };
-        
+
         Bytes getKeyMaterial() { return keyMaterial; };
 
         Bytes getRsaPrivateKey() { return rsaPrivateKey; };

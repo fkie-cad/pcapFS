@@ -82,11 +82,9 @@ uint64_t pcapfs::Index::getNextID(const std::string &type) {
 
 
 std::vector<pcapfs::FilePtr> pcapfs::Index::getFiles() const {
-    //TODO: Implement iterator for access
     std::vector<pcapfs::FilePtr> result;
-    for (const auto &mapEntry: files) {
-        result.push_back(mapEntry.second);
-    }
+    std::transform(files.cbegin(), files.cend(), std::back_inserter(result),
+                    [](const auto &mapEntry){ return mapEntry.second; });
     return result;
 }
 
@@ -194,7 +192,6 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
     archive >> numberOfFiles;
 
     FilePtr currentPtr;
-    std::vector<FilePtr> pcapFilesFromIndex;
     std::string type;
     std::string indexFilename;
     for (uint64_t i = 0; i < numberOfFiles; ++i) {

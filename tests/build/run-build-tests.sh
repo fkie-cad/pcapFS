@@ -59,18 +59,18 @@ set -- "${PARAMS[@]}"
 function run_build_test() {
     platform="$1"
     log="build-tests-${platform}.log"
-    TEST_COUNT=$((TEST_COUNT+1))    
+    TEST_COUNT=$((TEST_COUNT+1))
     result='fail'
     echo "[$(date +'%F %T') | ${platform} | start]" | tee -a "${log}"
     set +e
-    vagrant up "${platform}" >> "${log}" 2>&1 
-    vagrant ssh "${platform}" -c "/home/vagrant/pcapfs/tests/build/build-pcapfs.sh" >> "${log}" 2>&1 
+    vagrant up "${platform}" >> "${log}" 2>&1
+    vagrant ssh "${platform}" -c "/home/vagrant/pcapfs/tests/build/build-pcapfs.sh" >> "${log}" 2>&1
     err=$?
     if [ ${err} -eq 0 ]; then
         result='success'
     fi
     set -e
-    vagrant destroy -f "${platform}" >> "${log}" 2>&1 
+    vagrant destroy -f "${platform}" >> "${log}" 2>&1
     echo "[$(date +'%F %T') | ${platform} | ${result}]" | tee -a "${log}"
     if [ "${result}" = 'success' ]; then
         rm -f "${log}"

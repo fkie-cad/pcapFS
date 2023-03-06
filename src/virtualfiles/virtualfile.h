@@ -54,4 +54,3 @@ namespace pcapfs {
 }
 
 #endif //#define PCAPFS_VIRTUAL_FILES_VIRTUALFILE_H
-

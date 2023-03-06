@@ -14,7 +14,7 @@ using Catch::Equals;
 template<class T>
 class HasSameElements : public Catch::MatcherBase<T> {
 public:
-    HasSameElements(const T expected) : expected(expected) {
+    explicit HasSameElements(const T expected) : expected(expected) {
         std::sort(this->expected.begin(), this->expected.end());
     }
 

@@ -18,9 +18,9 @@ namespace pcapfs {
 
         ~CaptureFile();
 
-        size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        bool showFile() { return false; };
+        bool showFile() override { return false; };
 
         static std::vector<FilePtr> createFromPaths(pcapfs::Paths pcapPaths);
 

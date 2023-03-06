@@ -21,7 +21,7 @@ size_t pcapfs::CaptureFile::read(uint64_t startOffset, size_t length, const Inde
 
         if (fileHandle.fail()) {
             LOG_ERROR << "File " << filename << " could not be opened";
-            throw;
+            throw PcapFsException("File " + filename + " could not be opened");
         }
     }
 

@@ -57,12 +57,16 @@ pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
                                          const std::vector<pcapfs::FileTransmissionData> &transmission_data) {
     FileTransmissionData d;
     OffsetWithTime owt = filePtr->connectionBreaks.at(0);
-    for (const FileTransmissionData &td : transmission_data) {
-        if (connectionBreaksInTimeSlot(owt.second, td.time_slot)) {
-            d = td;
-            break;
-        }
-    }
+    //for (const FileTransmissionData &td : transmission_data) {
+    //    if (connectionBreaksInTimeSlot(owt.second, td.time_slot)) {
+    //        d = td;
+    //        break;
+    //    }
+    //}
+    auto result = std::find_if(transmission_data.cbegin(), transmission_data.cend(),
+                    [owt](const FileTransmissionData &td){ return connectionBreaksInTimeSlot(owt.second, td.time_slot); });
+    if (result != transmission_data.cend())
+        d = *result;
     return d;
 }
 
@@ -85,7 +89,7 @@ std::string pcapfs::FtpFile::constructFileName(const pcapfs::FileTransmissionDat
 void
 pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::FilePtr filePtr, size_t i) {
     size_t numElements = filePtr->connectionBreaks.size();
-    uint64_t &offset = filePtr->connectionBreaks.at(i).first;
+    const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
     size_t size = calculateSize(filePtr, numElements, i, offset);
     Fragment fragment = parseOffset(filePtr, offset, size);
 
@@ -98,7 +102,7 @@ pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::Fi
 
 
 size_t
-pcapfs::FtpFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, uint64_t &offset) {
+pcapfs::FtpFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset) {
     size_t size;
     if (i == numElements - 1) {
         size = filePtr->getFilesizeRaw() - offset;

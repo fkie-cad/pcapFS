@@ -208,9 +208,8 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
     }
     //TODO: add connection breaks for udp
     // Add all streams that are not closed (still in state.files map) to the result vector
-    for (auto &f : state.files) {
-        result.push_back(std::static_pointer_cast<pcapfs::File>(f.second));
-    }
+    std::transform(state.files.begin(), state.files.end(), std::back_inserter(result),
+                    [](auto &f){ return std::static_pointer_cast<pcapfs::File>(f.second); });
     return result;
 }
 

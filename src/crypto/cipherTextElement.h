@@ -30,7 +30,7 @@ namespace pcapfs {
 		bool isClientBlock;
 		bool encryptThenMacEnabled;
 		bool truncatedHmacEnabled;
-		
+
 	private:
 		size_t length = 0;
 		uint64_t virtualFileOffset = 0;

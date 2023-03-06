@@ -13,4 +13,4 @@ sudo docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt appar
 ```
 
 It is also possible to run another program and then execute all your work inside the docker environment without bind-mounted volumes.
-This is basically just an idea how to build a container that has all dependencies correctly builded for easy use.
+This is basically just an idea how to build a container that has all dependencies correctly built for easy use.

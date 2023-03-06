@@ -9,7 +9,7 @@
 int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 
 	/*
-	 * https://tools.ietf.org/html/rfc5246#appendix-A.5   
+	 * https://tools.ietf.org/html/rfc5246#appendix-A.5
      *
 	 * Following problem might occur: HMAC truncation.
 	 */
@@ -58,11 +58,11 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
         dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length - mac_len);
     else
         dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-    
+
     LOG_TRACE << "decrypting with padding: " << std::to_string(virtual_file_offset) << " and cipher text length: "
               << dataToDecrypt.size();
 
-    if(opensslDecrypt(EVP_rc4(), rc4_key, NULL, dataToDecrypt, decryptedData)) {
+    if(opensslDecrypt(EVP_rc4(), rc4_key, nullptr, dataToDecrypt, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
     } else {
@@ -101,7 +101,7 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
         memcpy(aes_key.data(), key_material+2*mac_len+key_len, key_len);
         memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
     }
-    
+
     Bytes decryptedData;
     Bytes dataToDecrypt(0);
 
@@ -133,13 +133,13 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
 
 
 void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, const int key_len) {
-    
+
     LOG_DEBUG << "entering decrypt_AES_GCM" << std::endl;
 
     size_t length = input->getLength();
     char* ciphertext = (char *) input->getCipherBlock().data();
     char* key_material = (char *) input->getKeyMaterial().data();
-    
+
     Bytes aes_key(key_len);
     unsigned char salt[4];
 
@@ -159,18 +159,18 @@ void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, s
     // expand gcm iv to ctr iv
     const unsigned char addval[4] = {0x00,0x00,0x00,0x02};
     memcpy(iv+12, addval, 4);
-    
+
     // cut off explicit nonce part (first 8 byte of ciphertext)
     ciphertext = ciphertext + 8;
 
-    // substract length of explicit nonce (first 8 byte) and auth tag (last 16 byte)
+    // subtract length of explicit nonce (first 8 byte) and auth tag (last 16 byte)
     length = length - 8 - 16;
-    
+
     Bytes decryptedData(length);
     Bytes dataToDecrypt(0);
-    
+
     dataToDecrypt.insert(dataToDecrypt.end(), ciphertext, ciphertext + length);
-    
+
     if(opensslDecrypt(key_len == 16 ? EVP_aes_128_ctr() : EVP_aes_256_ctr(), aes_key.data(), iv, dataToDecrypt, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
@@ -180,10 +180,10 @@ void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, s
 
 
 int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
-    
+
     int error = 0;
     // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-     
+
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if(!ctx) {
         LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
@@ -191,28 +191,28 @@ int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
     }
 
     // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
-    if(EVP_CipherInit_ex(ctx, cipher, NULL, key, iv, 0) != 1) {
+    if(EVP_CipherInit_ex(ctx, cipher, nullptr, key, iv, 0) != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1" << std::endl;
         error = 1;
     }
-    
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);    
-    if(EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv) != 1) {
+
+    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
+    if(EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1" << std::endl;
         error = 1;
     }
-    
+
     int outlen, tmplen;
     // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
     if(EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
         LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1" << std::endl;
         error = 1;
     }
-    
+
     //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
     if(EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &tmplen) != 1) {
         // weird case: for 1 byte padding, the only padding byte is 0, which causes the padding to be seen as not correctly formatted
-        // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct 
+        // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct
         // (see https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2)
         // => handle this case separately
         if(decryptedData.back() != 0) {
@@ -224,5 +224,5 @@ int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
         ERR_print_errors_fp(stderr);
 
     EVP_CIPHER_CTX_cleanup(ctx);
-    return error; 
+    return error;
  }

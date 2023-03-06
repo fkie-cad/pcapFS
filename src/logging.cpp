@@ -47,4 +47,3 @@ void pcapfs::logging::init(const pcapfs::logging::severity log_level) {
     const auto sink = boost::log::add_console_log(std::clog, boost::log::keywords::format = format); // @suppress("Invalid arguments")
     boost::log::core::get()->set_filter(boost::log::trivial::severity >= get_log_level(log_level));
 }
-

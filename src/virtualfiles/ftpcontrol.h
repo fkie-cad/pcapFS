@@ -54,7 +54,7 @@ namespace pcapfs {
         static void
         parseCredentials(std::shared_ptr<pcapfs::FtpControlFile> result, pcapfs::FilePtr filePtr, size_t i);
 
-        static size_t calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, uint64_t &offset);
+        static size_t calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset);
 
         static bool isLastElement(size_t numElements, size_t i);
 

@@ -102,7 +102,7 @@ void
 pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile> result,
                                                 pcapfs::FilePtr filePtr, size_t i) {
     size_t numElements = filePtr->connectionBreaks.size();
-    uint64_t &offset = filePtr->connectionBreaks.at(i).first;
+    const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
     size_t size = calculateSize(filePtr, numElements, i, offset);
     Fragment fragment = parseOffset(filePtr, offset, size);
 
@@ -149,7 +149,7 @@ uint8_t pcapfs::FtpControlFile::handleResponse(std::shared_ptr<FtpControlFile> &
 
 
 size_t
-pcapfs::FtpControlFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, uint64_t &offset) {
+pcapfs::FtpControlFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset) {
     if (isLastElement(numElements, i)) {
         return filePtr->getFilesizeRaw() - offset;
     } else {
@@ -218,7 +218,7 @@ void pcapfs::FtpControlFile::handleEnteringPassiveMode(const std::string &messag
 
 /**
  * message format: "Entering Passive Mode (127,0,0,1,000,255)".
- * The last two numbers represent the port beeing two signs of a hex value.
+ * The last two numbers represent the port being two signs of a hex value.
  */
 uint16_t pcapfs::FtpControlFile::parsePassivePort(std::string message) {
     size_t last_colon = message.rfind(',');
@@ -361,12 +361,11 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
 size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *buf) {
     size_t i = 0;
     size_t read_count = 0;
-    uint16_t length_of_prefixes = 0;
 
     for (Fragment &fragment : fragments) {
         Bytes rawData = readRawData(idx, fragment);
         uint8_t nr_of_lines = insertDirectionPrefixes(rawData, i);
-        length_of_prefixes = nr_of_lines * DATA_DIRECTION_PREFIX_LN;
+        uint16_t length_of_prefixes = nr_of_lines * DATA_DIRECTION_PREFIX_LN;
 
         memcpy(&buf[read_count], (char *) rawData.data(), fragment.length + length_of_prefixes);
 

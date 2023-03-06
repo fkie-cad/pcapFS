@@ -20,7 +20,7 @@ namespace pcapfs {
 
         void XOR(Bytes &data, char *key, size_t keySize);
 
-    private:
+    protected:
         static bool registeredAtFactory;
         uint64_t keyIdInIndex;
     };

@@ -3,6 +3,7 @@
 #include "file.h"
 
 #include "logging.h"
+#include "exceptions.h"
 
 
 pcapfs::File::File() : filesizeRaw(0), filesizeProcessed(0), idInIndex(0) {}
@@ -35,7 +36,7 @@ void pcapfs::File::fillBuffer(const Index &idx) {
 pcapfs::Bytes pcapfs::File::getBuffer() {
     if (buffer.empty()) {
         LOG_ERROR << "Reading empty buffer of file " << filename;
-        throw;
+        throw PcapFsException("Reading empty buffer of file " + filename);
     } else {
         return buffer;
     }
@@ -58,10 +59,9 @@ uint64_t pcapfs::File::getFilesizeProcessed() {
 
 bool pcapfs::File::meetsDecodeMapCriteria(const std::string &file) {
     for (const auto &entries : config.getDecodeMapFor(file)) {
-        for (const auto &it : entries) {
-            if (this->getProperty(it.first) != it.second) {
-                return false;
-            }
+        if (std::any_of(entries.begin(), entries.end(),
+                        [this](const auto &it){ return this->getProperty(it.first) != it.second; })) {
+            return false;
         }
         return true;
     }
@@ -71,19 +71,19 @@ bool pcapfs::File::meetsDecodeMapCriteria(const std::string &file) {
 std::string pcapfs::File::to_string() {
     std::stringstream ss;
     std::stringstream connectionBreaksOutputStream;
-    
+
     if(!this->connectionBreaks.empty()) {
         connectionBreaksOutputStream << "\n";
-        
+
         for(size_t i=0; i<this->connectionBreaks.size(); i++) {
             connectionBreaksOutputStream << "    ";
             connectionBreaksOutputStream << this->connectionBreaks[i].first << "\n";
         }
-        
+
     } else {
         connectionBreaksOutputStream << "<none>";
     }
-    
+
     ss << "File(\n"
         << "  filetype: " << this->getFiletype() << "\n"
         << "  filename: " << this->getFilename() << "\n"

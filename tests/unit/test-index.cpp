@@ -22,7 +22,7 @@ SCENARIO("test header version checks", "[index]") {
         }
     }
 
-    GIVEN("an index with a newer incompatble version") {
+    GIVEN("an index with a newer incompatible version") {
         indexPath /= "empty-9999.1.index";
         Index index;
         THEN("reading the index should throw an error") {

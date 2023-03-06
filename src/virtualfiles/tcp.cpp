@@ -126,7 +126,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
     }
 
     if (state->currentSide[flowkey] != side) {
-        //curent filesize (without tcp data) equals the offset in tcp stream where break occured
+        //current filesize (without tcp data) equals the offset in tcp stream where break occurred
         state->currentSide[flowkey] = side;
         tcpPointer->connectionBreaks.emplace_back(tcpPointer->getFilesizeRaw() - tcpData.getDataLength(),
                                                   state->currentTimestamp);
@@ -254,10 +254,8 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
     LOG_TRACE << "Final out of order packet buffer size: " << state.outOfOrderPackets.size();
 
     std::vector<pcapfs::FilePtr> result;
-    for (auto &f : state.files) {
-        //f.second->connectionBreaks.push_back(f.second->getFilesizeRaw());
-        result.push_back(std::static_pointer_cast<pcapfs::File>(f.second));
-    }
+    std::transform(state.files.begin(), state.files.end(), std::back_inserter(result),
+                    [](auto &f){ return std::static_pointer_cast<pcapfs::File>(f.second); });
     return result;
 }
 

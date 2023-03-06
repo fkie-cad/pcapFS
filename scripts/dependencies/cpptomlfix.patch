@@ -3,7 +3,7 @@
 @@ -7,6 +7,7 @@
  #ifndef CPPTOML_H
  #define CPPTOML_H
- 
+
 +#include <limits>
  #include <algorithm>
  #include <cassert>

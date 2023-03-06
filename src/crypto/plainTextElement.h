@@ -14,11 +14,11 @@ namespace pcapfs {
 
 		//~PlainTextElement();
 
-		Bytes const &getPlaintextBlock(){ return plaintextBlock; };	
+		Bytes const &getPlaintextBlock(){ return plaintextBlock; };
 		void setPlaintextBlock(const Bytes& newPlaintextBlock) { plaintextBlock = newPlaintextBlock; };
 
 		void printMe(void);
-	
+
 	private:
 		Bytes plaintextBlock;
 	};

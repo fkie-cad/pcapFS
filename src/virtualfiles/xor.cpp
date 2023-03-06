@@ -15,7 +15,7 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
     std::vector<FilePtr> resultVector;
     bool condition = filePtr->meetsDecodeMapCriteria("xor");
     //TODO: segfault if this is appliead to metadata (why?)
-    if (condition & !filePtr->flags.test(pcapfs::flags::IS_METADATA)) {
+    if (condition & (!filePtr->flags.test(pcapfs::flags::IS_METADATA))) {
         std::shared_ptr<XorFile> resultPtr = std::make_shared<XorFile>();
         Fragment fragment{};
         fragment.start = 0;

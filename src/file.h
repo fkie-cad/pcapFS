@@ -86,7 +86,7 @@ namespace pcapfs {
 
         std::string getProperty(const std::string &property);
 
-        static void setConfig(options::PcapFsOptions &config_) { config = config_; };
+        static void setConfig(const options::PcapFsOptions &config_) { config = config_; };
 
         bool meetsDecodeMapCriteria(const std::string &file);
 

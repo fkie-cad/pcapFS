@@ -42,4 +42,3 @@ py.test "${here}/pcapfs-crypto-tests-aes256-cbc-sha.py" -vv
 py.test "${here}/pcapfs-crypto-tests-aes256-cbc-sha256.py" -vv
 py.test "${here}/pcapfs-crypto-tests-aes128-gcm-sha256.py" -vv
 py.test "${here}/pcapfs-crypto-tests-aes256-gcm-sha384.py" -vv
-

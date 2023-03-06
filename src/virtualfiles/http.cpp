@@ -33,7 +33,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
     pcapfs::Configuration options;
     auto config = options.pcapfsOptions;
-    
+
     size_t size = 0;
     headerMap header;
     std::string requestedFilename;
@@ -126,7 +126,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             LOG_TRACE << "size: " << size << " - firstLine: " << firstLine << " - headerLength: " << headerLength;
 
-            if (size - firstLine - headerLength <= 0) {
+            long diff = size - firstLine - headerLength;
+            if (diff <= 0) {
                 continue;
             }
 
@@ -193,7 +194,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
             resultVector.push_back(resultHeaderPtr);
 
-            if (size - firstLine - headerLength <= 0) {
+            long diff = size - firstLine - headerLength;
+            if (diff <= 0) {
                 continue;
             }
 
@@ -249,20 +251,20 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultVector.push_back(resultPtr);
         }  else if(prevWasRequest && config.allowHTTP09 == true) {
-            
-            if (size <= 0) {
+
+            if (size == 0) {
                 continue;
             }
-            
+
             //create http response body
             fragment.start = offset;
             fragment.length = size;
-            
+
             resultPtr->fragments.push_back(fragment);
             resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-            
-            
+
+
             resultPtr->setOffsetType(filePtr->getFiletype());
             resultPtr->setFiletype("http");
             resultPtr->setFilename(requestedFilename);
@@ -277,7 +279,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
                 resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
             }
-            
+
             if (header["transfer-encoding"] == "chunked") {
                 resultPtr->flags.set(pcapfs::flags::CHUNKED);
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
@@ -290,18 +292,18 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::COMPRESSED_DEFLATE);
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
-            
+
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
-            
+
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
-            
+
             //TODO WHY?
             //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
             }
             prevWasRequest = false;
-            
+
             resultVector.push_back(resultPtr);
         }
     }
@@ -606,7 +608,8 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
         return 0;
     }
 
-    size_t read_count = std::min((size_t) infl_size - startOffset, length);
+    //size_t read_count = std::min((size_t) infl_size - startOffset, length);
+    int read_count = std::min(infl_size - startOffset, length);
     if (read_count <= 0) {
         delete[] inflated;
         return 0;
@@ -653,7 +656,7 @@ pcapfs::HttpFile::getRequestMethod(const Bytes &data, uint64_t startOffset, size
 
 
 std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::HttpMethod method) {
-    std::string methodEnumToString[9] = {
+    const std::string methodEnumToString[9] = {
             "GET",
             "HEAD",
             "POST",
@@ -676,8 +679,8 @@ bool pcapfs::HttpFile::usesValidHTTPVersion(const pcapfs::Bytes &data, uint64_t 
     char *dataPtr = (char *) (data.data() + startOffset);
     char *verPos = strstr(dataPtr, "HTTP/");
     bool ret_val;
-    if (verPos == NULL) {
-    	ret_val = 0;
+    if (verPos == nullptr) {
+    	return false;
     }
 
     verPos += 5;
@@ -723,7 +726,7 @@ off_t pcapfs::HttpFile::getRequestVersionOffset(const Bytes &data, uint64_t star
     off_t uriOffset = getRequestUriOffset(data, startOffset, length);
     char *dataPtr = (char *) (data.data() + startOffset + uriOffset);
     char *verPos = strstr(dataPtr, " HTTP/");
-    if (verPos == NULL) {
+    if (verPos == nullptr) {
         return 0;
     }
     return (verPos - dataPtr + uriOffset);
@@ -764,7 +767,7 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
     while (!isEndOfHeader and offsetInHeader < length) {
         char *fieldEndPtr = (char *) memchr(fieldData, '\n', length - offsetInHeader);
 
-        if (fieldEndPtr == NULL) {
+        if (fieldEndPtr == nullptr) {
             LOG_ERROR << "could not find end of http header field!";
             return 0;
         } else
@@ -783,7 +786,7 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
 
         char *fieldValuePtr = (char *) memchr(fieldData, nameValueSeperator, length - offsetInHeader);
         // could not find the position of the separator, meaning field value position is unknown
-        if (fieldValuePtr == NULL) {
+        if (fieldValuePtr == nullptr) {
             LOG_ERROR << "could not find separator in HTTP header field!";
             break;
         } else {
@@ -801,14 +804,10 @@ size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap 
         } else {
             //m_ValueOffsetInMessage = fieldValuePtr - (char*)m_TextBasedProtocolMessage->m_Data;
             // couldn't find the end of the field, so assuming the field value length is from m_ValueOffsetInMessage until the end of the packet
-            if (fieldEndPtr == NULL)
-                fieldValueSize = fieldData - fieldValuePtr + (length - offsetInHeader);
-            else {
-                fieldValueSize = fieldEndPtr - fieldValuePtr;
-                // if field ends with \r\n, decrease the value length by 1
-                if ((*(--fieldEndPtr)) == '\r') {
-                    fieldValueSize--;
-                }
+            fieldValueSize = fieldEndPtr - fieldValuePtr;
+            // if field ends with \r\n, decrease the value length by 1
+            if ((*(--fieldEndPtr)) == '\r') {
+                fieldValueSize--;
             }
         }
 
@@ -867,7 +866,7 @@ pcpp::HttpResponseLayer::HttpResponseStatusCode pcapfs::HttpFile::getResponseSta
 size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t startOffset, size_t length) {
     char *endOfFirstLine;
 
-    if ((endOfFirstLine = (char *) memchr((char *) data.data() + startOffset, '\n', length)) != NULL) {
+    if ((endOfFirstLine = (char *) memchr((char *) data.data() + startOffset, '\n', length)) != nullptr) {
         return (endOfFirstLine - (char *) (data.data() + startOffset) + 1);
     } else {
         return 0;
@@ -877,4 +876,3 @@ size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t start
 
 bool pcapfs::HttpFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("http", pcapfs::HttpFile::create, pcapfs::HttpFile::parse);
-

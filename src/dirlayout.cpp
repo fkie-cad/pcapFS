@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <numeric>
 
 #include <boost/algorithm/string/split.hpp>
 
@@ -31,7 +32,7 @@ namespace pcapfs_filesystem {
     }
 
 
-    pcapfs::FilePtr DirectoryLayout::findFile(std::string path) {
+    pcapfs::FilePtr DirectoryLayout::findFile(const std::string &path) {
         std::vector<std::string> path_v = pathVector(path);
         std::string filename = path_v.back();
         path_v.pop_back();
@@ -73,7 +74,7 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::fillDirTreeSortby(pcapfs::Index &index) {
+    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index) {
         initRoot();
         auto files = index.getFiles();
 
@@ -93,14 +94,12 @@ namespace pcapfs_filesystem {
                     // no side-effect, because last vector element is popped anyway
                     std::vector<std::string> path_v = pathVector(file->getProperty("uri") + "-");
                     if (file->getProperty("uri") != "")
-
                         path_v.pop_back();
                     if (path_v.empty()) {
                         continue;
                     }
-                    for (std::string &dir: path_v) {
-                        current = getOrCreateSubdir(current, dir);
-                    }
+                    current = std::accumulate(path_v.begin(), path_v.end(), current,
+                                                [](DirTreeNode* curr, const std::string &dir ){ return getOrCreateSubdir(curr, dir); });
                 } else {
                     std::string property = file->getProperty(category);
                     LOG_TRACE << category << " and creating dir for " << file->getProperty(category);
@@ -143,7 +142,7 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::initFilesystem(pcapfs::Index &index, std::string sortby) {
+    int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby) {
         dirSortby = pathVector(sortby);
         fillDirTreeSortby(index);
         pcapfs_filesystem::index = index;
@@ -152,13 +151,13 @@ namespace pcapfs_filesystem {
 
 
     std::vector<std::string> DirectoryLayout::pathVector(std::string path) {
-        std::vector<std::string> splitted;
-        boost::split(splitted, path, [](char c) { return c == '/'; });
+        std::vector<std::string> split;
+        boost::split(split, path, [](char c) { return c == '/'; });
         //remove empty strings in vector
-        splitted.erase(remove_if(splitted.begin(), splitted.end(), [&](std::string x) -> bool { return x.empty(); }),
-                       splitted.end());
+        split.erase(remove_if(split.begin(), split.end(), [&](const std::string &x) -> bool { return x.empty(); }),
+                       split.end());
 
-        return splitted;
+        return split;
     }
 
 }

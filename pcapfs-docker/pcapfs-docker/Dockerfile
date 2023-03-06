@@ -1,11 +1,11 @@
 FROM ubuntu:latest
 WORKDIR /code
-ENV DEBIAN_FRONTEND=noninteractive 
+ENV DEBIAN_FRONTEND=noninteractive
 RUN DEBIAN_FRONTEND="noninteractive" TZ="Europe/Brussels" apt-get update && apt-get -y install apt-utils
 RUN DEBIAN_FRONTEND="noninteractive" TZ="Europe/Brussels" apt-get update && apt-get -y install tzdata \
 	gcc \
 	g++ \
-	cmake \ 
+	cmake \
 	bash \
 	git \
 	make \
