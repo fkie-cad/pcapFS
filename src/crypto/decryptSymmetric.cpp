@@ -6,7 +6,7 @@
 #include "../logging.h"
 
 
-int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
+int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm &macAlg) {
 
 	/*
 	 * https://tools.ietf.org/html/rfc5246#appendix-A.5
@@ -28,26 +28,27 @@ int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm macAlg) {
 }
 
 
-void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg) {
+void pcapfs::Crypto::decrypt_RC4_128(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg) {
 
     uint64_t virtual_file_offset = input->getVirtualFileOffset();
-    size_t length = input->getCipherBlock().size();
-    char* ciphertext = (char*) input->getCipherBlock().data();
-    char* key_material = (char*) input->getKeyMaterial().data();
+    Bytes cipherBlock = input->getCipherBlock();
+    size_t length = cipherBlock.size();
+    char* ciphertext = (char*) cipherBlock.data();
+    char* keyMaterial = (char*) input->getKeyMaterial().data();
 
     const int mac_len = input->truncatedHmacEnabled ? 10 : getMacSize(macAlg);
     if(mac_len == -1) {
         LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
-        output->setPlaintextBlock(input->getCipherBlock());
+        output.insert(output.end(), cipherBlock.begin(), cipherBlock.end());
         return;
     }
     const int key_len = 16;
     unsigned char rc4_key[key_len];
 
     if(input->isClientBlock) {
-        memcpy(rc4_key, key_material + 2*mac_len, key_len);
+        memcpy(rc4_key, keyMaterial + 2*mac_len, key_len);
     } else {
-        memcpy(rc4_key, key_material + 2*mac_len+key_len, key_len);
+        memcpy(rc4_key, keyMaterial + 2*mac_len+key_len, key_len);
     }
 	LOG_DEBUG << "entering decrypt_RC4_128" << std::endl;
 
@@ -72,22 +73,22 @@ void pcapfs::Crypto::decrypt_RC4_128(std::shared_ptr<CipherTextElement> input, s
         if(!input->encryptThenMacEnabled)
         decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
     }
-    output->setPlaintextBlock(decryptedData);
+    output.insert(output.end(), decryptedData.begin(), decryptedData.end());
 }
 
 
-void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, pcpp::SSLHashingAlgorithm macAlg, const int key_len) {
+void pcapfs::Crypto::decrypt_AES_CBC(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg, const int key_len) {
 
     LOG_DEBUG << "entering decrypt_AES_CBC" << std::endl;
 
     size_t length = input->getLength();
-    char* ciphertext = (char *) input->getCipherBlock().data();
-    char* key_material = (char*) input->getKeyMaterial().data();
+    char* ciphertext = (char*) input->getCipherBlock().data();
+    char* keyMaterial = (char*) input->getKeyMaterial().data();
 
     const int mac_len = input->truncatedHmacEnabled ? 10 : getMacSize(macAlg);
     if(mac_len == -1) {
         LOG_ERROR << "Failed to decrypt a chunk because of unknown mac length" << std::endl;
-        output->setPlaintextBlock(input->getCipherBlock());
+        output.insert(output.end(), input->getCipherBlock().begin(), input->getCipherBlock().end());
         return;
     }
     const int iv_len = 16;
@@ -95,11 +96,11 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
     unsigned char iv[iv_len];
 
     if(input->isClientBlock) {
-        memcpy(aes_key.data(), key_material+2*mac_len, key_len);
-        memcpy(iv, key_material+2*mac_len+2*key_len, iv_len);
+        memcpy(aes_key.data(), keyMaterial+2*mac_len, key_len);
+        memcpy(iv, keyMaterial+2*mac_len+2*key_len, iv_len);
     } else {
-        memcpy(aes_key.data(), key_material+2*mac_len+key_len, key_len);
-        memcpy(iv, key_material+2*mac_len+2*key_len+iv_len, iv_len);
+        memcpy(aes_key.data(), keyMaterial+2*mac_len+key_len, key_len);
+        memcpy(iv, keyMaterial+2*mac_len+2*key_len+iv_len, iv_len);
     }
 
     Bytes decryptedData;
@@ -128,27 +129,27 @@ void pcapfs::Crypto::decrypt_AES_CBC(std::shared_ptr<CipherTextElement> input, s
         if(!input->encryptThenMacEnabled)
             decryptedData.erase(decryptedData.end() - mac_len, decryptedData.end());
     }
-    output->setPlaintextBlock(decryptedData);
+    output.insert(output.end(), decryptedData.begin(), decryptedData.end());
 }
 
 
-void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output, const int key_len) {
+void pcapfs::Crypto::decrypt_AES_GCM(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const int key_len) {
 
     LOG_DEBUG << "entering decrypt_AES_GCM" << std::endl;
 
     size_t length = input->getLength();
     char* ciphertext = (char *) input->getCipherBlock().data();
-    char* key_material = (char *) input->getKeyMaterial().data();
+    char* keyMaterial = (char *) input->getKeyMaterial().data();
 
     Bytes aes_key(key_len);
     unsigned char salt[4];
 
     if(input->isClientBlock) {
-        memcpy(aes_key.data(), key_material, key_len);
-        memcpy(salt, key_material+2*key_len, 4);
+        memcpy(aes_key.data(), keyMaterial, key_len);
+        memcpy(salt, keyMaterial+2*key_len, 4);
     } else {
-        memcpy(aes_key.data(), key_material+key_len, key_len);
-        memcpy(salt, key_material+2*key_len+4, 4);
+        memcpy(aes_key.data(), keyMaterial+key_len, key_len);
+        memcpy(salt, keyMaterial+2*key_len+4, 4);
     }
 
     // 96 bit gcm iv (nonce): salt (4 byte client/server_write_IV) + explicit nonce (first 8 Byte of encrypted data)
@@ -175,11 +176,11 @@ void pcapfs::Crypto::decrypt_AES_GCM(std::shared_ptr<CipherTextElement> input, s
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         decryptedData.assign(dataToDecrypt.begin(), dataToDecrypt.end());
     }
-    output->setPlaintextBlock(decryptedData);
+    output.insert(output.end(), decryptedData.begin(), decryptedData.end());
 }
 
 
-int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, Bytes& dataToDecrypt, Bytes& decryptedData) {
+int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, const Bytes &dataToDecrypt, Bytes &decryptedData) {
 
     int error = 0;
     // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html

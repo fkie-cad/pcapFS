@@ -70,9 +70,14 @@ std::string pcapfs::SslFile::toString() {
 
 
 size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
+    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector<Bytes> result(0);
 
-	size_t plaintext_size = read_for_plaintext_size(idx);
-	return plaintext_size;
+    getFullCipherText(idx, cipherTextVector);
+    decryptCiphertextVecToPlaintextVec(cipherTextVector, result);
+
+    return std::accumulate(result.begin(), result.end(), 0,
+                            [](size_t counter, Bytes elem){ return counter + elem.size(); });
 }
 
 
@@ -470,7 +475,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         //connection break has wrong size if content is encrypted
         LOG_DEBUG << "connectionBreaks Size: " << size;
 
-
         //Step 4: one logical fragment may contain multiple ssl layer messages
         pcpp::SSLLayer *sslLayer = pcpp::SSLLayer::createSSLMessage((uint8_t *) data.data() + offset, size, nullptr, packet);
         bool connectionBreakOccured = true;
@@ -558,8 +562,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 Fragment fragment;
                 fragment.id = filePtr->getIdInIndex();
                 fragment.start = offset + bytesBeforeEncryptedData;
-
-
                 fragment.length = encryptedDataLen;
 
                 // if size is a mismatch => ssl packet is malformed
@@ -605,6 +607,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 /*
                  * calculated_size contains all plain text in this context, therefore we do not need to add the current filesizeProcessed.
                  */
+                LOG_DEBUG << "filesizeprocessed: " << calculated_size;
                 resultPtr->setFilesizeProcessed(calculated_size);
             }
         }
@@ -704,7 +707,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPrem
  */
 
 
-int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output) {
+int pcapfs::SslFile::decryptData(const std::shared_ptr<CipherTextElement> &input, Bytes &output) {
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     switch (cipherSuite->getSymKeyAlg()) {
@@ -741,9 +744,9 @@ int pcapfs::SslFile::decryptData(std::shared_ptr<CipherTextElement> input, std::
 
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
-            return 1;
+            return 0;
     }
-    return 0;
+    return 1;
 }
 
 
@@ -966,7 +969,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 
         // Here, length is the plaintext length!
 
-        return read_decrypted_content(startOffset, length, idx, buf);
+        return readDecryptedContent(startOffset, length, idx, buf);
 
 	} else {
 
@@ -976,17 +979,16 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
         if(flags.test(pcapfs::flags::IS_METADATA)) {
             return readCertificate(startOffset, length, idx, buf);
         } else {
-            return read_raw(startOffset, length, idx, buf);
+            return readRaw(startOffset, length, idx, buf);
         }
 
 	}
 }
 
 
-std::string pcapfs::SslFile::convertToPem(const Bytes& input) {
+std::string pcapfs::SslFile::convertToPem(const Bytes &input) {
     X509* x509 = nullptr;
     std::string result(input.begin(), input.end());
-
     const unsigned char* c = input.data();
 
     // convert raw DER content to internal X509 structure
@@ -1028,7 +1030,6 @@ std::string pcapfs::SslFile::convertToPem(const Bytes& input) {
 
 
 size_t pcapfs::SslFile::readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-
     Fragment fragment = fragments.at(0);
     Bytes rawData(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
@@ -1040,7 +1041,7 @@ size_t pcapfs::SslFile::readCertificate(uint64_t startOffset, size_t length, con
 }
 
 
-size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+size_t pcapfs::SslFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
 	LOG_TRACE << "read_raw offset size: " << fragments.size();
     size_t position = 0;
@@ -1085,23 +1086,13 @@ size_t pcapfs::SslFile::read_raw(uint64_t startOffset, size_t length, const Inde
 }
 
 
-size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    size_t position = 0;
-    size_t posInFragment = 0;
-    size_t fragment = 0;
+size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
-    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
-    std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
-
-    std::vector<Bytes> result;
-    Bytes write_me_to_file;
     bool buffer_needs_content = std::all_of(buffer.cbegin(), buffer.cend(),
                                             [](const auto &elem) { return elem == 0; });
-
     if(buffer_needs_content == false) {
 
         LOG_DEBUG << "[BUFFER HIT] buffer is this:" << std::endl;
-
         assert(buffer.size() == filesizeProcessed);
 
         memcpy(buf, (const char*) buffer.data() + startOffset, length);
@@ -1117,26 +1108,16 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
             LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
             return filesizeProcessed - startOffset;
         }
-
     }
 
+    size_t position = 0;
+    size_t posInFragment = 0;
+    size_t fragment = 0;
+    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector<Bytes> result(0);
 
     getFullCipherText(idx, cipherTextVector);
-
-    /*for(size_t i=0; i< cipherTextVector.size(); i++) {
-        CipherTextElement *elem = cipherTextVector.at(i).get();
-        elem->printMe();
-    }*/
-
-    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
-
-
-    for(size_t i=0; i<plainTextVector.size(); i++) {
-        PlainTextElement *elem = plainTextVector.at(i).get();
-        //elem->printMe();
-        result.push_back(elem->getPlaintextBlock());
-        write_me_to_file.insert(std::end(write_me_to_file), std::begin(result.at(i)), std::end(result.at(i)) );
-    }
+    decryptCiphertextVecToPlaintextVec(cipherTextVector, result);
 
     while (position < startOffset) {
         position += result[fragment].size();
@@ -1156,18 +1137,8 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
      * We copy at the begin of the position the relevant bytes into the target buffer.
      * The data stream is copied until we reach the length or all data is copied.
      */
-
-
     bool first_iteration = true;
     Bytes bytes_ref;
-
-
-    if(length > write_me_to_file.size()) {
-        LOG_ERROR << "The requested file is larger than the decrypted resource. Diff: " << length - write_me_to_file.size();
-    }
-
-    size_t byte_counter = 0;
-
 
     while(position < startOffset + length && fragment < result.size())  {
         // minimum handles 2 cases here:
@@ -1181,50 +1152,12 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
             bytes_ref = result[fragment];
         }
         memcpy(buf + (position - startOffset), (const char*) bytes_ref.data(), toRead);
-        byte_counter += toRead;
         fragment++;
         posInFragment = 0;
         LOG_DEBUG << "bytes_ref.size(): " << bytes_ref.size() << " " << "toRead: " << toRead;
         position += bytes_ref.size();
     }
 
-    if(length > write_me_to_file.size()) {
-        LOG_ERROR << "The requested file is larger than the decrypted resource. Diff: " << length - write_me_to_file.size() << "byte_counter: " << byte_counter;
-    }
-
-    /*
-	if (write_me_to_file.size() > 0) {
-
-		LOG_ERROR << "offset: " << offset << " startOffset: " << startOffset <<
-				" length: " << length << " result_size: " << write_me_to_file.size();
-
-		memset(buf + startOffset, 0, length);
-
-        //This produces a crash when write_me_to_file is large enough.
-
-         memcpy(buf, (const char*) write_me_to_file.data() + startOffset, length);
-
-		LOG_ERROR << "offset: " << offset << " startOffset: " << startOffset <<
-				" length: " << length << " result_size: " << write_me_to_file.size();
-	} else {
-		LOG_ERROR << "Empty buffer after decryption, probably unwanted behavior.";
-	}
-	*/
-
-
-	/*
-	if (startOffset + length < filesizeRaw) {
-		//read till length is ended
-		LOG_TRACE << "File is not done yet. (filesizeraw: " << filesizeRaw << ")";
-		LOG_TRACE << "Length read: " << length;
-		return length;
-	} else {
-		// read till file end
-		LOG_TRACE << "File is done now. (filesizeraw: " << filesizeRaw << ")";
-		LOG_TRACE << "all processed bytes: " << filesizeRaw - startOffset;
-		return filesizeRaw - startOffset;
-	}
-	*/
 	if (startOffset + length < filesizeProcessed) {
 		//read till length is ended
 		LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
@@ -1236,40 +1169,6 @@ size_t pcapfs::SslFile::read_decrypted_content(uint64_t startOffset, size_t leng
 		LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
 		return filesizeProcessed - startOffset;
 	}
-}
-
-
-/*
- * This is the new function for the calculation of the plaintext:
- * Better: return a vector of std::pair of ciphertext length and
- * the respective plaintext length. Then you need only one decryption.
- */
-size_t pcapfs::SslFile::read_for_plaintext_size(const Index &idx) {
-    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
-    std::vector< std::shared_ptr<PlainTextElement>> plainTextVector(0);
-
-    getFullCipherText(idx, cipherTextVector);
-
-    /*for(size_t i=0; i< cipherTextVector.size(); i++) {
-        CipherTextElement *elem = cipherTextVector.at(i).get();
-        elem->printMe();
-    }*/
-
-    decryptCiphertextVecToPlaintextVec(cipherTextVector, plainTextVector);
-
-    size_t offset = 0;
-    LOG_TRACE << "entering file writer..." << std::endl;
-    std::vector<Bytes> result;
-
-    for(size_t i=0; i<plainTextVector.size(); i++) {
-        PlainTextElement *elem = plainTextVector.at(i).get();
-        //elem->printMe();
-        result.push_back(elem->getPlaintextBlock());
-        offset += elem->getPlaintextBlock().size();
-    }
-
-    LOG_TRACE << "offset size (this is the value we want to use later): " << offset;
-    return offset;
 }
 
 
@@ -1293,9 +1192,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
     size_t position = 0;
     int counter = 0;
 
-
     while (fragment < fragments.size()) {
-
         counter++;
         size_t toRead = fragments[fragment].length;
 
@@ -1306,11 +1203,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
             // TCP missing data
             LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
-
-            // Read the bytes from the packets of the file (using the file pointer):
-            // After this step, toDecrypt is filled with bytes.
-
-            // filePtr is a TCP file pointer at this position, the underlying file structure
+            // Read the bytes from the packets of the file (using the file pointer)
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->fragments.at(fragment).length);
             filePtr->read(fragments.at(fragment).start, fragments.at(fragment).length, idx, (char *) toDecrypt.data());
@@ -1333,7 +1226,6 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
                 LOG_INFO << "NO KEYS FOUND FOR " << counter;
             }
         }
-
         // set run variables in case next fragment is needed
         position += toRead;
         fragment++;
@@ -1378,17 +1270,16 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
  *
  */
 void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
-		std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
-		std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector
+		const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
+		std::vector<Bytes> &outputPlainTextVector
 	) {
-
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
-        std::shared_ptr<PlainTextElement> output = std::make_shared<PlainTextElement>();
+        Bytes output(0);
 
-        if(decryptData(element, output)) {
-            // decryption failed
-            output->setPlaintextBlock(element->getCipherBlock());
+        if(!decryptData(element, output)) {
+            // unsupported encryption
+            output.insert(output.end(), element->getCipherBlock().begin(), element->getCipherBlock().end());
         }
         outputPlainTextVector.push_back(output);
     }

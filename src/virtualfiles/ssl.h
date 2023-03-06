@@ -15,7 +15,6 @@
 #include "../keyfiles/sslkey.h"
 #include "virtualfile.h"
 #include "../crypto/cipherTextElement.h"
-#include "../crypto/plainTextElement.h"
 
 namespace pcapfs {
 
@@ -88,17 +87,16 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
-        size_t read_for_plaintext_size(const Index &idx);
-        size_t read_raw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
-        size_t read_decrypted_content(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        size_t readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        size_t readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf);
-        std::string convertToPem(const Bytes& input);
+        std::string convertToPem(const Bytes &input);
 
-        size_t getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
+        size_t getFullCipherText(const Index &idx, std::vector<std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
 
         void decryptCiphertextVecToPlaintextVec(
-            std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
-            std::vector< std::shared_ptr<PlainTextElement>> &outputPlainTextVector);
+            const std::vector<std::shared_ptr<CipherTextElement>> &cipherTextVector,
+            std::vector<Bytes> &outputPlainTextVector);
 
         size_t calculateProcessedSize(const Index& idx);
         size_t calculateProcessedCertSize(const Index &idx);
@@ -121,7 +119,7 @@ namespace pcapfs {
 
         static bool isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite);
 
-        int decryptData(std::shared_ptr<CipherTextElement> input, std::shared_ptr<PlainTextElement> output);
+        int decryptData(const std::shared_ptr<CipherTextElement> &input, Bytes &output);
 
         static Bytes searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
 
