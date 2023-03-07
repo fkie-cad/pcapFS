@@ -467,6 +467,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
             return 0;
         }
         ulong infl_size = outlen - zs.avail_out;
+        delete[] inflated;
         return infl_size;
     }
     return filesizeRaw;
