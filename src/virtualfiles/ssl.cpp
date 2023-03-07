@@ -97,7 +97,6 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
     size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
     pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
     uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
-    LOG_DEBUG << "numHandshakeMessages: " << numHandshakeMessages;
     if (numHandshakeMessages > 0){
         // add length of ssl record header
         offset += 5;
@@ -111,98 +110,86 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
 
 		if (handshakeType == pcpp::SSL_CLIENT_HELLO) {
+            LOG_DEBUG << "found client hello message";
 			pcpp::SSLClientHelloMessage *clientHelloMessage =
 					dynamic_cast<pcpp::SSLClientHelloMessage*>(handshakeMessage);
             memcpy(handshakeData->clientRandom.data(),
                     clientHelloMessage->getClientHelloHeader()->random,
                     CLIENT_RANDOM_SIZE);
-            offset += messageLength;
-            LOG_DEBUG << "found client hello message";
             if(numHandshakeMessages == 1) {
-                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                            sslLayer->getData()+5,
                                                             sslLayer->getData()+handshakeMessage->getMessageLength()+5);
             } else {
-                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                            sslLayer->getData()+5+currentHandshakeOffset,
                                                             sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
                 currentHandshakeOffset += handshakeMessage->getMessageLength();
             }
+            offset += messageLength;
 
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
-
-            //Segfault in getCipherSuite() possible, encrypted handshake message can be mistakenly classified as Server Hello
-            // => when we had a server hello before, just continue
-            if(handshakeData->processedTLSHandshake) {
-                offset+= sslLayer->getHeaderLen() - 5;
-                LOG_DEBUG << "found second server hello or wrong classification -> skip";
-                continue;
-            }
-
+            LOG_DEBUG << "found server hello message";
             pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
-
-            offset += messageLength;
-            LOG_DEBUG << "found server hello message";
             memcpy(handshakeData->serverRandom.data(),
 					serverHelloMessage->getServerHelloHeader()->random,
 					SERVER_RANDOM_SIZE);
-
             if(serverHelloMessage->getCipherSuite())
                 handshakeData->cipherSuite = serverHelloMessage->getCipherSuite();
 			handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
-
             handshakeData->processedTLSHandshake = true;
-			/*
-			 * TLS Extension for HMAC truncation activated? Eventually then HMAC is always 10 bytes only.
-			 */
+
 			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != nullptr) {
-				LOG_INFO << "Truncated HMAC extension is enabled";
+				LOG_TRACE << "Truncated HMAC extension is enabled";
                 handshakeData->truncatedHmac = true;
 			}
 			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != nullptr) {
-				LOG_INFO << "Encrypt-Then-Mac Extension is enabled";
+				LOG_TRACE << "Encrypt-Then-Mac Extension is enabled";
                 handshakeData->encryptThenMac = true;
 			} else {
-				LOG_INFO << "Encrypt-Then-Mac Extension is not enabled";
+				LOG_TRACE << "Encrypt-Then-Mac Extension is not enabled";
 			}
             if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_EXTENDED_MASTER_SECRET) != nullptr) {
-                // TODO: this extension is often not noticed! sometimes, pcpp does not determine the correct amount of extensions
-                // https://github.com/seladb/PcapPlusPlus/issues/1039
-                // this will be patched in the new version soon
-                LOG_INFO << "Extended Master Secret Extension is enabled";
+                LOG_TRACE << "Extended Master Secret Extension is enabled";
                 handshakeData->extendedMasterSecret = true;
             } else {
-                LOG_INFO << "Extended Master Secret Extension is not enabled";
+                LOG_TRACE << "Extended Master Secret Extension is not enabled";
             }
             if (serverHelloMessage->getCipherSuite()->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
                 if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5);
                 } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5+currentHandshakeOffset,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
                     currentHandshakeOffset += handshakeMessage->getMessageLength();
                 }
             }
+            offset += messageLength;
 
 		} else if (handshakeType == pcpp::SSL_CLIENT_KEY_EXCHANGE) {
             LOG_DEBUG << "found client key exchange message";
-            offset += messageLength;
-
             if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
                 pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
                 if (clientKeyExchangeMessage->getClientKeyExchangeParams() != nullptr) {
                     memcpy(handshakeData->rsaIdentifier.data(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2, 8);
 
-                    handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
+                    handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(),
+                                                                clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
                                                                 clientKeyExchangeMessage->getClientKeyExchangeParams()+clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
                 }
                 if(handshakeData->extendedMasterSecret) {
                     if(numHandshakeMessages == 1) {
-                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5,
                                                                     sslLayer->getData()+handshakeMessage->getMessageLength()+5);
                     } else {
-                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5+currentHandshakeOffset,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
                     }
                     handshakeData->sessionHash = calculateSessionHash(handshakeData);
@@ -210,72 +197,70 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
                         LOG_ERROR << "Failed to calculate session hash. Look above why";
                 }
             }
+            offset += messageLength;
 
-        } else if (handshakeType == pcpp::SSL_CERTIFICATE && !handshakeData->clientChangeCipherSpec && !handshakeData->serverChangeCipherSpec) {
-            // second condition has to be checked because of pcpp bug (s.u.)
-            LOG_DEBUG << "found certiciate";
+        } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
+            LOG_DEBUG << "found certiciate message";
             LOG_TRACE << "offset: " << offset;
             pcpp::SSLCertificateMessage *certificateMessage = dynamic_cast<pcpp::SSLCertificateMessage*>(handshakeMessage);
             std::vector<FilePtr> certificates = createCertFiles(filePtr, offset, certificateMessage, idx);
             handshakeData->certificates.insert(handshakeData->certificates.end(), certificates.begin(), certificates.end());
 
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
+            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA &&
+                handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
                 if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5);
                 } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5+currentHandshakeOffset,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
                     currentHandshakeOffset += handshakeMessage->getMessageLength();
                 }
             }
-
             offset += messageLength;
 
-        } else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN ||
-                    (handshakeType == 0 && (handshakeData->clientChangeCipherSpec || handshakeData->serverChangeCipherSpec))) {
-			//certificate status or encrypted handshake message
-
-            // when the encrypted handshake message start with leading zeros, it may get interpreted as
-            // multiple handshake messages of type 0 (Hello Request). Since we only want the correct offset,
-            // we aquiesce in that and just add the message length. In the end, this still results in the correct offset.
-
-            offset += messageLength;
-
+        } else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN) {
+            // probably encrypted handshake message
 			if (isClientMessage(handshakeData->iteration) && handshakeData->clientChangeCipherSpec) {
                 handshakeData->clientEncryptedData += messageLength;
-				LOG_DEBUG
-				<< "encrypted handshake message, client encrypted " << std::to_string(handshakeData->clientEncryptedData);
+				LOG_DEBUG << "found encrypted handshake message, client encrypted " << std::to_string(handshakeData->clientEncryptedData);
 			} else if (handshakeData->serverChangeCipherSpec) {
                 handshakeData->serverEncryptedData += messageLength;
-				LOG_DEBUG
-				<< "encrypted handshake message, server encrypted " << std::to_string(handshakeData->serverEncryptedData);
+				LOG_DEBUG << "found encrypted handshake message, server encrypted " << std::to_string(handshakeData->serverEncryptedData);
 			}
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
+            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
+                handshakeData->sessionHash.empty()) {
                 if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5);
                 } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                    currentHandshakeOffset += handshakeMessage->getMessageLength();
-                }
-            }
-
-		} else {
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
-                if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(), sslLayer->getData()+5+currentHandshakeOffset,
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5+currentHandshakeOffset,
                                                                 sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
                     currentHandshakeOffset += handshakeMessage->getMessageLength();
                 }
             }
             offset += messageLength;
-            LOG_DEBUG << "handshake message type: " << handshakeMessage->getHandshakeType();
-            LOG_DEBUG << "handshake message length: " << messageLength;
+
+		} else {
+            LOG_DEBUG << "found handshake message of type " << handshakeMessage->getHandshakeType() << " and length " << messageLength;
+            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
+                handshakeData->sessionHash.empty()) {
+                if(numHandshakeMessages == 1) {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                } else {
+                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                sslLayer->getData()+5+currentHandshakeOffset,
+                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+                }
+            }
+            offset += messageLength;
         }
 	}
 }
@@ -307,7 +292,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::createCertFiles(const FilePtr &fil
 
         offsetTemp += 3; // length field in front of each certificate
         LOG_TRACE << "cert " << i << ": length: " << certificate->getDataLength();
-        LOG_TRACE << "fragment.start: " << offset + offsetTemp;
 
         Fragment fragment;
         fragment.id = filePtr->getIdInIndex();
@@ -488,6 +472,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 processTLSHandshake(sslLayer, handshakeData, offset, filePtr, idx);
 
             } else if (recType == pcpp::SSL_CHANGE_CIPHER_SPEC) {
+                LOG_DEBUG << "found change cipher spec message";
                 if (isClientMessage(i)) {
                     LOG_DEBUG << "client starting encryption now!";
                     handshakeData->clientChangeCipherSpec = true;
