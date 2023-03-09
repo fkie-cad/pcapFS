@@ -20,7 +20,7 @@
 #include "../crypto/decryptSymmetric.h"
 
 
-std::string pcapfs::SslFile::toString() {
+std::string const pcapfs::SslFile::toString() {
 	std::string ret;
 	ret.append("SslFile object content:\n");
 
@@ -82,8 +82,8 @@ size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
 
 
 bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
-	//Step 1: detect ssl stream by checking for dst Port 443
-	//TODO: other detection method -> config file vs heuristic?
+	// detect ssl stream by checking for dst Port 443
+	// TODO: other detection method -> config file vs heuristic?
 	if (filePtr->getProperty("dstPort") == "443") {
 		return true;
 	}
@@ -96,6 +96,10 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 
     size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
     pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
+    if (!handshakeLayer) {
+        LOG_ERROR << "Failed to extract TLS Handshake Layer";
+        return;
+    }
     uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
     if (numHandshakeMessages > 0){
         // add length of ssl record header
@@ -104,122 +108,138 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
 
 	for (uint64_t j = 0; j < numHandshakeMessages; ++j) {
 		pcpp::SSLHandshakeMessage *handshakeMessage = handshakeLayer->getHandshakeMessageAt(j);
-        if (handshakeMessage == nullptr)
-            break;
+        if (!handshakeMessage)
+            continue;
         size_t messageLength = handshakeMessage->getMessageLength();
+        //offset += messageLength;
 		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
 
 		if (handshakeType == pcpp::SSL_CLIENT_HELLO) {
             LOG_DEBUG << "found client hello message";
 			pcpp::SSLClientHelloMessage *clientHelloMessage =
 					dynamic_cast<pcpp::SSLClientHelloMessage*>(handshakeMessage);
+            if (!clientHelloMessage) {
+                LOG_ERROR << "Failed to extract Client Hello Message";
+                continue;
+            }
             memcpy(handshakeData->clientRandom.data(),
                     clientHelloMessage->getClientHelloHeader()->random,
                     CLIENT_RANDOM_SIZE);
-            if(numHandshakeMessages == 1) {
+            if (numHandshakeMessages == 1) {
                 handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
                                                             sslLayer->getData()+5,
-                                                            sslLayer->getData()+handshakeMessage->getMessageLength()+5);
+                                                            sslLayer->getData()+messageLength+5);
             } else {
                 handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
                                                             sslLayer->getData()+5+currentHandshakeOffset,
-                                                            sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                currentHandshakeOffset += handshakeMessage->getMessageLength();
+                                                            sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                currentHandshakeOffset += messageLength;
             }
-            offset += messageLength;
 
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
             LOG_DEBUG << "found server hello message";
             pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
+            if (!serverHelloMessage) {
+                LOG_ERROR << "Failed to extract Server Hello Message";
+                continue;
+            }
             memcpy(handshakeData->serverRandom.data(),
 					serverHelloMessage->getServerHelloHeader()->random,
 					SERVER_RANDOM_SIZE);
-            if(serverHelloMessage->getCipherSuite())
+            if (serverHelloMessage->getCipherSuite())
                 handshakeData->cipherSuite = serverHelloMessage->getCipherSuite();
 			handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
             handshakeData->processedTLSHandshake = true;
 
 			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
-			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC) != nullptr) {
+			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_TRUNCATED_HMAC)) {
 				LOG_TRACE << "Truncated HMAC extension is enabled";
                 handshakeData->truncatedHmac = true;
 			}
-			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC) != nullptr) {
+			if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_ENCRYPT_THEN_MAC)) {
 				LOG_TRACE << "Encrypt-Then-Mac Extension is enabled";
                 handshakeData->encryptThenMac = true;
-			} else {
+			} else
 				LOG_TRACE << "Encrypt-Then-Mac Extension is not enabled";
-			}
-            if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_EXTENDED_MASTER_SECRET) != nullptr) {
+            if (serverHelloMessage->getExtensionOfType(pcpp::SSL_EXT_EXTENDED_MASTER_SECRET)) {
                 LOG_TRACE << "Extended Master Secret Extension is enabled";
                 handshakeData->extendedMasterSecret = true;
-            } else {
+            } else
                 LOG_TRACE << "Extended Master Secret Extension is not enabled";
-            }
-            if (serverHelloMessage->getCipherSuite()->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
-                if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+            if (handshakeData->cipherSuite) {
+                if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
+                    if (numHandshakeMessages == 1) {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5,
+                                                                    sslLayer->getData()+messageLength+5);
+                    } else {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5+currentHandshakeOffset,
+                                                                    sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                        currentHandshakeOffset += messageLength;
+                    }
                 }
             }
-            offset += messageLength;
 
 		} else if (handshakeType == pcpp::SSL_CLIENT_KEY_EXCHANGE) {
             LOG_DEBUG << "found client key exchange message";
-            if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
-                pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
-                if (clientKeyExchangeMessage->getClientKeyExchangeParams() != nullptr) {
-                    memcpy(handshakeData->rsaIdentifier.data(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2, 8);
-
-                    handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(),
-                                                                clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
-                                                                clientKeyExchangeMessage->getClientKeyExchangeParams()+clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
-                }
-                if(handshakeData->extendedMasterSecret) {
-                    if(numHandshakeMessages == 1) {
-                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                    sslLayer->getData()+5,
-                                                                    sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                    } else {
-                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
+            if (handshakeData->cipherSuite) {
+                if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
+                    pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
+                    if (!clientKeyExchangeMessage) {
+                        LOG_ERROR << "Failed to extract Client Key Exchange Message";
+                        continue;
                     }
-                    handshakeData->sessionHash = calculateSessionHash(handshakeData);
-                    if(handshakeData->sessionHash.empty())
-                        LOG_ERROR << "Failed to calculate session hash. Look above why";
+                    if (clientKeyExchangeMessage->getClientKeyExchangeParams()) {
+                        memcpy(handshakeData->rsaIdentifier.data(), clientKeyExchangeMessage->getClientKeyExchangeParams()+2, 8);
+
+                        handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(),
+                                                                    clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
+                                                                    clientKeyExchangeMessage->getClientKeyExchangeParams()+clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
+                    }
+                    if (handshakeData->extendedMasterSecret) {
+                        if (numHandshakeMessages == 1) {
+                            handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                        sslLayer->getData()+5,
+                                                                        sslLayer->getData()+messageLength+5);
+                        } else {
+                            handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5+currentHandshakeOffset,
+                                                                    sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                        }
+                        handshakeData->sessionHash = calculateSessionHash(handshakeData);
+                        if (handshakeData->sessionHash.empty())
+                            LOG_ERROR << "Failed to calculate session hash. Look above why";
+                    }
                 }
             }
-            offset += messageLength;
 
         } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
             LOG_DEBUG << "found certiciate message";
             LOG_TRACE << "offset: " << offset;
             pcpp::SSLCertificateMessage *certificateMessage = dynamic_cast<pcpp::SSLCertificateMessage*>(handshakeMessage);
-            std::vector<FilePtr> certificates = createCertFiles(filePtr, offset, certificateMessage, idx);
+            if (!certificateMessage) {
+                LOG_ERROR << "Failed to extract TLS Certificate Message";
+                continue;
+            }
+            const std::vector<FilePtr> certificates = createCertFiles(filePtr, offset, certificateMessage, idx);
             handshakeData->certificates.insert(handshakeData->certificates.end(), certificates.begin(), certificates.end());
-
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA &&
-                handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
-                if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+            if (handshakeData->cipherSuite) {
+                if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA &&
+                    handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
+                    if (numHandshakeMessages == 1) {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5,
+                                                                    sslLayer->getData()+messageLength+5);
+                    } else {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5+currentHandshakeOffset,
+                                                                    sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                        currentHandshakeOffset += messageLength;
+                    }
                 }
             }
-            offset += messageLength;
 
         } else if (handshakeType == pcpp::SSL_HANDSHAKE_UNKNOWN) {
             // probably encrypted handshake message
@@ -230,44 +250,46 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
                 handshakeData->serverEncryptedData += messageLength;
 				LOG_DEBUG << "found encrypted handshake message, server encrypted " << std::to_string(handshakeData->serverEncryptedData);
 			}
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
-                handshakeData->sessionHash.empty()) {
-                if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+            if (handshakeData->cipherSuite) {
+                if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
+                    handshakeData->sessionHash.empty()) {
+                    if (numHandshakeMessages == 1) {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5,
+                                                                    sslLayer->getData()+messageLength+5);
+                    } else {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5+currentHandshakeOffset,
+                                                                    sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                        currentHandshakeOffset += messageLength;
+                    }
                 }
             }
-            offset += messageLength;
 
 		} else {
             LOG_DEBUG << "found handshake message of type " << handshakeMessage->getHandshakeType() << " and length " << messageLength;
-            if(handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
-                handshakeData->sessionHash.empty()) {
-                if(numHandshakeMessages == 1) {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5);
-                } else {
-                    handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
-                                                                sslLayer->getData()+5+currentHandshakeOffset,
-                                                                sslLayer->getData()+handshakeMessage->getMessageLength()+5+currentHandshakeOffset);
-                    currentHandshakeOffset += handshakeMessage->getMessageLength();
+            if (handshakeData->cipherSuite) {
+                if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA && handshakeData->extendedMasterSecret &&
+                    handshakeData->sessionHash.empty()) {
+                    if (numHandshakeMessages == 1) {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5,
+                                                                    sslLayer->getData()+messageLength+5);
+                    } else {
+                        handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
+                                                                    sslLayer->getData()+5+currentHandshakeOffset,
+                                                                    sslLayer->getData()+messageLength+5+currentHandshakeOffset);
+                        currentHandshakeOffset += messageLength;
+                    }
                 }
             }
-            offset += messageLength;
         }
+        offset += messageLength;
 	}
 }
 
 
 size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
-
     Bytes rawData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);
@@ -278,8 +300,8 @@ size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage, const Index &idx) {
-
+std::vector<pcapfs::FilePtr> const pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset,
+                                                                pcpp::SSLCertificateMessage* certificateMessage, const Index &idx) {
     std::vector<FilePtr> resultVector(0);
     uint64_t offsetTemp = 0;
 
@@ -379,8 +401,8 @@ pcapfs::Bytes const pcapfs::SslFile::calculateSessionHash(const std::shared_ptr<
 
 void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx){
 	//search for master secret in candidates
-    if (handshakeData->processedTLSHandshake) {
-		Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
+    if (handshakeData->processedTLSHandshake && handshakeData->cipherSuite) {
+		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
 			Bytes keyMaterial = createKeyMaterial(masterSecret, handshakeData, false);
             if(!keyMaterial.empty()) {
@@ -390,6 +412,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 			    idx.insert(keyPtr);
 			    resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
 			    resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+                resultPtr->flags.set(pcapfs::flags::PROCESSED);
             } else
                 LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
 		}
@@ -415,7 +438,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 
 
 bool pcapfs::SslFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite) {
-    if (cipherSuite == nullptr)
+    if (!cipherSuite)
         return false;
     if (supportedCipherSuiteIds.find(cipherSuite->getID()) == supportedCipherSuiteIds.end()) {
         LOG_ERROR << "unsupported cipher suite for decryption: " << cipherSuite->asString();
@@ -429,27 +452,23 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
-    //Step 1: detect ssl stream by checking for dst Port 443
+    // detect ssl stream by checking for dst Port 443
     if(!isTLSTraffic(filePtr)) {
         return resultVector;
     }
 
-    //Step 2: Get key material for SSL stream
     size_t size = 0;
     size_t numElements = filePtr->connectionBreaks.size();
     bool visitedVirtualSslFile = false;
-    pcpp::Packet *packet = nullptr;
     std::shared_ptr<SslFile> resultPtr = nullptr;
     std::shared_ptr<TLSHandshakeData> handshakeData = std::make_shared<TLSHandshakeData>();
 
-    //Step 3: process all logical breaks in underlying virtual file
-    //TODO: How many files? One?
+    // process all logical breaks in underlying virtual file
     for (unsigned int i = 0; i < numElements; ++i) {
         LOG_DEBUG << "processing element " << std::to_string(i+1) << " of " << std::to_string(numElements);
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
 
         // get correct size (depending on element processed)
-        // get size between the two connections
         if (i == numElements - 1) {
             size = filePtr->getFilesizeRaw() - offset;
         } else {
@@ -459,8 +478,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         //connection break has wrong size if content is encrypted
         LOG_DEBUG << "connectionBreaks Size: " << size;
 
-        //Step 4: one logical fragment may contain multiple ssl layer messages
-        pcpp::SSLLayer *sslLayer = pcpp::SSLLayer::createSSLMessage((uint8_t *) data.data() + offset, size, nullptr, packet);
+        // one logical fragment may contain multiple ssl layer messages
+        pcpp::SSLLayer *sslLayer = pcpp::SSLLayer::createSSLMessage((uint8_t *) data.data() + offset, size, nullptr, nullptr);
         bool connectionBreakOccured = true;
         handshakeData->iteration = i;
 
@@ -487,6 +506,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 pcpp::SSLApplicationDataLayer *applicationDataLayer =
                         dynamic_cast<pcpp::SSLApplicationDataLayer *>(sslLayer);
+                if (!applicationDataLayer) {
+                    LOG_ERROR << "dynamic_cast to ssl app data layer failed";
+                    offset += sslLayer->getLayerPayloadSize();
+                    continue;
+                }
 
                 uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
                 uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
@@ -499,28 +523,21 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
                 //create ssl application file
                 //TODO: does client always send first?
-                if (resultPtr == nullptr) {
+                if (!resultPtr) {
+                    if (handshakeData->sslVersion == 0)
+                        // possible that extraction of sslVersion was not done in advance
+                        handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
+
                     resultPtr = std::make_shared<SslFile>();
                     initResultPtr(resultPtr, filePtr, handshakeData, idx);
 
-                    //TODO
-                    //init with 0, unsure where we init this right now
+                    //init with 0
                     resultPtr->filesizeProcessed = 0;
                     resultPtr->filesizeRaw = 0;
                 }
 
-                /*
-                 * We need to distinguish between 2 cases:
-                 *
-                 * A) We have a Key and we do the decryption with this key
-                 * B) We do not have the key and only return the ciphertext.
-                 *
-                 * We got this information from the initialization step from resultPtrInit.
-                 */
-
                 if (resultPtr->flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
                     LOG_INFO << "[PARSING TLS APP DATA **WITH** KEY]";
-                    resultPtr->flags.set(flags::PROCESSED);
                 } else {
                     LOG_INFO << "[PARSING TLS APP DATA **WITHOUT** KEY]";
                 }
@@ -599,7 +616,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     }
 
     //TODO: multiple ssl streams in one tcp stream?!
-    if (resultPtr != nullptr) {
+    if (resultPtr) {
         resultVector.push_back(resultPtr);
     }
 
@@ -611,17 +628,20 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
 
 //Returns the correct Master Secret out of a bunch of candidates
-pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
+pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
 
     bool isRsaKeyX = (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA);
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
 
     for (auto &keyFile: keyFiles) {
         std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
-
-        if(sslKeyFile->getClientRandom() == handshakeData->clientRandom){
+        if (!sslKeyFile) {
+            LOG_ERROR << "dynamic_pointer_cast failed for ssl key file";
+            continue;
+        }
+        if (sslKeyFile->getClientRandom() == handshakeData->clientRandom){
             return sslKeyFile->getMasterSecret();
-        } else if(isRsaKeyX) {
+        } else if (isRsaKeyX) {
             if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
                 return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
             } else if (!sslKeyFile->getRsaPrivateKey().empty()) {
@@ -630,28 +650,29 @@ pcapfs::Bytes pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<T
             }
         }
     }
-
     return Bytes();
 }
 
 
-pcapfs::Bytes pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey) {
+pcapfs::Bytes const pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey) {
 
     Bytes result(0);
 
-    if(encryptedPremasterSecret.empty() || rsaPrivateKey.empty())
+    if(encryptedPremasterSecret.empty() || rsaPrivateKey.empty()) {
+        LOG_ERROR << "Failed to decrypt encrypted premaster secret";
         return result;
+    }
 
     BIO* bio = BIO_new(BIO_s_mem());
     BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
-    if(bio == nullptr) {
+    if(!bio) {
         LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
         BIO_free(bio);
         return result;
     }
 
     RSA* rsa = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
-    if(rsa == nullptr) {
+    if(!rsa) {
         LOG_ERROR << "Openssl: Failed to read in rsa private key";
         BIO_free(bio);
         return result;
@@ -671,6 +692,7 @@ pcapfs::Bytes pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPrem
             result.clear();
         }
     }
+    RSA_free(rsa);
 
     return result;
 }
@@ -696,37 +718,31 @@ int pcapfs::SslFile::decryptData(const std::shared_ptr<CipherTextElement> &input
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     switch (cipherSuite->getSymKeyAlg()) {
-
         case pcpp::SSL_SYM_RC4_128:
         {
             Crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
             break;
         }
-
         case pcpp::SSL_SYM_AES_128_CBC:
         {
             Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 16);
             break;
         }
-
         case pcpp::SSL_SYM_AES_256_CBC:
         {
             Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 32);
             break;
         }
-
         case pcpp::SSL_SYM_AES_128_GCM:
         {
             Crypto::decrypt_AES_GCM(input, output, 16);
             break;
         }
-
         case pcpp::SSL_SYM_AES_256_GCM:
         {
             Crypto::decrypt_AES_GCM(input, output, 32);
             break;
         }
-
         default:
             LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
             return 0;
@@ -769,14 +785,18 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
      *          server_write_IV[SecurityParameters.IV_size]
      */
 
-
     Bytes output(0);
 
-    if(input.empty())
+    if (input.empty())
         return output;
 
-    if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
+    if ((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
         (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
+
+        if (handshakeData->clientRandom.empty() || handshakeData->serverRandom.empty()) {
+            LOG_ERROR << "Failed to derive key material because client and/or server random could not be extracted";
+            return output;
+        }
 
         bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
 
@@ -785,10 +805,11 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
         Bytes seed(SEED_SIZE);
 
         size_t OUTPUT_SIZE;
-        if(deriveMasterSecret){
+        if (deriveMasterSecret){
             OUTPUT_SIZE = 48;
-            if(handshakeData->extendedMasterSecret) {
+            if (handshakeData->extendedMasterSecret) {
                 if (handshakeData->sessionHash.empty()) {
+                    LOG_ERROR << "Failed to derive extended master secret because session hash could not be calculuated";
                     return output;
                 }
                 LABEL_SIZE = 22;
@@ -810,7 +831,7 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
 
         unsigned char error = 0;
         EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, nullptr);
-        if(!pctx) {
+        if (!pctx) {
             LOG_ERROR << "Openssl: Failed to allocate public key algorithm context" << std::endl;
             error = 1;
         }
@@ -819,13 +840,13 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
             error = 1;
         }
 
-        if(useSha384) {
+        if (useSha384) {
              if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha384()) <= 0) {
                     LOG_ERROR << "Openssl: Failed to set the master secret" << std::endl;
                     error = 1;
                 }
         } else {
-            if(handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2) {
+            if (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2) {
                 if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
                     LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
                     error = 1;
@@ -851,10 +872,12 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
             error = 1;
         }
 
-        if(error) {
+        if (error) {
             ERR_print_errors_fp(stderr);
             output.clear();
         }
+
+        EVP_PKEY_CTX_free(pctx);
 
     } else {
         LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
@@ -864,121 +887,34 @@ pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const
 }
 
 
-/*
- * TODO:
- *
- * CURRENT READ FUNCTION:
- *
- * The current read function currently tries to encrypt traffic at a certain position.
- * We wanted to implement an abstract way to ask for decrypted data at a certain position
- * WITHOUT decrypting everything every time.
- *
- * This seems not to be possible at this point.
- *
- * Idea: We need a mapping which does the following:
- *
- * +----------+----------+----------
- * |          |          |
- * |   AAAA   |   BBBB   |   ...
- * |          |          |
- * +----------+----------+----------
- *
- * If someone asks now for block 2 (BBBB), then we should return such a structure:
- *
- * +----------+----------+---------------
- * |          |          |
- * |   0000   |   BBBB   |   0000....
- * |          |          |
- * +----------+----------+---------------
- *
- * Many ciphers require a complete decryption of such a track.
- * This leads to, depending on the length of the track, a very inefficient implementation.
- *
- * But since this is required for many ciphers such as CBC or GCM cipher modes, we need to
- * decrypt a certain amount of blocks, either up to the requested block or other, etc.
- * This is a topic highly depending on the cipher and the cipher mode used in the TLS application data.
- *
- * Improvement goals:
- *
- * ### Build a function which decrypts all of the blocks from the beginning.
- * ### Build a handler function which wraps the plaintext to text for the user, meaning: "remove" the MAC.
- * ### Build a wrapper which handles specific requests to single blocks in the chain (using certain offsets).
- *
- *
- *
- * CHALLENGES:
- *
- * ### plaintext offset calculation depends i.e. on the size of the authentication digests, we need another abstraction layer:
- *
- *
- * ciphertext (symbolic AAAA and BBBB, think about garbage looking bytes):
- * +----------+----------+----------
- * |          |          |
- * |   AAAA   |   BBBB   |   ...
- * |          |          |
- * +----------+----------+----------
- *
- *
- * plaintext (derived from decryption, has a lot of stuff like message authentication digests):
- * +----------+----------+----------
- * |      | M |      | M |
- * |   AA | A |   BB | A |   ...
- * |      | C |      | C |
- * +----------+----------+----------
- *
- *
- * real text, readable by the user, either MAC checked or not:
- * +----------+----------+----------
- * |          |          |
- * |   abcd   |   efgh   |   ...
- * |          |          |
- * +----------+----------+----------
- *
- * Concrete: If the user requests the block 2 containing the BBBB ciphertext, we want to provide efgh to the user.
- * We still have to decrypt the complete TLS application data stream.
- *
- *
- *
- * FUTURE GOALS:
- *
- * ### Cache the decrypted streams to prevent the decryption of the complete stream in requests which loop through
- *     all fields of a stream, refer inside a single stream or many recurring requests to a certain pool of
- *     TLS application data streams.
- */
-
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
     if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
-
         LOG_TRACE << "[USING KEY] start with reading decrypted content, startOffset: " << startOffset << " and length: " << length;
 
-        // Here, length is the plaintext length!
-
+        // Here, length is the plaintext length
         return readDecryptedContent(startOffset, length, idx, buf);
-
 	} else {
-
 		LOG_TRACE << "[NO KEY] start with reading raw, startOffset: " << startOffset << " and length: " << length;
 
-        // Here, length is the ciphertext length!
+        // Here, length is the ciphertext length
         if(flags.test(pcapfs::flags::IS_METADATA)) {
             return readCertificate(startOffset, length, idx, buf);
         } else {
             return readRaw(startOffset, length, idx, buf);
         }
-
 	}
 }
 
 
-std::string pcapfs::SslFile::convertToPem(const Bytes &input) {
+std::string const pcapfs::SslFile::convertToPem(const Bytes &input) {
     X509* x509 = nullptr;
     std::string result(input.begin(), input.end());
     const unsigned char* c = input.data();
 
     // convert raw DER content to internal X509 structure
     x509 = d2i_X509(&x509, &c, input.size());
-    if (x509 == nullptr) {
+    if (!x509) {
         LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content:";
         ERR_print_errors_fp(stderr);
         X509_free(x509);
@@ -998,7 +934,7 @@ std::string pcapfs::SslFile::convertToPem(const Bytes &input) {
     // access certificate content in bio
     BUF_MEM* mem = nullptr;
     BIO_get_mem_ptr(bio, &mem);
-    if(mem == nullptr || !mem->data || !mem->length) {
+    if(!mem || !mem->data || !mem->length) {
         LOG_ERROR << "Openssl: Failed to extract buffer out of bio:";
         ERR_print_errors_fp(stderr);
         BIO_free(bio);
@@ -1158,21 +1094,10 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
 
 
 /*
- * pcapfs::SslFile::getFullCipherText
- *
  * The function gets the full TLS application layer stream into a vector.
- * Each element in the vector represents one decrypted packet, containing a alternating stream of the packets from client and server.
- * Concrete: iterate over all fragments, return the cipher text blocks and the keymaterial.
- *
- * TODO: New datatype for the vector, a datatype holding:
- *          - pcapfs::Bytes object
- *          - key material bytes
- *          - cipher type, ssl version, server or client (?)
- *
- * After use of this function, free every pointer in outputCipherTextVector at the function which called 'getFullCipherText'.
- *
+ * Each element in the vector represents one decrypted packet, containing an alternating stream of the packets from client and server.
  */
-size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
     size_t fragment = 0;
     size_t position = 0;
     int counter = 0;
@@ -1247,23 +1172,19 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector< std::sh
 
 
 /*
- * pcapfs::SslFile::decryptCiphertextToPlaintext
- *
- * Encrypt the vector of bytes using the key material provided via every frame of the vector.
- * returns a vector of plaintext plus information such as if mac, alignment, padding is correct.
- * This is the vector which can be used by a user to get the plaintext with full information via the next function prototype.
- *
+ * Decrypt the vector of bytes using the key material provided via every frame of the vector.
+ * returns a vector of the plaintext.
  */
 void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
-		std::vector<Bytes> &outputPlainTextVector
-	) {
+		std::vector<Bytes> &outputPlainTextVector) {
+
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
         Bytes output(0);
 
         if(!decryptData(element, output)) {
-            // unsupported encryption
+            // unsupported encryption, should not happen
             output.insert(output.end(), element->getCipherBlock().begin(), element->getCipherBlock().end());
         }
         outputPlainTextVector.push_back(output);

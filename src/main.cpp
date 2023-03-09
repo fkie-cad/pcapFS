@@ -107,7 +107,13 @@ int main(int argc, const char *argv[]) {
 
     pcapfs::Index index;
     index.setCurrentWorkingDirectory(boost::filesystem::current_path().string());
-    std::vector<pcapfs::FilePtr> pcapFiles = pcapfs::PcapFile::createFromPaths(config.pcaps);
+    std::vector<pcapfs::FilePtr> pcapFiles(0);
+    try {
+        pcapFiles = pcapfs::PcapFile::createFromPaths(config.pcaps);
+    } catch (const pcapfs::PcapFsException & err) {
+        std::cerr << "Error: " << err.what() << std::endl;
+        return 2;
+    }
 
     //TODO: use factory as well (only get key vfiles)
     if (!config.keyFiles.empty()) {

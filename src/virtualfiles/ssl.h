@@ -66,7 +66,7 @@ namespace pcapfs {
         bool extendedMasterSecret = false;
         uint64_t clientEncryptedData = 0;
 		uint64_t serverEncryptedData = 0;
-        uint16_t sslVersion = pcpp::SSLVersion::SSL2;
+        uint16_t sslVersion = 0;
         unsigned int iteration = 0;
 
         Bytes clientRandom;
@@ -76,7 +76,7 @@ namespace pcapfs {
         Bytes sessionHash;
         Bytes encryptedPremasterSecret;
         std::vector<FilePtr> certificates;
-        pcpp::SSLCipherSuite* cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByID(0);
+        pcpp::SSLCipherSuite* cipherSuite = nullptr;
     };
 
     class SslFile : public VirtualFile {
@@ -90,7 +90,7 @@ namespace pcapfs {
         size_t readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf);
-        std::string convertToPem(const Bytes &input);
+        std::string const convertToPem(const Bytes &input);
 
         size_t getFullCipherText(const Index &idx, std::vector<std::shared_ptr<CipherTextElement>> &outputCipherTextVector);
 
@@ -104,7 +104,7 @@ namespace pcapfs {
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offset,
                                         const FilePtr &fileptr, const Index &idx);
 
-        static std::vector<FilePtr> createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage, const Index &idx);
+        static std::vector<FilePtr> const createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage, const Index &idx);
 
         static Bytes const calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData);
 
@@ -121,19 +121,19 @@ namespace pcapfs {
 
         int decryptData(const std::shared_ptr<CipherTextElement> &input, Bytes &output);
 
-        static Bytes searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
+        static Bytes const searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
 
-        static Bytes decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey);
+        static Bytes const decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey);
 
         void serialize(boost::archive::text_oarchive &archive) override;
 
         void deserialize(boost::archive::text_iarchive &archive) override;
 
-        std::string toString();
+        std::string const toString();
 
         uint64_t getKeyIDinIndex() { return keyIDinIndex; };
 
-        std::string getCipherSuite() { return cipherSuite; };
+        std::string const getCipherSuite() { return cipherSuite; };
 
         uint16_t getSslVersion() { return sslVersion; };
 

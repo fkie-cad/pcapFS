@@ -27,7 +27,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
         while (std::getline(infile, line)) {
             std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
 
-            if (line == RSA_KEY_BEGIN) {
+            if (line.rfind(RSA_KEY_BEGIN) != std::string::npos) {
                 char elem;
                 for(size_t i = 0; i < strlen(RSA_KEY_BEGIN); ++i)
                     keyPtr->rsaPrivateKey.push_back(RSA_KEY_BEGIN[i]);
