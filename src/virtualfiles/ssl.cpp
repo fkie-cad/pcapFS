@@ -18,6 +18,7 @@
 #include "../filefactory.h"
 #include "../logging.h"
 #include "../crypto/decryptSymmetric.h"
+#include "../crypto/ciphersuites.h"
 
 
 std::string const pcapfs::SslFile::toString() {
@@ -70,7 +71,7 @@ std::string const pcapfs::SslFile::toString() {
 
 
 size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
-    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector<CiphertextPtr> cipherTextVector(0);
     std::vector<Bytes> result(0);
 
     getFullCipherText(idx, cipherTextVector);
@@ -440,7 +441,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 bool pcapfs::SslFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite) {
     if (!cipherSuite)
         return false;
-    if (supportedCipherSuiteIds.find(cipherSuite->getID()) == supportedCipherSuiteIds.end()) {
+    if (crypto::supportedCipherSuiteIds.find(cipherSuite->getID()) == crypto::supportedCipherSuiteIds.end()) {
         LOG_ERROR << "unsupported cipher suite for decryption: " << cipherSuite->asString();
         return false;
     }
@@ -714,33 +715,33 @@ pcapfs::Bytes const pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encrypt
  */
 
 
-int pcapfs::SslFile::decryptData(const std::shared_ptr<CipherTextElement> &input, Bytes &output) {
+int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
 	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
     switch (cipherSuite->getSymKeyAlg()) {
         case pcpp::SSL_SYM_RC4_128:
         {
-            Crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
+            crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
             break;
         }
         case pcpp::SSL_SYM_AES_128_CBC:
         {
-            Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 16);
+            crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 16);
             break;
         }
         case pcpp::SSL_SYM_AES_256_CBC:
         {
-            Crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 32);
+            crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 32);
             break;
         }
         case pcpp::SSL_SYM_AES_128_GCM:
         {
-            Crypto::decrypt_AES_GCM(input, output, 16);
+            crypto::decrypt_AES_GCM(input, output, 16);
             break;
         }
         case pcpp::SSL_SYM_AES_256_GCM:
         {
-            Crypto::decrypt_AES_GCM(input, output, 32);
+            crypto::decrypt_AES_GCM(input, output, 32);
             break;
         }
         default:
@@ -1034,7 +1035,7 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
     size_t position = 0;
     size_t posInFragment = 0;
     size_t fragment = 0;
-    std::vector< std::shared_ptr<CipherTextElement>> cipherTextVector(0);
+    std::vector<CiphertextPtr> cipherTextVector(0);
     std::vector<Bytes> result(0);
 
     getFullCipherText(idx, cipherTextVector);
@@ -1097,7 +1098,7 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
  * The function gets the full TLS application layer stream into a vector.
  * Each element in the vector represents one decrypted packet, containing an alternating stream of the packets from client and server.
  */
-size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<std::shared_ptr<CipherTextElement>> &outputCipherTextVector) {
+size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<CiphertextPtr> &outputCipherTextVector) {
     size_t fragment = 0;
     size_t position = 0;
     int counter = 0;
@@ -1123,7 +1124,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<std::sha
                 std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
                     idx.get({"sslkey", getKeyIDinIndex()}));
 
-                std::shared_ptr<CipherTextElement> cte = std::make_shared<CipherTextElement>();
+                CiphertextPtr cte = std::make_shared<CipherTextElement>();
                 cte->setVirtualFileOffset(previousBytes[fragment]);
                 cte->setCipherBlock(toDecrypt);
                 cte->setLength(toRead);
@@ -1176,11 +1177,11 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<std::sha
  * returns a vector of the plaintext.
  */
 void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
-		const std::vector< std::shared_ptr<CipherTextElement>> &cipherTextVector,
+		const std::vector<CiphertextPtr> &cipherTextVector,
 		std::vector<Bytes> &outputPlainTextVector) {
 
     for (size_t i=0; i<cipherTextVector.size(); i++) {
-        std::shared_ptr<CipherTextElement> element = cipherTextVector.at(i);
+        CiphertextPtr element = cipherTextVector.at(i);
         Bytes output(0);
 
         if(!decryptData(element, output)) {

@@ -6,7 +6,7 @@
 #include "cipherTextElement.h"
 
 namespace pcapfs {
-    namespace Crypto {
+    namespace crypto {
 
     		int getMacSize(const pcpp::SSLHashingAlgorithm &macAlg);
 

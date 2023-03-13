@@ -6,7 +6,7 @@
 #include "../logging.h"
 
 
-int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm &macAlg) {
+int pcapfs::crypto::getMacSize(const pcpp::SSLHashingAlgorithm &macAlg) {
 	switch (macAlg) {
 		case pcpp::SSL_HASH_NULL: return 0;
 
@@ -21,7 +21,7 @@ int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm &macAlg) {
 }
 
 
-void pcapfs::Crypto::decrypt_RC4_128(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg) {
+void pcapfs::crypto::decrypt_RC4_128(const CiphertextPtr &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg) {
 
     uint64_t virtual_file_offset = input->getVirtualFileOffset();
     Bytes cipherBlock = input->getCipherBlock();
@@ -68,7 +68,7 @@ void pcapfs::Crypto::decrypt_RC4_128(const std::shared_ptr<CipherTextElement> &i
 }
 
 
-void pcapfs::Crypto::decrypt_AES_CBC(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg, const int key_len) {
+void pcapfs::crypto::decrypt_AES_CBC(const CiphertextPtr &input, Bytes &output, const pcpp::SSLHashingAlgorithm &macAlg, const int key_len) {
 
     LOG_DEBUG << "entering decrypt_AES_CBC" << std::endl;
 
@@ -124,7 +124,7 @@ void pcapfs::Crypto::decrypt_AES_CBC(const std::shared_ptr<CipherTextElement> &i
 }
 
 
-void pcapfs::Crypto::decrypt_AES_GCM(const std::shared_ptr<CipherTextElement> &input, Bytes &output, const int key_len) {
+void pcapfs::crypto::decrypt_AES_GCM(const CiphertextPtr &input, Bytes &output, const int key_len) {
 
     LOG_DEBUG << "entering decrypt_AES_GCM" << std::endl;
 
@@ -171,7 +171,7 @@ void pcapfs::Crypto::decrypt_AES_GCM(const std::shared_ptr<CipherTextElement> &i
 }
 
 
-int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, const Bytes &dataToDecrypt, Bytes &decryptedData) {
+int pcapfs::crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, const Bytes &dataToDecrypt, Bytes &decryptedData) {
 
     int error = 0;
     // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html

@@ -31,5 +31,7 @@ namespace pcapfs {
 		Bytes cipherBlock;
 		Bytes keyMaterial;
 	};
+
+	typedef std::shared_ptr<CipherTextElement> CiphertextPtr;
 }
 #endif // PCAPFS_CRYPTO_CIPHERTEXTELEMENT_H
