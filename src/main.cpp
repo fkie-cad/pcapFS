@@ -49,8 +49,12 @@ getNextVirtualFile(const std::vector<pcapfs::FilePtr> &files, pcapfs::Index &idx
         std::vector<pcapfs::FilePtr> newPtr(0);
         for (auto &it: pcapfs::FileFactory::getFactoryParseMethods()) {
             if (file->getFiletype() != it.first) {
-
-                newPtr = it.second(file, idx);
+                try {
+                    newPtr = it.second(file, idx);
+                } catch (pcapfs::PcapFsException &err) {
+                    std::cerr << "Error: " << err.what() << std::endl;
+                    continue;
+                }
 
                 if (!newPtr.empty()) {
                     file->flags.set(pcapfs::flags::PARSED);
