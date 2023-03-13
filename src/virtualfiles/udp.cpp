@@ -54,19 +54,12 @@ size_t pcapfs::UdpFile::read(uint64_t startOffset, size_t length, const Index &i
 
     // start copying
     while (position < startOffset + length && fragment < fragments.size()) {
-        /*if (!pcapfs::CONF.zero_padding && fragments[fragment].start == 0) {
-            LOG_TRACE << "Skipping zero padded data";
-            fragment++;
-            continue;
-        }*/
-
         size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
 
         //TODO: is start=0 really good for missing data?
         if (fragments[fragment].start == 0) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
-            //LOG_ERROR << "filling data";
         } else {
             //TODO: offsets at which number?
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
@@ -112,7 +105,6 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
             if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(IP)) {
                 std::shared_ptr<pcapfs::UdpFile> udpPointer;
 
-                //LOG_ERROR << "Found UDP packet, packet number: " << i;
                 state.currentOffset.id = state.currentPcapfileID;
                 state.currentOffset.start = pcapPosition;
                 Layer *l = parsedPacket.getFirstLayer();//->getDataLen();
@@ -122,7 +114,6 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     state.currentOffset.start += l->getHeaderLen();
                 }
                 UdpLayer *udpLayer = parsedPacket.getLayerOfType<UdpLayer>();
-                //state.currentOffset.length = tcp::calc_ip_payload(parsedPacket) - udpLayer->getHeaderLen();
                 state.currentOffset.length = udpLayer->getDataLen();
 
                 std::string conString = "";
@@ -146,22 +137,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                 if (state.files.count(conString) == 1) {
                     state.files[conString]->fragments.push_back(state.currentOffset);
                 } else {
-                    /*pcapfs::protocols::HTTP::reverseConnMeta(udpc.conn);
-                    if( state.files.count(udpc) == 1 ) {
-                        // udp "stream" goes the other direction, finish up the old one
-                        IndexFileInformation *to_finish = state.files[udpc];
-                        result.push_back(*to_finish);
-                        state.files.erase(udpc);
-                        delete to_finish;
-                        pcapfs::protocols::HTTP::reverseConnMeta(udpc.conn);
-                    }*/
 
                     // create a new fileinformation
                     state.files.emplace(conString, std::make_shared<pcapfs::UdpFile>());
                     udpPointer = state.files[conString];
 
                     udpPointer->setFirstPacketNumber(i);
-                    //tcp_file->fileinformation.flags = 0;
                     udpPointer->setTimestamp(state.currentTimestamp);
                     udpPointer->setFilename("UDPFILE" + std::to_string(state.nextUniqueId));
                     udpPointer->setIdInIndex(state.nextUniqueId);
@@ -169,8 +150,6 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setFilesizeRaw(udpLayer->getDataLen());
                     udpPointer->setFilesizeProcessed(udpLayer->getDataLen());
                     udpPointer->setFiletype("udp");
-                    //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
-                    //udpPointer->connectionBreaks.push_back({0, state.currentTimestamp});
 
                     if (parsedPacket.isPacketOfType(IPv4)) {
                         IPv4Layer *iPv4Layer = parsedPacket.getLayerOfType<IPv4Layer>();
@@ -187,19 +166,6 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setProperty("protocol", "udp");
                     udpPointer->fragments.push_back(state.currentOffset);
                     ++state.nextUniqueId;
-
-                    /*IndexFileInformation * file_template = new IndexFileInformation();
-                    pcapfs::protocols::HTTP::initConnMeta(udpc.conn, file_template->conn);
-                    file_template->fragments.push_back(state.currentOffset);
-                    file_template->flow_ID = state.nextUniqueId;
-                    file_template->firstPacketNumber = i;
-                    file_template->timestamp = rawPacket.getPacketTimeStamp().tv_sec;
-                    file_template->flags = 0;
-                    file_template->offsetType = pcapfs::index::fileType::pcap;
-                    file_template->filename = "";
-                    file_template->protocolType = "udp";
-
-                    state.files[udpc] = file_template;*/
                 }
             }
             pcapPosition += parsedPacket.getFirstLayer()->getDataLen();

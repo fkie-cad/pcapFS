@@ -7,13 +7,6 @@
 
 
 int pcapfs::Crypto::getMacSize(const pcpp::SSLHashingAlgorithm &macAlg) {
-
-	/*
-	 * https://tools.ietf.org/html/rfc5246#appendix-A.5
-     *
-	 * Following problem might occur: HMAC truncation.
-	 */
-
 	switch (macAlg) {
 		case pcpp::SSL_HASH_NULL: return 0;
 
@@ -185,37 +178,30 @@ int pcapfs::Crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
 
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() generated a NULL pointer instead of a new EVP_CIPHER_CTX" << std::endl;
+        LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
         error = 1;
     }
-
-    // int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv, int enc);
     if (EVP_CipherInit_ex(ctx, cipher, nullptr, key, iv, 0) != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() returned a return code != 1" << std::endl;
+        LOG_ERROR << "EVP_CipherInit_ex() failed" << std::endl;
         error = 1;
     }
-
-    //int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *type, ENGINE *impl, const unsigned char *key, const unsigned char *iv);
     if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() returned a return code != 1" << std::endl;
+        LOG_ERROR << "EVP_DecryptInit_ex() failed" << std::endl;
         error = 1;
     }
 
     int outlen, tmplen;
-    // int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl, const unsigned char *in, int inl);
     if (EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() returned a return code != 1" << std::endl;
+        LOG_ERROR << "EVP_DecryptUpdate() failed" << std::endl;
         error = 1;
     }
-
-    //int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *outm, int *outl);
     if (EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &tmplen) != 1) {
         // weird case: for 1 byte padding, the only padding byte is 0, which causes the padding to be seen as not correctly formatted
         // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct
         // (see https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2)
         // => handle this case separately
         if(decryptedData.back() != 0) {
-            LOG_ERROR << "EVP_DecryptFinal_ex() returned a return code != 1" << std::endl;
+            LOG_ERROR << "EVP_DecryptFinal_ex() failed" << std::endl;
             error = 1;
         }
     }

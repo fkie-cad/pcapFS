@@ -20,7 +20,6 @@ namespace {
 
 std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vector<boost::filesystem::path> &keyFiles) {
     std::vector<pcapfs::FilePtr> resultVector;
-    //TODO: support multiple SSL key log files, right now only CLIENT_RANDOM <CR> <Master secret>
     for (auto &keyFile: keyFiles) {
         std::ifstream infile(keyFile.string());
         std::string line;

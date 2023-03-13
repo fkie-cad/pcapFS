@@ -192,7 +192,7 @@ namespace {
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
                     ("version,V", "show version information and exit");
-            
+
             po::typed_value<std::string, char>* verbosity;
             #if(DEBUG)
                 verbosity = po::value<std::string>()->default_value("debug");

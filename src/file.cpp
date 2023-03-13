@@ -6,9 +6,6 @@
 #include "exceptions.h"
 
 
-pcapfs::File::File() : filesizeRaw(0), filesizeProcessed(0), idInIndex(0) {}
-
-
 std::string pcapfs::File::getProperty(const std::string &property) {
     return properties[property];
 }

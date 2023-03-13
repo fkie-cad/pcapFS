@@ -40,7 +40,8 @@ namespace pcapfs {
         friend class Index;
 
     public:
-        File();
+
+        File() : filesizeRaw(0), filesizeProcessed(0), idInIndex(0) {};
 
         virtual ~File() = default;
 
@@ -57,7 +58,6 @@ namespace pcapfs {
 
         uint64_t getFilesizeRaw() { return filesizeRaw; };
 
-        //uint64_t getFilesizeProcessed() { return filesizeProcessed; };
         uint64_t getFilesizeProcessed();
 
         uint64_t getIdInIndex() { return idInIndex; };
@@ -90,8 +90,6 @@ namespace pcapfs {
 
         bool meetsDecodeMapCriteria(const std::string &file);
 
-        // std::bitset<10> flags;
-        // Why not 10 ?
         std::bitset<11> flags;
 
         std::vector<OffsetWithTime> connectionBreaks; //TODO: are they good here?
@@ -117,9 +115,6 @@ namespace pcapfs {
 
         Bytes buffer;
     };
-
-
-
 
     typedef std::shared_ptr<File> FilePtr;
 }

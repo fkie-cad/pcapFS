@@ -110,12 +110,11 @@ int main(int argc, const char *argv[]) {
     std::vector<pcapfs::FilePtr> pcapFiles(0);
     try {
         pcapFiles = pcapfs::PcapFile::createFromPaths(config.pcaps);
-    } catch (const pcapfs::PcapFsException & err) {
+    } catch (const pcapfs::PcapFsException &err) {
         std::cerr << "Error: " << err.what() << std::endl;
         return 2;
     }
 
-    //TODO: use factory as well (only get key vfiles)
     if (!config.keyFiles.empty()) {
         std::vector<pcapfs::FilePtr> keyFiles = pcapfs::SSLKeyFile::parseCandidates(config.keyFiles);
         index.insertKeyCandidates(keyFiles);
@@ -124,8 +123,6 @@ int main(int argc, const char *argv[]) {
     }
 
     if (config.indexInMemory) { LOG_INFO << "Using an in-memory index"; }
-
-    //TODO: needs to check the index file here as well, if it matches the pcaps
 
 
     /*

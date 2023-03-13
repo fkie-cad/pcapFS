@@ -78,7 +78,6 @@ int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
 
 void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
-    //File_Offsets* tcp_file = (*files)[pair(tcpData.getConnectionData().flowKey, side)];
 
     uint32_t flowkey = tcpData.getConnectionData().flowKey;
     pcapfs::TcpFile::TCPPtr tcpPointer;
@@ -90,17 +89,11 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
     if (state->files.find(flowkey) == state->files.end()) {
         LOG_TRACE << "New file with key: " << flowkey;
 
-        /*if (!files.insert(std::pair<uint32_t, FileInformation *>(flowkey, tcp_file)).second) {
-            LOG_ERROR << "Duplicate flowkey!";
-            exit(666);
-        }*/
-
         state->files.emplace(flowkey, std::make_shared<pcapfs::TcpFile>());
         state->currentSide.insert(std::pair<uint32_t, signed char>(flowkey, side));
         tcpPointer = state->files[flowkey];
 
         tcpPointer->setFirstPacketNumber(state->currentFragment.frameNr);
-        //tcp_file->fileinformation.flags = 0;
         tcpPointer->setTimestamp(state->currentTimestamp);
         tcpPointer->setFilename("tcp" + std::to_string(state->nextUniqueId));
         tcpPointer->setIdInIndex(state->nextUniqueId);
@@ -108,7 +101,6 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer->setFilesizeRaw(tcpData.getDataLength());
         tcpPointer->setFilesizeProcessed(tcpData.getDataLength());
         tcpPointer->setFiletype("tcp");
-        //tcp_file->fileinformation.filesize_uncompressed = tcpData.getDataLength();
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
         tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP.toString());
@@ -121,8 +113,6 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer = state->files[flowkey];
         tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
         tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw());
-        //TODO: where to add uncompressed/unprocessed filesize?
-        //tcp_file->fileinformation.filesize_uncompressed += tcpData.getDataLength();
     }
 
     if (state->currentSide[flowkey] != side) {
@@ -145,14 +135,11 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
          * Is the missing data spread over several HTTP-messages or even sides?! -> Assuming no
          */
         Fragment fragment;
-        //TODO: check for missing data
 
         if (!tcpPointer->fragments.empty()) {
             fragment = tcpPointer->fragments.back();
         } else {
-            //LOG_ERROR << std::to_string(state->currentFragment.frameNr) << " and flowkey " << std::to_string(flowkey);
-            LOG_ERROR << "Missing data at begin of streaml!";
-            //LOG_ERROR << "missing bytes: " << std::to_string(missing_count);
+            LOG_ERROR << "Missing data at begin of stream!";
             fragment = state->currentFragment.fragment;
         }
 
@@ -191,7 +178,6 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
     PcapPtr pcapPtr;
 
     int icmpPackets = 0;
-
 
     for (auto &pcap: pcapFiles) {
         pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapFile>(pcap);

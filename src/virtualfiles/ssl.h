@@ -53,7 +53,7 @@ namespace pcapfs {
         0xC028, // TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
         0xC02F, // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         0xC030  // TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-        };
+    };
 
     struct TLSHandshakeData {
         TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),

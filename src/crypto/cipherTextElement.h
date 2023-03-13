@@ -4,16 +4,10 @@
 
 #include "../commontypes.h"
 
-/**
- * @todo write docs
- */
 namespace pcapfs {
 
 	class CipherTextElement {
 	public:
-		//CipherTextElement();
-
-		//~CipherTextElement();
 
 		size_t getLength() { return length; };
 		uint64_t getVirtualFileOffset(){ return virtualFileOffset; };

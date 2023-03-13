@@ -61,8 +61,6 @@ namespace pcapfs {
 
         void increaseID(const std::string &type);
 
-        //used for key candidates
-        //TODO: use a map to make the search more effective?
         std::unordered_map<std::string, std::vector<FilePtr>> keyCandidates;
     };
 

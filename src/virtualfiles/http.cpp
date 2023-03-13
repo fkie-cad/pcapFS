@@ -19,11 +19,6 @@
  * Is always called for a file that is classified as HTTP.
  */
 std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
-    //LOG_ERROR << filePtr->getFilename() << " EGGHUNTME";
-    /*
-     * Check if SSL file has proper offsets before parsing as HTTP
-     * Seems something is broken at this point, maybe check the connection breaks first
-     */
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
@@ -44,19 +39,14 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
     LOG_TRACE << "HTTP parser, number of elements (connection breaks): " << numElements;
 
-    //for(auto &offsetWithTime : filePtr->connectionBreaks){
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t &offset = filePtr->connectionBreaks.at(i).first;
-        //TODO: Why do we distinguish here?
         if (i == numElements - 1) {
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-
-
-        //TODO: add connection breaks here!
         Fragment fragment;
         Fragment fragmentHeader;
         fragment.id = filePtr->getIdInIndex();
@@ -132,7 +122,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
 
             //create http request body
-            //TODO: make sure these values are set!!!!
             fragment.start = offset + firstLine + headerLength;
             fragment.length = size - firstLine - headerLength;
 
@@ -203,12 +192,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             fragment.start = offset + firstLine + headerLength;
             fragment.length = size - firstLine - headerLength;
 
-            //TODO:
-            //Also Why?
             resultPtr->fragments.push_back(fragment);
             resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-
 
             resultPtr->setOffsetType(filePtr->getFiletype());
             resultPtr->setFiletype("http");
@@ -241,9 +227,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
 
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
-
-            //TODO WHY?
-            //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
             }
@@ -264,7 +247,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->setFilesizeRaw(fragment.length);
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
-
             resultPtr->setOffsetType(filePtr->getFiletype());
             resultPtr->setFiletype("http");
             resultPtr->setFilename(requestedFilename);
@@ -296,9 +278,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
 
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
-
-            //TODO WHY?
-            //TODO: hide files whose processed size is zero?
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
             }
