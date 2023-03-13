@@ -191,9 +191,17 @@ namespace {
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
-                    ("verbosity,v", po::value<std::string>()->default_value("warning"),
-                     "set verbosity (valid values are: trace, debug, info, warning, error, fatal)")
                     ("version,V", "show version information and exit");
+            
+            po::typed_value<std::string, char>* verbosity;
+            #if(DEBUG)
+                verbosity = po::value<std::string>()->default_value("debug");
+            #else
+                verbosity = po::value<std::string>()->default_value("warning");
+            #endif
+            pcapfs_options.add_options()
+                    ("verbosity,v", verbosity,
+                     "set verbosity (valid values are: trace, debug, info, warning, error, fatal)");
 
             po::options_description fuse_options("FUSE help");
             fuse_options.add_options()

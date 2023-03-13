@@ -72,7 +72,7 @@ add_executable(pcapfs src/main.cpp ${PCAPFS_COMMON_SOURCES})
 target_compile_options(pcapfs PRIVATE -Wall -Wextra -g3 -pedantic)
 target_compile_features(pcapfs PRIVATE ${COMPILE_FEATURES})
 target_link_libraries(pcapfs PRIVATE ${PCAPFS_LINK_LIBRARIES})
-
+target_compile_definitions(pcapfs PRIVATE "DEBUG=$<CONFIG:Debug>")
 
 if (BUILD_TESTING)
     find_package(Catch2 REQUIRED)
