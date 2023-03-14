@@ -1,14 +1,5 @@
 #include "ssl.h"
 
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/sha.h>
-#include <openssl/rsa.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
-#include <openssl/bio.h>
-
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
 
@@ -19,6 +10,8 @@
 #include "../logging.h"
 #include "../crypto/decryptSymmetric.h"
 #include "../crypto/ciphersuites.h"
+#include "../crypto/handshakedata.h"
+#include "../crypto/cryptutils.h"
 
 
 std::string const pcapfs::SslFile::toString() {
@@ -92,7 +85,7 @@ bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
 }
 
 
-void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offset,
+void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
                                             const FilePtr &filePtr, const Index &idx){
 
     size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
@@ -125,7 +118,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
             }
             memcpy(handshakeData->clientRandom.data(),
                     clientHelloMessage->getClientHelloHeader()->random,
-                    CLIENT_RANDOM_SIZE);
+                    crypto::CLIENT_RANDOM_SIZE);
             if (numHandshakeMessages == 1) {
                 handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
                                                             sslLayer->getData()+5,
@@ -147,7 +140,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
             }
             memcpy(handshakeData->serverRandom.data(),
 					serverHelloMessage->getServerHelloHeader()->random,
-					SERVER_RANDOM_SIZE);
+					crypto::SERVER_RANDOM_SIZE);
             if (serverHelloMessage->getCipherSuite())
                 handshakeData->cipherSuite = serverHelloMessage->getCipherSuite();
 			handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
@@ -209,7 +202,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
                                                                     sslLayer->getData()+5+currentHandshakeOffset,
                                                                     sslLayer->getData()+messageLength+5+currentHandshakeOffset);
                         }
-                        handshakeData->sessionHash = calculateSessionHash(handshakeData);
+                        handshakeData->sessionHash = crypto::calculateSessionHash(handshakeData);
                         if (handshakeData->sessionHash.empty())
                             LOG_ERROR << "Failed to calculate session hash. Look above why";
                     }
@@ -295,13 +288,13 @@ size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
     rawData.resize(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    std::string pemString = convertToPem(rawData);
+    std::string pemString = crypto::convertToPem(rawData);
     return pemString.size();
 }
 
 
 void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage,
-                                                                    const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
+                                                                    const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
     uint64_t offsetTemp = 0;
 
     offset += 7; //certificate message header length
@@ -344,66 +337,12 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, p
 }
 
 
-pcapfs::Bytes const pcapfs::SslFile::calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData) {
-
-    Bytes digest(0);
-
-    if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
-        (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
-
-        bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
-
-        EVP_MD_CTX *mdctx;
-        unsigned int digest_len = 0;
-        unsigned char error = 0;
-	    if((mdctx = EVP_MD_CTX_new()) == nullptr)
-	    	error = 1;
-
-        if(useSha384){
-            digest.resize(48);
-            digest_len = 48;
-	        if(EVP_DigestInit_ex(mdctx, EVP_sha384(), nullptr) != 1)
-	    	    error = 1;
-        } else {
-            if(handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2){
-                digest.resize(32);
-                digest_len = 32;
-                if(EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1)
-	    	        error = 1;
-            } else {
-                digest.resize(36);
-                digest_len = 36;
-                if(EVP_DigestInit_ex(mdctx, EVP_md5_sha1(), nullptr) != 1)
-                    error = 1;
-            }
-        }
-
-	    if(EVP_DigestUpdate(mdctx, handshakeData->handshakeMessagesRaw.data(), handshakeData->handshakeMessagesRaw.size()) != 1)
-	    	error = 1;
-
-	    if(EVP_DigestFinal_ex(mdctx, digest.data(), &digest_len) != 1)
-	    	error = 1;
-
-        if(error) {
-            ERR_print_errors_fp(stderr);
-            digest.clear();
-        }
-
-	    EVP_MD_CTX_free(mdctx);
-    } else {
-        LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
-    }
-
-    return digest;
-}
-
-
-void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const std::shared_ptr<TLSHandshakeData> &handshakeData, Index &idx){
+void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const TLSHandshakeDataPtr &handshakeData, Index &idx){
 	//search for master secret in candidates
     if (handshakeData->processedTLSHandshake && handshakeData->cipherSuite) {
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
-			Bytes keyMaterial = createKeyMaterial(masterSecret, handshakeData, false);
+			Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
             if(!keyMaterial.empty()) {
 			    //TODO: not good to add sslkey file directly into index!!!
 			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
@@ -460,7 +399,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     size_t numElements = filePtr->connectionBreaks.size();
     bool visitedVirtualSslFile = false;
     std::shared_ptr<SslFile> resultPtr = nullptr;
-    std::shared_ptr<TLSHandshakeData> handshakeData = std::make_shared<TLSHandshakeData>();
+    TLSHandshakeDataPtr handshakeData = std::make_shared<crypto::TLSHandshakeData>();
 
     // process all logical breaks in underlying virtual file
     for (unsigned int i = 0; i < numElements; ++i) {
@@ -626,53 +565,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 }
 
 
-int pcapfs::SslFile::matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &serverCertificate) {
-    if(rsaPrivateKey.empty() || serverCertificate.empty()) {
-        return false;
-    }
-
-    BIO* bio = BIO_new(BIO_s_mem());
-    BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
-    if(!bio) {
-        LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
-        ERR_print_errors_fp(stderr);
-        BIO_free(bio);
-        return false;
-    }
-
-    EVP_PKEY* privKey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-    if(!privKey) {
-        LOG_ERROR << "Openssl: Failed to read in rsa private key";
-        ERR_print_errors_fp(stderr);
-        BIO_free(bio);
-        EVP_PKEY_free(privKey);
-        return false;
-    }
-
-    BIO_free(bio);
-
-    const unsigned char* c = serverCertificate.data();
-    X509* x509 = nullptr;
-    x509 = d2i_X509(&x509, &c, serverCertificate.size());
-    if (!x509) {
-        LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content";
-        ERR_print_errors_fp(stderr);
-        EVP_PKEY_free(privKey);
-        X509_free(x509);
-        return false;
-    }
-
-    int result = X509_verify(x509, privKey);
-
-    X509_free(x509);
-    EVP_PKEY_free(privKey);
-
-    return result;
-}
-
-
 //Returns the correct Master Secret out of a bunch of candidates
-pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
+pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
 
     bool isRsaKeyX = (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA);
     std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
@@ -687,58 +581,14 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const std::shared
             return sslKeyFile->getMasterSecret();
         } else if (isRsaKeyX) {
             if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
-                return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
-            } else if (matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
-                return createKeyMaterial(decryptPreMasterSecret(handshakeData->encryptedPremasterSecret,
-                                        sslKeyFile->getRsaPrivateKey()), handshakeData, true);
+                return crypto::createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
+            } else if (crypto::matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
+                return crypto::createKeyMaterial(crypto::decryptPreMasterSecret(handshakeData->encryptedPremasterSecret,
+                                                sslKeyFile->getRsaPrivateKey()), handshakeData, true);
             }
         }
     }
     return Bytes();
-}
-
-
-pcapfs::Bytes const pcapfs::SslFile::decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey) {
-
-    Bytes result(0);
-
-    if(encryptedPremasterSecret.empty() || rsaPrivateKey.empty()) {
-        LOG_ERROR << "Failed to decrypt encrypted premaster secret";
-        return result;
-    }
-
-    BIO* bio = BIO_new(BIO_s_mem());
-    BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
-    if(!bio) {
-        LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
-        BIO_free(bio);
-        return result;
-    }
-
-    RSA* rsa = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
-    if(!rsa) {
-        LOG_ERROR << "Openssl: Failed to read in rsa private key";
-        BIO_free(bio);
-        return result;
-    }
-
-    BIO_free(bio);
-
-    result.resize(RSA_size(rsa));
-    std::vector<int> possible_padding = {RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_NO_PADDING};
-    for(size_t i = 0; i < possible_padding.size(); ++i) {
-        if(RSA_private_decrypt(encryptedPremasterSecret.size(), encryptedPremasterSecret.data(),
-                                result.data(), rsa, possible_padding[i]) != -1) {
-            break;
-
-        } else if(i == possible_padding.size() - 1) {
-            LOG_ERROR << "Openssl: Failed to decrypt encrypted premaster secret";
-            result.clear();
-        }
-    }
-    RSA_free(rsa);
-
-    return result;
 }
 
 
@@ -795,142 +645,6 @@ int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
 }
 
 
-pcapfs::Bytes const pcapfs::SslFile::createKeyMaterial(const Bytes &input, const std::shared_ptr<TLSHandshakeData> &handshakeData, bool deriveMasterSecret) {
-
-    //function to derive the master secret from premaster secret and derive key material from master secret
-    /*
-     * SSLv3:
-     *
-     * It is a bit longer, see this one:
-     *
-     * https://tools.ietf.org/html/rfc6101#section-6.2.1
-     *
-     *
-     * TLS 1.0 and TLS 1.1:
-     *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
-     *                                      P_SHA-1(S2, label + seed);
-     *
-     * TLS 1.2:
-     *       PRF(secret, label, seed) = P_SHA256(secret, label + seed)
-     *
-     *
-     *
-     * key_block = PRF(SecurityParameters.master_secret,
-     *                 "key expansion",
-     *                 SecurityParameters.server_random +
-     *                 SecurityParameters.client_random);
-     *
-     * KEY MATERIAL (TLS 1.0/1.1/1.2):
-     *          client_write_MAC_secret[SecurityParameters.hash_size]
-     *          server_write_MAC_secret[SecurityParameters.hash_size]
-     *          client_write_key[SecurityParameters.key_material_length]
-     *          server_write_key[SecurityParameters.key_material_length]
-     *          client_write_IV[SecurityParameters.IV_size]
-     *          server_write_IV[SecurityParameters.IV_size]
-     */
-
-    Bytes output(0);
-
-    if (input.empty())
-        return output;
-
-    if ((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
-        (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
-
-        if (handshakeData->clientRandom.empty() || handshakeData->serverRandom.empty()) {
-            LOG_ERROR << "Failed to derive key material because client and/or server random could not be extracted";
-            return output;
-        }
-
-        bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
-
-        size_t LABEL_SIZE = 13;
-        size_t SEED_SIZE = LABEL_SIZE + CLIENT_RANDOM_SIZE + SERVER_RANDOM_SIZE;
-        Bytes seed(SEED_SIZE);
-
-        size_t OUTPUT_SIZE;
-        if (deriveMasterSecret){
-            OUTPUT_SIZE = 48;
-            if (handshakeData->extendedMasterSecret) {
-                if (handshakeData->sessionHash.empty()) {
-                    LOG_ERROR << "Failed to derive extended master secret because session hash could not be calculuated";
-                    return output;
-                }
-                LABEL_SIZE = 22;
-                SEED_SIZE = LABEL_SIZE + handshakeData->sessionHash.size();
-                seed.resize(SEED_SIZE);
-                memcpy(&seed[0], "extended master secret", LABEL_SIZE);
-                memcpy(&seed[LABEL_SIZE], handshakeData->sessionHash.data(), handshakeData->sessionHash.size());
-            } else {
-                memcpy(&seed[0], "master secret", LABEL_SIZE);
-                memcpy(&seed[LABEL_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
-                memcpy(&seed[LABEL_SIZE + CLIENT_RANDOM_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
-            }
-        } else {
-            OUTPUT_SIZE = 192;
-            memcpy(&seed[0], "key expansion", LABEL_SIZE);
-            memcpy(&seed[LABEL_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
-            memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
-        }
-
-        unsigned char error = 0;
-        EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_TLS1_PRF, nullptr);
-        if (!pctx) {
-            LOG_ERROR << "Openssl: Failed to allocate public key algorithm context" << std::endl;
-            error = 1;
-        }
-        if (EVP_PKEY_derive_init(pctx) <= 0) {
-            LOG_ERROR << "Openssl: Failed to initialize public key algorithm context" << std::endl;
-            error = 1;
-        }
-
-        if (useSha384) {
-             if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha384()) <= 0) {
-                    LOG_ERROR << "Openssl: Failed to set the master secret" << std::endl;
-                    error = 1;
-                }
-        } else {
-            if (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2) {
-                if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
-                    LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
-                    error = 1;
-                }
-            } else if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_md5_sha1()) <= 0) {
-                LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.0 or 1.1" << std::endl;
-                error = 1;
-            }
-        }
-
-        if (EVP_PKEY_CTX_set1_tls1_prf_secret(pctx, input.data(), 48) <= 0) {
-        	LOG_ERROR << "Openssl: PRF key derivation failed" << std::endl;
-            error = 1;
-        }
-        if (EVP_PKEY_CTX_add1_tls1_prf_seed(pctx, seed.data(), SEED_SIZE) <= 0) {
-        	LOG_ERROR << "Openssl: Failed to set the seed" << std::endl;
-            error = 1;
-        }
-
-        output.resize(OUTPUT_SIZE);
-        if (EVP_PKEY_derive(pctx, output.data(), &OUTPUT_SIZE) <= 0) {
-        	LOG_ERROR << "Openssl: Failed to derive the shared secret" << std::endl;
-            error = 1;
-        }
-
-        if (error) {
-            ERR_print_errors_fp(stderr);
-            output.clear();
-        }
-
-        EVP_PKEY_CTX_free(pctx);
-
-    } else {
-        LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
-    }
-
-    return output;
-}
-
-
 size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
     if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
@@ -951,55 +665,12 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 }
 
 
-std::string const pcapfs::SslFile::convertToPem(const Bytes &input) {
-    X509* x509 = nullptr;
-    std::string result(input.begin(), input.end());
-    const unsigned char* c = input.data();
-
-    // convert raw DER content to internal X509 structure
-    x509 = d2i_X509(&x509, &c, input.size());
-    if (!x509) {
-        LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content:";
-        ERR_print_errors_fp(stderr);
-        X509_free(x509);
-        return result;
-    }
-
-    // write x509 certificate in bio
-    BIO* bio = BIO_new(BIO_s_mem());
-    if (!PEM_write_bio_X509(bio, x509)) {
-        LOG_ERROR << "Openssl: Failed to write ssl certificate as pem into bio:";
-        ERR_print_errors_fp(stderr);
-        BIO_free(bio);
-        X509_free(x509);
-        return result;
-    }
-
-    // access certificate content in bio
-    BUF_MEM* mem = nullptr;
-    BIO_get_mem_ptr(bio, &mem);
-    if(!mem || !mem->data || !mem->length) {
-        LOG_ERROR << "Openssl: Failed to extract buffer out of bio:";
-        ERR_print_errors_fp(stderr);
-        BIO_free(bio);
-        X509_free(x509);
-        return result;
-    }
-
-    result.assign(mem->data, mem->length);
-
-    BIO_free(bio);
-    X509_free(x509);
-    return result;
-}
-
-
 size_t pcapfs::SslFile::readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     Fragment fragment = fragments.at(0);
     Bytes rawData(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    std::string pemString = convertToPem(rawData);
+    std::string pemString = crypto::convertToPem(rawData);
     size_t readCount = std::min((size_t) pemString.length() - startOffset, length);
     memcpy(buf, pemString.c_str() + startOffset, length);
     return readCount;
