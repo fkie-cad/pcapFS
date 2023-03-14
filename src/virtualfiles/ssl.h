@@ -23,7 +23,8 @@ namespace pcapfs {
 
     struct TLSHandshakeData {
         TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),
-                             handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0), certificates(0) {}
+                             handshakeMessagesRaw(0), sessionHash(0), encryptedPremasterSecret(0), certificates(0),
+                             serverCertificate(0) {}
         bool processedTLSHandshake = false;
         bool clientChangeCipherSpec = false;
         bool serverChangeCipherSpec = false;
@@ -42,6 +43,7 @@ namespace pcapfs {
         Bytes sessionHash;
         Bytes encryptedPremasterSecret;
         std::vector<FilePtr> certificates;
+        Bytes serverCertificate;
         pcpp::SSLCipherSuite* cipherSuite = nullptr;
     };
 
@@ -70,7 +72,8 @@ namespace pcapfs {
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_ptr<TLSHandshakeData> &handshakeData, uint64_t &offset,
                                         const FilePtr &fileptr, const Index &idx);
 
-        static std::vector<FilePtr> const createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage, const Index &idx);
+        static void createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage,
+                                                        const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
 
         static Bytes const calculateSessionHash(const std::shared_ptr<TLSHandshakeData> &handshakeData);
 
@@ -90,6 +93,8 @@ namespace pcapfs {
         static Bytes const searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx);
 
         static Bytes const decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey);
+
+        static int matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &serverCertificate);
 
         void serialize(boost::archive::text_oarchive &archive) override;
 

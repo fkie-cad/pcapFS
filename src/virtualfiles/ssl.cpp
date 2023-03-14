@@ -224,8 +224,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, std::shared_
                 LOG_ERROR << "Failed to extract TLS Certificate Message";
                 continue;
             }
-            const std::vector<FilePtr> certificates = createCertFiles(filePtr, offset, certificateMessage, idx);
-            handshakeData->certificates.insert(handshakeData->certificates.end(), certificates.begin(), certificates.end());
+            createCertFiles(filePtr, offset, certificateMessage, handshakeData, idx);
             if (handshakeData->cipherSuite) {
                 if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA &&
                     handshakeData->extendedMasterSecret && handshakeData->sessionHash.empty()) {
@@ -301,9 +300,8 @@ size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
 }
 
 
-std::vector<pcapfs::FilePtr> const pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset,
-                                                                pcpp::SSLCertificateMessage* certificateMessage, const Index &idx) {
-    std::vector<FilePtr> resultVector(0);
+void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage,
+                                                                    const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
     uint64_t offsetTemp = 0;
 
     offset += 7; //certificate message header length
@@ -337,12 +335,12 @@ std::vector<pcapfs::FilePtr> const pcapfs::SslFile::createCertFiles(const FilePt
 
         certPtr->setFilesizeProcessed(certPtr->calculateProcessedCertSize(idx));
 
-        resultVector.push_back(certPtr);
+        handshakeData->certificates.push_back(certPtr);
+        handshakeData->serverCertificate.insert(handshakeData->serverCertificate.end(),
+                                                certificate->getData(), certificate->getData()+certificate->getDataLength());
 
         offsetTemp += certificate->getDataLength();
     }
-
-    return resultVector;
 }
 
 
@@ -628,6 +626,51 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 }
 
 
+int pcapfs::SslFile::matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &serverCertificate) {
+    if(rsaPrivateKey.empty() || serverCertificate.empty()) {
+        return false;
+    }
+
+    BIO* bio = BIO_new(BIO_s_mem());
+    BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
+    if(!bio) {
+        LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
+        ERR_print_errors_fp(stderr);
+        BIO_free(bio);
+        return false;
+    }
+
+    EVP_PKEY* privKey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+    if(!privKey) {
+        LOG_ERROR << "Openssl: Failed to read in rsa private key";
+        ERR_print_errors_fp(stderr);
+        BIO_free(bio);
+        EVP_PKEY_free(privKey);
+        return false;
+    }
+
+    BIO_free(bio);
+
+    const unsigned char* c = serverCertificate.data();
+    X509* x509 = nullptr;
+    x509 = d2i_X509(&x509, &c, serverCertificate.size());
+    if (!x509) {
+        LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content";
+        ERR_print_errors_fp(stderr);
+        EVP_PKEY_free(privKey);
+        X509_free(x509);
+        return false;
+    }
+
+    int result = X509_verify(x509, privKey);
+
+    X509_free(x509);
+    EVP_PKEY_free(privKey);
+
+    return result;
+}
+
+
 //Returns the correct Master Secret out of a bunch of candidates
 pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const std::shared_ptr<TLSHandshakeData> &handshakeData, const Index &idx) {
 
@@ -645,9 +688,9 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const std::shared
         } else if (isRsaKeyX) {
             if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
                 return createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
-            } else if (!sslKeyFile->getRsaPrivateKey().empty()) {
-                return createKeyMaterial(decryptPreMasterSecret(handshakeData->encryptedPremasterSecret, sslKeyFile->getRsaPrivateKey()),
-                                        handshakeData, true);
+            } else if (matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
+                return createKeyMaterial(decryptPreMasterSecret(handshakeData->encryptedPremasterSecret,
+                                        sslKeyFile->getRsaPrivateKey()), handshakeData, true);
             }
         }
     }
