@@ -1,0 +1,48 @@
+<HTML><BODY BGCOLOR="#ffffff">
+<pre>
+
+s_server -no_comp -cert ssl_scripts/MyRootCA.pem -tls1_2 -cipher DHE-RSA-AES128-SHA -key ssl_scripts/MyRootCA.key -accept 443 -debug -www -keylogfile /home/axel/dh2.key 
+Secure Renegotiation IS supported
+Ciphers supported in s_server binary
+TLSv1.3    :TLS_AES_256_GCM_SHA384    TLSv1.3    :TLS_CHACHA20_POLY1305_SHA256 
+TLSv1.3    :TLS_AES_128_GCM_SHA256    SSLv3      :DHE-RSA-AES128-SHA        
+---
+Ciphers common between both SSL end points:
+TLS_AES_128_GCM_SHA256     TLS_CHACHA20_POLY1305_SHA256 TLS_AES_256_GCM_SHA384    
+DHE-RSA-AES128-SHA
+Signature Algorithms: ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:RSA-PSS+SHA256:RSA-PSS+SHA384:RSA-PSS+SHA512:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA1:RSA+SHA1
+Shared Signature Algorithms: ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:RSA-PSS+SHA256:RSA-PSS+SHA384:RSA-PSS+SHA512:RSA+SHA256:RSA+SHA384:RSA+SHA512
+Supported groups: x25519:secp256r1:secp384r1:secp521r1:ffdhe2048:ffdhe3072
+Shared groups: x25519:secp256r1:secp384r1:secp521r1:ffdhe2048:ffdhe3072
+---
+New, SSLv3, Cipher is DHE-RSA-AES128-SHA
+SSL-Session:
+    Protocol  : TLSv1.2
+    Cipher    : DHE-RSA-AES128-SHA
+    Session-ID: 
+    Session-ID-ctx: 01000000
+    Master-Key: F2F2BAB44DC40F61B7F7CEC75A9871EFE94997C07C822D7DA1E1057F81943FD0390CF481973D1EDF0EE19A4BEB9A7091
+    PSK identity: None
+    PSK identity hint: None
+    SRP username: None
+    Start Time: 1673271231
+    Timeout   : 7200 (sec)
+    Verify return code: 0 (ok)
+    Extended master secret: yes
+---
+   0 items in the session cache
+   0 client connects (SSL_connect())
+   0 client renegotiates (SSL_connect())
+   0 client connects that finished
+   1 server accepts (SSL_accept())
+   0 server renegotiates (SSL_accept())
+   1 server accepts that finished
+   0 session cache hits
+   1 session cache misses
+   0 session cache timeouts
+   0 callback cache hits
+   0 cache full overflows (128 allowed)
+---
+no client certificate available
+</pre></BODY></HTML>
+
