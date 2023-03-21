@@ -36,3 +36,4 @@ source "${venv}/bin/activate"
 set -u
 
 py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+py.test "${here}/pcapfs-crypto-tests-features.py" -vv

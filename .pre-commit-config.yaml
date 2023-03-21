@@ -1,4 +1,4 @@
-exclude: '.*\.(pcap|index|key|txt)|^3rdparty/|^build/|^dependencies'
+exclude: '.*\.(pcap|index|key|txt)|^3rdparty/|^build/|^dependencies|expected_output'
 fail_fast: false
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
