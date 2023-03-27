@@ -105,7 +105,6 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
         if (!handshakeMessage)
             continue;
         size_t messageLength = handshakeMessage->getMessageLength();
-        //offset += messageLength;
 		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
 
 		if (handshakeType == pcpp::SSL_CLIENT_HELLO) {
@@ -119,6 +118,11 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
             memcpy(handshakeData->clientRandom.data(),
                     clientHelloMessage->getClientHelloHeader()->random,
                     crypto::CLIENT_RANDOM_SIZE);
+
+            pcpp::SSLServerNameIndicationExtension* sni = dynamic_cast<pcpp::SSLServerNameIndicationExtension*>(clientHelloMessage->getExtensionOfType(0));
+            if (sni) {
+                handshakeData->serverName = sni->getHostName();
+            }
             if (numHandshakeMessages == 1) {
                 handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
                                                             sslLayer->getData()+5,
@@ -323,6 +327,8 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, p
 	    certPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
 	    certPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
 	    certPtr->setProperty("protocol", "ssl");
+        if (!handshakeData->serverName.empty())
+            certPtr->setProperty("domain", handshakeData->serverName);
         certPtr->flags.set(pcapfs::flags::IS_METADATA);
         certPtr->flags.set(pcapfs::flags::PROCESSED);
 
@@ -355,23 +361,25 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
                 LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
 		}
 	}
-	resultPtr->setOffsetType(filePtr->getFiletype());
-	resultPtr->setFiletype("ssl");
-	resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
+    resultPtr->setOffsetType(filePtr->getFiletype());
+    resultPtr->setFiletype("ssl");
+    resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
-	resultPtr->setSslVersion(handshakeData->sslVersion);
-	resultPtr->setFilename("SSL");
-	resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-	resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-	resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-	resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-	resultPtr->setProperty("protocol", "ssl");
-	resultPtr->setTimestamp(filePtr->connectionBreaks.at(handshakeData->iteration).second);
+    resultPtr->setSslVersion(handshakeData->sslVersion);
+    resultPtr->setFilename("SSL");
+    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    resultPtr->setProperty("protocol", "ssl");
+    if (!handshakeData->serverName.empty())
+        resultPtr->setProperty("domain", handshakeData->serverName);
+    resultPtr->setTimestamp(filePtr->connectionBreaks.at(handshakeData->iteration).second);
 
-	if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-		resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
-	}
+    if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
+        resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
+    }
 }
 
 

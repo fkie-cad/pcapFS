@@ -38,6 +38,7 @@ namespace pcapfs {
             std::vector<FilePtr> certificates;
             Bytes serverCertificate;
             pcpp::SSLCipherSuite* cipherSuite = nullptr;
+            std::string serverName;
         } TLSHandshakeData;
 
     }

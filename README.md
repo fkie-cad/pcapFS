@@ -209,7 +209,7 @@ along with the protocol they origin from:
 | dstIP    | ip       | Destination IP address |
 | srcPort  | tcp, udp | Source port |
 | dstPort  | tcp, udp | Destination port |
-| domain   | http     | The domain parsed from the HTTP Host header |
+| domain   | http, ssl     | The domain parsed from the HTTP Host header and SNI|
 | path     | http     | The path parsed from a HTTP request |
 
 A protocol implemented in pcapFS can define its own properties based on values it parsed. Therefore, as more and more
