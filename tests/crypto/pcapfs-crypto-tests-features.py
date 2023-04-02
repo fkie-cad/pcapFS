@@ -5,6 +5,7 @@ import tempfile
 from contextlib import contextmanager
 
 import pytest
+
 """
 test decryption with master secret, premaster secret, private server key and
 ssl certificate extraction for separate ssl connections in one pcap
@@ -20,14 +21,19 @@ class TestCryptoFeatures:
             params=[
                 "-k",
                 "{here}/feature_test/keyfiles".format(here=HERE),
-                "--show-metadata"
+                "--show-metadata",
             ],
         ) as mountpoint:
             files = get_file_list(mountpoint)
             assert files == expected_files
             for file in files:
                 f = open(os.path.join(mountpoint, file), "rb")
-                f_cmp = open(os.path.join("{here}/feature_test/expected_output".format(here=HERE), file), "rb")
+                f_cmp = open(
+                    os.path.join(
+                        "{here}/feature_test/expected_output".format(here=HERE), file
+                    ),
+                    "rb",
+                )
                 assert f.read() == f_cmp.read()
                 f.close()
                 f_cmp.close()
@@ -73,6 +79,15 @@ def test_pcap():
 
 @pytest.fixture
 def expected_files():
-    return sorted(["http/4-0_GET.meta", "http/4-117", "http/4-73.meta", "ssl/0-626_SSLCertificate.pem",
-                   "ssl/1-1726_SSL", "ssl/1-193_SSLCertificate.pem", "ssl/2-1624_SSL", "ssl/2-195_SSLCertificate.pem"])
-
+    return sorted(
+        [
+            "http/4-0_GET.meta",
+            "http/4-117",
+            "http/4-73.meta",
+            "ssl/0-626_SSLCertificate.pem",
+            "ssl/1-1726_SSL",
+            "ssl/1-193_SSLCertificate.pem",
+            "ssl/2-1624_SSL",
+            "ssl/2-195_SSLCertificate.pem",
+        ]
+    )

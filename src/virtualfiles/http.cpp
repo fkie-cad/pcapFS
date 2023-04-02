@@ -12,6 +12,7 @@
 
 #include "../filefactory.h"
 #include "../logging.h"
+#include "../cobaltstrike.h"
 
 
 /*
@@ -22,7 +23,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
-    if(!isHttpTraffic(filePtr)){
+    //if(!isHttpTraffic(filePtr)){
+    //    return resultVector;
+    //}
+    if(!isHttpTraffic(data)){
         return resultVector;
     }
 
@@ -81,6 +85,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultHeaderPtr->setFiletype("http");
             requestedHost = header["host"];
+
+            if (header.find("cookie") != header.end()) {
+                CobaltStrike::getInstance().handleHttpGet(header["cookie"]);
+            }
+
             requestedUri = getRequestUri(data, offset, size);
             requestedFilename = requestedHost + requestedUri;
             requestedFilename = uriToFilename(requestedFilename);
@@ -600,10 +609,21 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     return (int) read_count;
 }
 
-bool pcapfs::HttpFile::isHttpTraffic(const FilePtr& filePtr) {
+/**bool pcapfs::HttpFile::isHttpTraffic(const FilePtr& filePtr) {
     // TODO: check for port 443, whether file has already decrypted content -> new flag?
     if ((filePtr->getProperty("dstPort") == "80") || (filePtr->getProperty("dstPort") == "443")) {
         return true;
+    }
+    return false;
+}**/
+
+bool pcapfs::HttpFile::isHttpTraffic(const Bytes &data) {
+    if (data.size() >= 7) {
+        std::string str(data.begin(), data.begin()+7);
+        for (auto &s : httpStrings) {
+            if (str.compare(0, s.length(), s) == 0)
+                return true;
+        }
     }
     return false;
 }

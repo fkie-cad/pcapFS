@@ -591,8 +591,8 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshak
             if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
                 return crypto::createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
             } else if (crypto::matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
-                return crypto::createKeyMaterial(crypto::decryptPreMasterSecret(handshakeData->encryptedPremasterSecret,
-                                                sslKeyFile->getRsaPrivateKey()), handshakeData, true);
+                return crypto::createKeyMaterial(crypto::rsaPrivateDecrypt(handshakeData->encryptedPremasterSecret,
+                                                sslKeyFile->getRsaPrivateKey(), true), handshakeData, true);
             }
         }
     }

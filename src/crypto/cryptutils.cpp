@@ -189,26 +189,29 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
 }
 
 
-pcapfs::Bytes const pcapfs::crypto::decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey) {
+pcapfs::Bytes const pcapfs::crypto::rsaPrivateDecrypt(const Bytes &input, const Bytes &rsaPrivateKey, bool printErrors) {
 
     Bytes result(0);
 
-    if(encryptedPremasterSecret.empty() || rsaPrivateKey.empty()) {
-        LOG_ERROR << "Failed to decrypt encrypted premaster secret";
+    if(input.empty() || rsaPrivateKey.empty()) {
+        if (printErrors)
+            LOG_ERROR << "Failed to decrypt encrypted premaster secret";
         return result;
     }
 
     BIO* bio = BIO_new(BIO_s_mem());
     BIO_write(bio, rsaPrivateKey.data(), rsaPrivateKey.size());
     if(!bio) {
-        LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
+        if (printErrors)
+            LOG_ERROR << "Openssl: Failed to create BIO with rsa private key";
         BIO_free(bio);
         return result;
     }
 
     RSA* rsa = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
     if(!rsa) {
-        LOG_ERROR << "Openssl: Failed to read in rsa private key";
+        if (printErrors)
+            LOG_ERROR << "Openssl: Failed to read in rsa private key";
         BIO_free(bio);
         return result;
     }
@@ -218,12 +221,13 @@ pcapfs::Bytes const pcapfs::crypto::decryptPreMasterSecret(const Bytes &encrypte
     result.resize(RSA_size(rsa));
     std::vector<int> possible_padding = {RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_NO_PADDING};
     for(size_t i = 0; i < possible_padding.size(); ++i) {
-        if(RSA_private_decrypt(encryptedPremasterSecret.size(), encryptedPremasterSecret.data(),
+        if(RSA_private_decrypt(input.size(), input.data(),
                                 result.data(), rsa, possible_padding[i]) != -1) {
             break;
 
         } else if(i == possible_padding.size() - 1) {
-            LOG_ERROR << "Openssl: Failed to decrypt encrypted premaster secret";
+            if (printErrors)
+                LOG_ERROR << "Openssl: Failed to decrypt encrypted premaster secret";
             result.clear();
         }
     }

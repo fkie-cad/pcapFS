@@ -1,6 +1,7 @@
 #ifndef PCAPFS_VIRTUAL_FILES_HTTP_H
 #define PCAPFS_VIRTUAL_FILES_HTTP_H
 
+#include <set>
 #include <pcapplusplus/HttpLayer.h>
 
 #include "virtualfile.h"
@@ -8,6 +9,8 @@
 
 namespace pcapfs {
     typedef std::map<std::string, std::string> headerMap;
+
+    const std::set<std::string> httpStrings = {"HTTP", "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH"};
 
     class HttpFile : public VirtualFile {
     public:
@@ -30,7 +33,8 @@ namespace pcapfs {
 
 
         //functions used for http parsing
-        static bool isHttpTraffic(const FilePtr& filePtr);
+        //static bool isHttpTraffic(const FilePtr& filePtr);
+        static bool isHttpTraffic(const Bytes& data);
 
         static bool isHTTPRequest(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);
 

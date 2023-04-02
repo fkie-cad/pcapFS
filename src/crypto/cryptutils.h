@@ -16,7 +16,7 @@ namespace pcapfs {
 
         Bytes const calculateSessionHash(const TLSHandshakeDataPtr &handshakeData);
 
-        Bytes const decryptPreMasterSecret(const Bytes &encryptedPremasterSecret, const Bytes &rsaPrivateKey);
+        Bytes const rsaPrivateDecrypt(const Bytes &input, const Bytes &rsaPrivateKey, bool printErrors);
 
         int matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &serverCertificate);
 
