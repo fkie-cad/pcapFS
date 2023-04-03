@@ -29,7 +29,11 @@ namespace pcapfs {
 
         int readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf);
 
+        int readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+
         int calculateProcessedSize(const Index &idx);
+
+        int calculateProcessedSizeCS(const Index &idx, bool fromClient);
 
 
         //functions used for http parsing
@@ -64,8 +68,15 @@ namespace pcapfs {
 
         static bool usesValidHTTPVersion(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);
 
+        void serialize(boost::archive::text_oarchive &archive) override;
+
+        void deserialize(boost::archive::text_iarchive &archive) override;
+
     protected:
         static bool registeredAtFactory;
+        
+        Bytes cobaltStrikeKey;
+        bool fromClient;
 
     };
 

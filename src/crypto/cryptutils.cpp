@@ -334,3 +334,32 @@ pcapfs::Bytes const pcapfs::crypto::calculateSessionHash(const TLSHandshakeDataP
 
     return digest;
 }
+
+
+pcapfs::Bytes const pcapfs::crypto::calculateSha256(const Bytes &input) {
+
+    unsigned int digest_len = 32;
+    Bytes digest(digest_len);
+
+    EVP_MD_CTX *mdctx;
+    unsigned char error = 0;
+	if((mdctx = EVP_MD_CTX_new()) == nullptr)
+		error = 1;
+    if(EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1)
+	    error = 1;
+    if(EVP_DigestUpdate(mdctx, input.data(), input.size()) != 1)
+	    error = 1;
+	if(EVP_DigestFinal_ex(mdctx, digest.data(), &digest_len) != 1)
+		error = 1;
+
+    if(error) {
+        LOG_ERROR << "Failed to derive symmetric Key Material for Cobalt Strike decryption";
+        ERR_print_errors_fp(stderr);
+        digest.clear();
+    }
+
+	EVP_MD_CTX_free(mdctx);
+
+    return digest;
+}
+

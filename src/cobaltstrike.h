@@ -2,9 +2,23 @@
 #define PCAPFS_COBALTSTRIKE_H
 
 #include <set>
+#include <unordered_map>
 #include "commontypes.h"
 
 namespace pcapfs {
+
+    typedef struct CobaltStrikeConnection {
+        std::string serverIp;
+        std::string serverPort;
+        Bytes aesKey;
+        Bytes hmacKey;
+
+        std::pair<std::string,std::string> identifier() {
+            return std::make_pair(serverIp, serverPort);
+        }
+    } CobaltStrikeConnection;
+
+    typedef std::shared_ptr<CobaltStrikeConnection> CobaltStrikeConnectionPtr;
     
     class CobaltStrike {
     public:
@@ -16,15 +30,20 @@ namespace pcapfs {
         CobaltStrike(CobaltStrike const&) = delete;
         void operator=(CobaltStrike const&) = delete;
 
-        void handleHttpGet(const std::string &cookie);
+        void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort);
+        bool isKnownConnection(const std::string &ServerIp, const std::string &ServerPort);
+        Bytes const decryptPayload(const Bytes& input, const std::string &serverIp, const std::string &serverPort);
+        CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort);
 
     private:
         CobaltStrike() {}
 
         bool matchMagicBytes(const Bytes& input);
+        void addConnectionData(const Bytes& rawKey, const std::string &dstIp, const std::string &dstPort);
+        int opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData);
 
-        std::vector<std::pair<Bytes,Bytes>> symKeys;
-        std::vector<std::string> knownCookies;
+        std::vector<CobaltStrikeConnectionPtr> connections;
+        //std::vector<std::string> knownCookies;
 
         const std::set<std::string> privKeyCandidates = {
                             "-----BEGIN RSA PRIVATE KEY-----\n" \

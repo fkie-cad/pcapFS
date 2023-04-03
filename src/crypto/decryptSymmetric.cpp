@@ -195,6 +195,7 @@ int pcapfs::crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
         LOG_ERROR << "EVP_DecryptUpdate() failed" << std::endl;
         error = 1;
     }
+
     if (EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &tmplen) != 1) {
         // weird case: for 1 byte padding, the only padding byte is 0, which causes the padding to be seen as not correctly formatted
         // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct
