@@ -3,7 +3,10 @@
 #include <boost/beast/core/detail/base64.hpp>
 #include <openssl/evp.h>
 #include <openssl/err.h>
+#include <endian.h>
+#include <sstream>
 #include "crypto/cryptutils.h"
+#include "cobaltstrike/cs_callback_codes.h"
 
 void pcapfs::CobaltStrike::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort) {
 
@@ -73,18 +76,25 @@ pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrike::getConnectionData(const 
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey) {
+pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient) {
     if (input.size() < 32 || aesKey.empty())
         return input;
-    LOG_DEBUG << "start decrypting cobalt strike communication";
 
-    Bytes result(input.size() - 16);
-    Bytes dataToDecrypt(input.begin(), input.end()-16);
+    Bytes result, dataToDecrypt;
+    if (fromClient) {
+        result.resize(input.size() - 20);
+        dataToDecrypt.assign(input.begin()+4, input.end()-16);
+    } else {
+        result.resize(input.size() - 16);
+        dataToDecrypt.assign(input.begin(), input.end()-16);
+    }
+
     if (opensslDecryptCS(dataToDecrypt, aesKey, result)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         result.assign(input.begin(), input.end());
     }
-    return result;
+
+    return fromClient ? parseDecryptedClientContent(result) : parseDecryptedServerContent(result);
 }
 
 
@@ -118,4 +128,39 @@ int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Byt
 
     EVP_CIPHER_CTX_cleanup(ctx);
     return error;
+ }
+
+
+pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Bytes &data) {
+
+    Bytes result;
+    Bytes temp(data.begin(), data.end());
+    auto it = std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c == 0x0A; });
+    if (it != temp.rend() && it > temp.rbegin() - 16)
+        temp.erase(it.base(), temp.end());
+    else if (temp.back() == 0x00)
+        temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
+
+    const char* tempc =  reinterpret_cast<char*>(temp.data());
+    uint32_t counter = be32toh(*((uint32_t*) tempc));
+    uint32_t callback_code = be32toh(*((uint32_t*) (tempc+8)));
+    std::stringstream ss;
+    ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << CSCallback::codes[callback_code]
+        << "\n---------------------------------------------------------\n";
+    const std::string metadata = ss.str();
+
+    temp.erase(temp.begin(), temp.begin()+12);
+    if (!std::isprint(temp.front()))
+        temp.erase(temp.begin(), temp.begin()+4);
+
+    result.insert(result.end(), metadata.begin(), metadata.end());
+    result.insert(result.end(), temp.begin(), temp.end());
+    return result;
+}
+
+
+pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
+    Bytes result(data.begin(), data.end());
+    result.erase(std::find_if(result.rbegin(), result.rend(), [](unsigned char c){ return c != 0x41; }).base(), result.end());
+    return result;
  }
