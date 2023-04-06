@@ -14,7 +14,6 @@
 #include "../logging.h"
 #include "../cobaltstrike.h"
 
-#include <openssl/bio.h>
 /*
  * HTTP Parsing function.
  * Is always called for a file that is classified as HTTP.
@@ -23,9 +22,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
-    //if(!isHttpTraffic(filePtr)){
-    //    return resultVector;
-    //}
     if(!isHttpTraffic(data)){
         return resultVector;
     }
@@ -161,13 +157,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
 
             if (requestMethod == "POST" && CobaltStrike::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))) {
-                //resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSizeCS(idx, true));
-                // memorize aes key and whether from server or from client in serialization
                 resultPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
                 resultPtr->cobaltStrikeKey = CobaltStrike::getInstance().getConnectionData(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))->aesKey;
                 resultPtr->fromClient = true;
-                //resultHeaderPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
             } else {
                 resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
             }
@@ -247,16 +240,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             }
 
             if (CobaltStrike::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))) {
-                //resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-                //int temp = resultPtr->calculateProcessedSizeCS(idx, false);
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSizeCS(idx, false));
-                // memorize aes key, and whether from server or from client in serialization
-                //LOG_ERROR << temp;
-                //if (temp > 0)
                 resultPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
                 resultPtr->cobaltStrikeKey = CobaltStrike::getInstance().getConnectionData(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))->aesKey;
                 resultPtr->fromClient = false;
-                //resultHeaderPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
             } else {
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
             }
@@ -326,25 +313,17 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
 
 int pcapfs::HttpFile::calculateProcessedSizeCS(const Index &idx, bool fromClient) {
-    //LOG_ERROR << "entered calculateProcessedSizeCS";
     Bytes rawData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
 
-    //BIO_dump_fp(stdout, (const char*) rawData.data(), rawData.size());
-    //decrypt
-    //LOG_ERROR << "now we decrypt";
-    //Bytes truncatedinput(rawData.begin()+4, rawData.end());
     Bytes decryptedData;
-    if(fromClient) {
-        decryptedData = CobaltStrike::getInstance().decryptPayload(Bytes(rawData.begin()+4, rawData.end()), filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"));
-    } else {
-        decryptedData = CobaltStrike::getInstance().decryptPayload(rawData, filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"));
-    }
-    //printf("decrypted:\n");
-    //BIO_dump_fp(stdout, (const char*) decryptedData.data(), decryptedData.size());
+    if(fromClient)
+        decryptedData = CobaltStrike::getInstance().decryptPayload(Bytes(rawData.begin()+4, rawData.end()), cobaltStrikeKey);
+    else
+        decryptedData = CobaltStrike::getInstance().decryptPayload(rawData, cobaltStrikeKey);
 
     return decryptedData.size();
 }
@@ -364,23 +343,20 @@ size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &
     }
 }
 
+
 int pcapfs::HttpFile::readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     Fragment fragment = fragments.at(0);
     Bytes rawData(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    
-    //printf("aeskey:\n");
-    //BIO_dump_fp(stdout, (const char*) cobaltStrikeKey.data(), cobaltStrikeKey.size());
+
     Bytes decryptedData;
-    if(fromClient) {
-        decryptedData = CobaltStrike::getInstance().decryptPayload(Bytes(rawData.begin()+4, rawData.end()), getProperty("dstIP"), getProperty("dstPort"));
-    } else {
-        decryptedData = CobaltStrike::getInstance().decryptPayload(rawData, getProperty("srcIP"), getProperty("srcPort"));
-    }
+    if(fromClient)
+        decryptedData = CobaltStrike::getInstance().decryptPayload(Bytes(rawData.begin()+4, rawData.end()), cobaltStrikeKey);
+    else
+        decryptedData = CobaltStrike::getInstance().decryptPayload(rawData, cobaltStrikeKey);
 
     memcpy(buf, decryptedData.data() + startOffset, length);
-
     return std::min(decryptedData.size() - startOffset, length);
 }
 
@@ -682,13 +658,6 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     return (int) read_count;
 }
 
-/**bool pcapfs::HttpFile::isHttpTraffic(const FilePtr& filePtr) {
-    // TODO: check for port 443, whether file has already decrypted content -> new flag?
-    if ((filePtr->getProperty("dstPort") == "80") || (filePtr->getProperty("dstPort") == "443")) {
-        return true;
-    }
-    return false;
-}**/
 
 bool pcapfs::HttpFile::isHttpTraffic(const Bytes &data) {
     if (data.size() >= 7) {
@@ -700,6 +669,7 @@ bool pcapfs::HttpFile::isHttpTraffic(const Bytes &data) {
     }
     return false;
 }
+
 
 //functions for HTTP parsing
 bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, uint64_t length) {

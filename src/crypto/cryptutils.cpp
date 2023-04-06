@@ -362,4 +362,3 @@ pcapfs::Bytes const pcapfs::crypto::calculateSha256(const Bytes &input) {
 
     return digest;
 }
-

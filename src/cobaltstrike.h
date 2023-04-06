@@ -2,7 +2,6 @@
 #define PCAPFS_COBALTSTRIKE_H
 
 #include <set>
-#include <unordered_map>
 #include "commontypes.h"
 
 namespace pcapfs {
@@ -19,7 +18,7 @@ namespace pcapfs {
     } CobaltStrikeConnection;
 
     typedef std::shared_ptr<CobaltStrikeConnection> CobaltStrikeConnectionPtr;
-    
+
     class CobaltStrike {
     public:
         static CobaltStrike& getInstance() {
@@ -32,7 +31,7 @@ namespace pcapfs {
 
         void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort);
         bool isKnownConnection(const std::string &ServerIp, const std::string &ServerPort);
-        Bytes const decryptPayload(const Bytes& input, const std::string &serverIp, const std::string &serverPort);
+        Bytes const decryptPayload(const Bytes &input, const Bytes &aesKey);
         CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort);
 
     private:
@@ -43,7 +42,6 @@ namespace pcapfs {
         int opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
-        //std::vector<std::string> knownCookies;
 
         const std::set<std::string> privKeyCandidates = {
                             "-----BEGIN RSA PRIVATE KEY-----\n" \

@@ -5,6 +5,7 @@
 #include <pcapplusplus/HttpLayer.h>
 
 #include "virtualfile.h"
+#include "../cobaltstrike.h"
 
 
 namespace pcapfs {
@@ -37,7 +38,6 @@ namespace pcapfs {
 
 
         //functions used for http parsing
-        //static bool isHttpTraffic(const FilePtr& filePtr);
         static bool isHttpTraffic(const Bytes& data);
 
         static bool isHTTPRequest(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);
@@ -74,7 +74,7 @@ namespace pcapfs {
 
     protected:
         static bool registeredAtFactory;
-        
+
         Bytes cobaltStrikeKey;
         bool fromClient;
 

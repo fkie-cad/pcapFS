@@ -1,7 +1,6 @@
 #include "cobaltstrike.h"
 
 #include <boost/beast/core/detail/base64.hpp>
-#include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include "crypto/cryptutils.h"
@@ -12,22 +11,19 @@ void pcapfs::CobaltStrike::handleHttpGet(const std::string &cookie, const std::s
         // when the cookie is shorter than 34 characters, the raw key can't be encoded in it
         return;
 
-    //LOG_ERROR << "Cookie: " << cookie;
+    LOG_TRACE << "HTTP Header Cookie: " << cookie;
+    LOG_TRACE << "check if cookie belongs to cobalt strike";
 
     Bytes toDecrypt(3*(cookie.length()/4) - 1); // TODO: change size of toDecrypt?
     boost::beast::detail::base64::decode(toDecrypt.data(), cookie.c_str(), cookie.length());
-    //printf("toDecrypt:\n");
-    //BIO_dump_fp(stdout, (const char*) toDecrypt.data(), toDecrypt.size());
 
     Bytes result(toDecrypt.size());
     for(const std::string &privKey : privKeyCandidates) {
         result = crypto::rsaPrivateDecrypt(toDecrypt, Bytes(privKey.begin(), privKey.end()), false);
         if (!result.empty()) {
-            //printf("result:\n");
-            //BIO_dump_fp(stdout, (const char*) result.data(), result.size());
 
             if (matchMagicBytes(result)) {
-                //LOG_ERROR << "found cobalt strike communication";
+                LOG_DEBUG << "found cobalt strike communication";
                 // extract symmetric key material
                 Bytes rawKey(result.begin()+8, result.begin()+8+16);
                 addConnectionData(rawKey, dstIp, dstPort);
@@ -64,11 +60,6 @@ void pcapfs::CobaltStrike::addConnectionData(const Bytes &rawKey, const std::str
     newConnection->serverIp = dstIp;
     newConnection->serverPort = dstPort;
     connections.push_back(newConnection);
-
-    //printf("aeskey:\n");
-    //BIO_dump_fp(stdout, (const char*) newConnection->aesKey.data(), newConnection->aesKey.size());
-    //printf("hmackey:\n");
-    //BIO_dump_fp(stdout, (const char*) newConnection->hmacKey.data(), newConnection->hmacKey.size());
 }
 
 
@@ -82,22 +73,20 @@ pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrike::getConnectionData(const 
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes& input, const std::string &serverIp, const std::string &serverPort) {
-    CobaltStrikeConnectionPtr conn = getConnectionData(serverIp, serverPort);
-    if (input.size() < 32 || !conn)
+pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey) {
+    if (input.size() < 32 || aesKey.empty())
         return input;
-    
+    LOG_DEBUG << "start decrypting cobalt strike communication";
+
     Bytes result(input.size() - 16);
     Bytes dataToDecrypt(input.begin(), input.end()-16);
-    //printf("dataToDecrypt:\n");
-    //BIO_dump_fp(stdout, (const char*) dataToDecrypt.data(), dataToDecrypt.size());
-    // maybe use version of openssldecrypt without decryptfinalex?
-    if (opensslDecryptCS(dataToDecrypt, conn->aesKey, result)) {
+    if (opensslDecryptCS(dataToDecrypt, aesKey, result)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         result.assign(input.begin(), input.end());
     }
     return result;
 }
+
 
 int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData) {
 
@@ -123,9 +112,6 @@ int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Byt
         LOG_ERROR << "EVP_DecryptUpdate() failed" << std::endl;
         error = 1;
     }
-
-    //printf("decrypted:\n");
-    //BIO_dump_fp(stdout, (const char*) decryptedData.data(), decryptedData.size());
 
     if (error)
         ERR_print_errors_fp(stderr);
