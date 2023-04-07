@@ -7,6 +7,7 @@
 #include <sstream>
 #include "crypto/cryptutils.h"
 #include "cobaltstrike/cs_callback_codes.h"
+#include "cobaltstrike/cs_command_codes.h"
 
 void pcapfs::CobaltStrike::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort) {
 
@@ -26,7 +27,7 @@ void pcapfs::CobaltStrike::handleHttpGet(const std::string &cookie, const std::s
         if (!result.empty()) {
 
             if (matchMagicBytes(result)) {
-                LOG_DEBUG << "found cobalt strike communication";
+                LOG_INFO << "found cobalt strike communication";
                 // extract symmetric key material
                 Bytes rawKey(result.begin()+8, result.begin()+8+16);
                 addConnectionData(rawKey, dstIp, dstPort);
@@ -132,35 +133,105 @@ int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Byt
 
 
 pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Bytes &data) {
-
     Bytes result;
     Bytes temp(data.begin(), data.end());
-    auto it = std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c == 0x0A; });
-    if (it != temp.rend() && it > temp.rbegin() - 16)
-        temp.erase(it.base(), temp.end());
-    else if (temp.back() == 0x00)
-        temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
+    uint32_t counter = be32toh(*((uint32_t*) temp.data()));
+    //uint32_t data_length = be32toh(*((uint32_t*) (tempc+4))); // is including padding bytes and additional values at the end
+    uint32_t callback_code = be32toh(*((uint32_t*) (temp.data()+8)));
+    const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
 
-    const char* tempc =  reinterpret_cast<char*>(temp.data());
-    uint32_t counter = be32toh(*((uint32_t*) tempc));
-    uint32_t callback_code = be32toh(*((uint32_t*) (tempc+8)));
     std::stringstream ss;
-    ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << CSCallback::codes[callback_code]
-        << "\n---------------------------------------------------------\n";
-    const std::string metadata = ss.str();
+    ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << callback_string;
 
-    temp.erase(temp.begin(), temp.begin()+12);
-    if (!std::isprint(temp.front()))
-        temp.erase(temp.begin(), temp.begin()+4);
+    if (callback_string == "CALLBACK_ERROR" && std::isprint(*(temp.begin()+24))) {
+        auto zero_it = std::find_if(temp.begin()+24, temp.end(), [](unsigned char c){ return c == 0x00; });
+        const std::string param(temp.begin()+24, zero_it);
+        ss << "\nParameter: " << param << "\n---------------------------------------------------------\n";
+        const std::string metadata = ss.str();
+        Bytes weirdPayload(std::find_if(zero_it, temp.end(), [](unsigned char c){ return c != 0x00; }), temp.end());
+        if (weirdPayload.back() == 0x00)
+            weirdPayload.erase(std::find_if(weirdPayload.rbegin(), weirdPayload.rend(), [](unsigned char c){ return c != 0x00; }).base(), weirdPayload.end());
+        result.insert(result.end(), metadata.begin(), metadata.end());
+        result.insert(result.end(), weirdPayload.begin(), weirdPayload.end());
 
-    result.insert(result.end(), metadata.begin(), metadata.end());
-    result.insert(result.end(), temp.begin(), temp.end());
+    } else {
+        temp.erase(temp.begin(), temp.begin()+12);
+        //temp.erase(temp.begin()+data_length, temp.end());
+        if (callback_string == "CALLBACK_PENDING") {
+            temp.erase(temp.begin(), temp.begin()+4); // has an additional field to exclude
+            if (temp.back() == 0x00)
+                temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
+        } else if (std::isprint(temp.front()) || std::isspace(temp.front())) {
+            temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c == 0x0A; }).base(), temp.end());
+        }
+
+        ss << "\n---------------------------------------------------------\n";
+        const std::string metadata = ss.str();
+        result.insert(result.end(), metadata.begin(), metadata.end());
+        result.insert(result.end(), temp.begin(), temp.end());
+    }
+
     return result;
 }
 
 
 pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
-    Bytes result(data.begin(), data.end());
-    result.erase(std::find_if(result.rbegin(), result.rend(), [](unsigned char c){ return c != 0x41; }).base(), result.end());
+    Bytes temp(data.begin(), data.end());
+    uint32_t command_code = be32toh(*((uint32_t*) (temp.data()+8)));
+    if (command_code > 102) // we have probably no command content
+        return data;
+
+    Bytes result;
+    uint32_t timestamp_raw = be32toh(*((uint32_t*) temp.data()));
+    uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
+    uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+12)));
+
+    std::stringstream ss;
+    ss << "Timestamp: " << timestamp_raw << "\nData Size: " << data_size
+        << "\nCommand: " << command_code << " " << CSCommands::codes[command_code]
+        << "\nArgs Len: " << args_len << "\n---------------------------------------------------------\n";
+    const std::string metadata = ss.str();
+
+    temp.erase(temp.begin(), temp.begin()+16);
+
+    if (temp.back() == 0x41)
+        temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x41; }).base(), temp.end());
+
+    // TODO in the future: switch case with common commands
+    if (CSCommands::codes[command_code] == "COMMAND_LS") {
+        uint32_t ls_counter = be32toh(*((uint32_t*) temp.data()));
+        //uint32_t ls_dir_len = be32toh(*((uint32_t*) (ls_params+4)));
+        std::string ls_dir(temp.begin()+8, temp.end());
+        ss << "Counter: " << ls_counter <<  "\nDirectory: " << ls_dir;
+
+        const std::string params = ss.str();
+        result.insert(result.end(), params.begin(), params.end());
+        return result;
+
+    } else if (CSCommands::codes[command_code] == "COMMAND_CD") {
+        std::string dir(temp.begin(), temp.end());
+        ss << "Directory: " << dir;
+        const std::string params = ss.str();
+        result.insert(result.end(), params.begin(), params.end());
+        return result;
+
+    } else if (CSCommands::codes[command_code] == "COMMAND_RM") {
+        std::string file(temp.begin(), temp.end());
+        ss << "File: " << file;
+        const std::string params = ss.str();
+        result.insert(result.end(), params.begin(), params.end());
+        return result;
+
+    } else if (CSCommands::codes[command_code] == "COMMAND_SLEEP") {
+        uint32_t sleep = be32toh(*((uint32_t*) temp.data()));
+        uint32_t jitter = be32toh(*((uint32_t*) (temp.data()+4)));
+        ss << "Sleep: " << sleep << "\nJitter: " << jitter;
+        const std::string params = ss.str();
+        result.insert(result.end(), params.begin(), params.end());
+        return result;
+    }
+
+    result.insert(result.end(), metadata.begin(), metadata.end());
+    result.insert(result.end(), temp.begin(), temp.end());
     return result;
  }
