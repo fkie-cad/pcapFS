@@ -31,7 +31,8 @@ namespace pcapfs {
 
         void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort);
         bool isKnownConnection(const std::string &ServerIp, const std::string &ServerPort);
-        Bytes const decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient);
+        bool decryptPayload(const Bytes &input, Bytes &output, const Bytes &aesKey, bool fromClient);
+        Bytes const decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey);
         CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort);
 
     private:
@@ -41,7 +42,7 @@ namespace pcapfs {
         void addConnectionData(const Bytes& rawKey, const std::string &dstIp, const std::string &dstPort);
         int opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData);
         Bytes const parseDecryptedClientContent(const Bytes &data);
-        Bytes const parseDecryptedServerContent(const Bytes &data);
+        bool parseDecryptedServerContent(const Bytes &data, Bytes &output);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
 

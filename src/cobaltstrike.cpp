@@ -76,26 +76,35 @@ pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrike::getConnectionData(const 
     return result;
 }
 
+// bool: true if server command has embedded file to extract as extra http file
+bool pcapfs::CobaltStrike::decryptPayload(const Bytes &input, Bytes &output, const Bytes &aesKey, bool fromClient) {
+    if (input.size() < 32 || aesKey.empty()) {
+        output.assign(input.begin(), input.end());
+        return false;
+    }
 
-pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient) {
-    if (input.size() < 32 || aesKey.empty())
-        return input;
-
-    Bytes result, dataToDecrypt;
+    Bytes decryptedData, dataToDecrypt;
     if (fromClient) {
-        result.resize(input.size() - 20);
+        decryptedData.resize(input.size() - 20);
         dataToDecrypt.assign(input.begin()+4, input.end()-16);
     } else {
-        result.resize(input.size() - 16);
+        decryptedData.resize(input.size() - 16);
         dataToDecrypt.assign(input.begin(), input.end()-16);
     }
 
-    if (opensslDecryptCS(dataToDecrypt, aesKey, result)) {
+    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
-        result.assign(input.begin(), input.end());
+        output.assign(input.begin(), input.end());
+        return false;
     }
 
-    return fromClient ? parseDecryptedClientContent(result) : parseDecryptedServerContent(result);
+    if (fromClient) {
+        output = parseDecryptedClientContent(decryptedData);
+        return false;
+    } else {
+        return parseDecryptedServerContent(decryptedData, output);
+
+    }
 }
 
 
@@ -175,63 +184,125 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Byte
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
+bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes &output) {
     Bytes temp(data.begin(), data.end());
-    uint32_t command_code = be32toh(*((uint32_t*) (temp.data()+8)));
-    if (command_code > 102) // we have probably no command content
-        return data;
 
-    Bytes result;
-    uint32_t timestamp_raw = be32toh(*((uint32_t*) temp.data()));
-    uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
-    uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+12)));
-
+    bool result = false;
+    const uint32_t timestamp_raw = be32toh(*((uint32_t*) temp.data()));
+    const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
     std::stringstream ss;
-    ss << "Timestamp: " << timestamp_raw << "\nData Size: " << data_size
-        << "\nCommand: " << command_code << " " << CSCommands::codes[command_code]
-        << "\nArgs Len: " << args_len << "\n---------------------------------------------------------\n";
-    const std::string metadata = ss.str();
+    ss << "Timestamp: " << timestamp_raw << "\nData Size: " << data_size;
 
-    temp.erase(temp.begin(), temp.begin()+16);
+    const std::string header = ss.str();
+    output.insert(output.end(), header.begin(), header.end());
 
-    if (temp.back() == 0x41)
-        temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x41; }).base(), temp.end());
+    temp.erase(temp.begin(), temp.begin()+8);
 
-    // TODO in the future: switch case with common commands
-    if (CSCommands::codes[command_code] == "COMMAND_LS") {
-        uint32_t ls_counter = be32toh(*((uint32_t*) temp.data()));
-        //uint32_t ls_dir_len = be32toh(*((uint32_t*) (ls_params+4)));
-        std::string ls_dir(temp.begin()+8, temp.end());
-        ss << "Counter: " << ls_counter <<  "\nDirectory: " << ls_dir;
+    uint32_t curr_len = 8; // header size with timestamp and data_size
+    while (curr_len <= data_size) {
+        ss.str("");
+        ss << "\n---------------------------------------------------------\n";
 
-        const std::string params = ss.str();
-        result.insert(result.end(), params.begin(), params.end());
-        return result;
+        uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
+        if (command_code > 102) { // we have probably no command content
+            output.assign(data.begin(), data.end());
+            return false;
+        }
+        std::string command = CSCommands::codes[command_code];
+        uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
+        ss << "Command: " << command_code << " " << command
+            << "\nArgs Len: " << args_len << std::endl;
 
-    } else if (CSCommands::codes[command_code] == "COMMAND_CD") {
-        std::string dir(temp.begin(), temp.end());
-        ss << "Directory: " << dir;
-        const std::string params = ss.str();
-        result.insert(result.end(), params.begin(), params.end());
-        return result;
+        temp.erase(temp.begin(), temp.begin()+8);
+        if (args_len + 8 > data_size)
+            break;
 
-    } else if (CSCommands::codes[command_code] == "COMMAND_RM") {
-        std::string file(temp.begin(), temp.end());
-        ss << "File: " << file;
-        const std::string params = ss.str();
-        result.insert(result.end(), params.begin(), params.end());
-        return result;
+        if (command == "COMMAND_LS") {
+            uint32_t ls_counter = be32toh(*((uint32_t*) temp.data()));
+            //uint32_t ls_dir_len = be32toh(*((uint32_t*) (ls_params+4)));
+            std::string ls_dir(temp.begin()+8, temp.begin()+args_len);
+            ss << "Counter: " << ls_counter <<  "\nDirectory: " << ls_dir;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
 
-    } else if (CSCommands::codes[command_code] == "COMMAND_SLEEP") {
-        uint32_t sleep = be32toh(*((uint32_t*) temp.data()));
-        uint32_t jitter = be32toh(*((uint32_t*) (temp.data()+4)));
-        ss << "Sleep: " << sleep << "\nJitter: " << jitter;
-        const std::string params = ss.str();
-        result.insert(result.end(), params.begin(), params.end());
-        return result;
+        } else if (command == "COMMAND_CD") {
+            std::string dir(temp.begin(), temp.begin()+args_len);
+            ss << "Directory: " << dir;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_RM"){
+            std::string file(temp.begin(), temp.begin()+args_len);
+            ss << "File: " << file;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_SLEEP") {
+            uint32_t sleep = be32toh(*((uint32_t*) temp.data()));
+            uint32_t jitter = be32toh(*((uint32_t*) (temp.data()+4)));
+            ss << "Sleep: " << sleep << "\nJitter: " << jitter;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command != "COMMAND_SPAWN_TOKEN_X86" && command != "COMMAND_UPLOAD"){
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+            output.insert(output.end(), temp.begin(), temp.begin()+args_len);
+        } else {
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+        }
+
+        if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_UPLOAD")
+            result = true;
+
+        curr_len += args_len + 8;
+        temp.erase(temp.begin(), temp.begin()+args_len);
+
     }
 
-    result.insert(result.end(), metadata.begin(), metadata.end());
-    result.insert(result.end(), temp.begin(), temp.end());
     return result;
+ }
+
+
+ pcapfs::Bytes const pcapfs::CobaltStrike::decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey) {
+    if (input.size() < 32 || aesKey.empty())
+        return input;
+
+    Bytes decryptedData(input.size() - 16);
+    Bytes dataToDecrypt(input.begin(), input.end() - 16);
+
+    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
+        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+        return input;
+    }
+
+    Bytes temp(decryptedData.begin(), decryptedData.end());
+
+    const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
+    temp.erase(temp.begin(), temp.begin()+8);
+
+    uint32_t curr_len = 8; // header size with timestamp and data_size
+    while (curr_len < data_size) {
+
+        uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
+        if (command_code > 102) { // we have probably no command content
+            return decryptedData;
+        }
+        std::string command = CSCommands::codes[command_code];
+        uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
+
+        temp.erase(temp.begin(), temp.begin()+8);
+        if (args_len + 8 > data_size)
+            break;
+
+        if (command == "COMMAND_SPAWN_TOKEN_X86"){
+            return Bytes(temp.begin(), temp.begin()+args_len);
+        } else if (command == "COMMAND_UPLOAD") {
+            return Bytes(temp.begin()+4, temp.begin()+args_len);
+        }
+        curr_len += args_len + 8;
+        temp.erase(temp.begin(), temp.begin()+args_len);
+    }
+    return decryptedData;
  }

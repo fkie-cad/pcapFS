@@ -34,7 +34,9 @@ namespace pcapfs {
 
         int calculateProcessedSize(const Index &idx);
 
-        int calculateProcessedSizeCS(const Index &idx, bool fromClient);
+        bool calculateProcessedSizeCS(const Index &idx, bool fromClient, int &result);
+
+        int calculateProcessedSizeCSEmbeddedFile(const Index &idx);
 
 
         //functions used for http parsing
