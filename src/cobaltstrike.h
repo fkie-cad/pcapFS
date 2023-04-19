@@ -10,7 +10,6 @@ namespace pcapfs {
         std::string serverIp;
         std::string serverPort;
         Bytes aesKey;
-        Bytes hmacKey;
 
         std::pair<std::string,std::string> identifier() {
             return std::make_pair(serverIp, serverPort);
@@ -31,9 +30,10 @@ namespace pcapfs {
 
         void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort);
         bool isKnownConnection(const std::string &ServerIp, const std::string &ServerPort);
-        bool decryptPayload(const Bytes &input, Bytes &output, const Bytes &aesKey, bool fromClient);
-        Bytes const decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey);
+        Bytes const decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient);
+        Bytes const decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey, uint64_t index);
         CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort);
+        std::vector<uint64_t> extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey);
 
     private:
         CobaltStrike() {}
@@ -42,7 +42,8 @@ namespace pcapfs {
         void addConnectionData(const Bytes& rawKey, const std::string &dstIp, const std::string &dstPort);
         int opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData);
         Bytes const parseDecryptedClientContent(const Bytes &data);
-        bool parseDecryptedServerContent(const Bytes &data, Bytes &output);
+        Bytes const parseDecryptedServerContent(const Bytes &data);
+        bool isCommandWithEmbeddedFiles(const std::string &cmd);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
 

@@ -30,13 +30,12 @@ namespace pcapfs {
 
         int readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf);
 
-        int readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf);
-
         int calculateProcessedSize(const Index &idx);
 
-        bool calculateProcessedSizeCS(const Index &idx, bool fromClient, int &result);
-
-        int calculateProcessedSizeCSEmbeddedFile(const Index &idx);
+        // functions which call cobalt strike components
+        int readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf);
+        int calculateProcessedSizeCS(const Index &idx, bool fromClient);
+        std::vector<uint64_t> checkEmbeddedCSFiles(const Index &idx);
 
 
         //functions used for http parsing
@@ -77,8 +76,10 @@ namespace pcapfs {
     protected:
         static bool registeredAtFactory;
 
+        // values needed to be memorized for cobalt strike handling
         Bytes cobaltStrikeKey;
         bool fromClient;
+        uint64_t csEmbeddedFileIndex;
 
     };
 

@@ -8,6 +8,7 @@ namespace pcapfs {
     class CSCommands {
     public:
         static const std::vector<std::string> codes;
+        static const std::set<std::string> commandsWithEmbeddedFiles;
     };
 }
 
@@ -115,6 +116,10 @@ const std::vector<std::string> pcapfs::CSCommands::codes = {
         "COMMAND_INLINE_EXECUTE_OBJECT",
         "COMMAND_JOB_REGISTER_MSGMODE",
         "COMMAND_LSOCKET_BIND_LOCALHOST"
+};
+
+const std::set<std::string> pcapfs::CSCommands::commandsWithEmbeddedFiles = {
+    "COMMAND_SPAWN_TOKEN_X86", "COMMAND_UPLOAD", "COMMAND_UPLOAD_CONTINUE", "COMMAND_INLINE_EXECUTE_OBJECT"
 };
 
 #endif // PCAPFS_CS_COMMAND_CODES_H

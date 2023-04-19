@@ -60,7 +60,7 @@ void pcapfs::CobaltStrike::addConnectionData(const Bytes &rawKey, const std::str
 
     CobaltStrikeConnectionPtr newConnection = std::make_shared<CobaltStrikeConnection>();
     newConnection->aesKey = Bytes(digest.begin(), digest.begin()+16);
-    newConnection->hmacKey = Bytes(digest.begin()+16, digest.end());
+    //newConnection->hmacKey = Bytes(digest.begin()+16, digest.end());
     newConnection->serverIp = dstIp;
     newConnection->serverPort = dstPort;
     connections.push_back(newConnection);
@@ -76,11 +76,10 @@ pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrike::getConnectionData(const 
     return result;
 }
 
-// bool: true if server command has embedded file to extract as extra http file
-bool pcapfs::CobaltStrike::decryptPayload(const Bytes &input, Bytes &output, const Bytes &aesKey, bool fromClient) {
+
+pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient) {
     if (input.size() < 32 || aesKey.empty()) {
-        output.assign(input.begin(), input.end());
-        return false;
+        return input;
     }
 
     Bytes decryptedData, dataToDecrypt;
@@ -94,17 +93,10 @@ bool pcapfs::CobaltStrike::decryptPayload(const Bytes &input, Bytes &output, con
 
     if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
-        output.assign(input.begin(), input.end());
-        return false;
+        return input;
     }
 
-    if (fromClient) {
-        output = parseDecryptedClientContent(decryptedData);
-        return false;
-    } else {
-        return parseDecryptedServerContent(decryptedData, output);
-
-    }
+    return fromClient ? parseDecryptedClientContent(decryptedData) : parseDecryptedServerContent(decryptedData);
 }
 
 
@@ -184,10 +176,10 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Byte
 }
 
 
-bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes &output) {
+pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
     Bytes temp(data.begin(), data.end());
 
-    bool result = false;
+    Bytes output;
     const uint32_t timestamp_raw = be32toh(*((uint32_t*) temp.data()));
     const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
     std::stringstream ss;
@@ -206,7 +198,7 @@ bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes 
         uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
         if (command_code > 102) { // we have probably no command content
             output.assign(data.begin(), data.end());
-            return false;
+            return data;
         }
         std::string command = CSCommands::codes[command_code];
         uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
@@ -244,7 +236,7 @@ bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes 
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
-        } else if (command != "COMMAND_SPAWN_TOKEN_X86" && command != "COMMAND_UPLOAD"){
+        } else if (!isCommandWithEmbeddedFiles(command)){
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
             output.insert(output.end(), temp.begin(), temp.begin()+args_len);
@@ -253,19 +245,15 @@ bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes 
             output.insert(output.end(), params.begin(), params.end());
         }
 
-        if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_UPLOAD")
-            result = true;
-
         curr_len += args_len + 8;
         temp.erase(temp.begin(), temp.begin()+args_len);
-
     }
 
-    return result;
+    return output;
  }
 
 
- pcapfs::Bytes const pcapfs::CobaltStrike::decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey) {
+ pcapfs::Bytes const pcapfs::CobaltStrike::decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey, uint64_t index) {
     if (input.size() < 32 || aesKey.empty())
         return input;
 
@@ -279,30 +267,84 @@ bool pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data, Bytes 
 
     Bytes temp(decryptedData.begin(), decryptedData.end());
 
-    const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
+    const uint32_t dataSize = be32toh(*((uint32_t*) (temp.data()+4)));
     temp.erase(temp.begin(), temp.begin()+8);
 
-    uint32_t curr_len = 8; // header size with timestamp and data_size
-    while (curr_len < data_size) {
+    uint32_t currOffset = 8; // header size with timestamp and data_size
+    for (uint64_t currIndex = 0; currOffset < dataSize; ++currIndex) {
 
         uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
         if (command_code > 102) { // we have probably no command content
             return decryptedData;
         }
         std::string command = CSCommands::codes[command_code];
-        uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
+        uint32_t argsLen = be32toh(*((uint32_t*) (temp.data()+4)));
 
         temp.erase(temp.begin(), temp.begin()+8);
-        if (args_len + 8 > data_size)
+        if (argsLen + 8 > dataSize)
             break;
 
-        if (command == "COMMAND_SPAWN_TOKEN_X86"){
-            return Bytes(temp.begin(), temp.begin()+args_len);
-        } else if (command == "COMMAND_UPLOAD") {
-            return Bytes(temp.begin()+4, temp.begin()+args_len);
+        if (currIndex == index) {
+            if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
+                return Bytes(temp.begin(), temp.begin()+argsLen);
+            } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
+                return Bytes(temp.begin()+4, temp.begin()+argsLen);
+            }
         }
-        curr_len += args_len + 8;
-        temp.erase(temp.begin(), temp.begin()+args_len);
+        currOffset += argsLen + 8;
+        temp.erase(temp.begin(), temp.begin()+argsLen);
     }
     return decryptedData;
  }
+
+
+/**
+ * returns a vector of indices indicating which commands contain an embedded file as argument
+*/
+std::vector<uint64_t> pcapfs::CobaltStrike::extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey) {
+    std::vector<uint64_t> result(0);
+
+    if (input.size() < 32 || aesKey.empty())
+        return result;
+
+    Bytes decryptedData(input.size() - 16);
+    Bytes dataToDecrypt(input.begin(), input.end() - 16);
+
+    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
+        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+        return result;
+    }
+
+    Bytes temp(decryptedData.begin(), decryptedData.end());
+
+    const uint32_t dataSize = be32toh(*((uint32_t*) (temp.data()+4)));
+    temp.erase(temp.begin(), temp.begin()+8);
+
+    uint32_t currOffset = 8; // header size with timestamp and data_size
+    for (uint64_t currIndex = 0; currOffset < dataSize; ++currIndex) {
+
+        uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
+        if (command_code > 102) { // we have probably no command content
+            return result;
+        }
+        std::string command = CSCommands::codes[command_code];
+        uint32_t argsLen = be32toh(*((uint32_t*) (temp.data()+4)));
+
+        temp.erase(temp.begin(), temp.begin()+8);
+        if (argsLen + 8 > dataSize)
+            break;
+
+        if (isCommandWithEmbeddedFiles(command))
+            result.push_back(currIndex);
+
+        currOffset += argsLen + 8;
+        temp.erase(temp.begin(), temp.begin()+argsLen);
+    }
+
+    return result;
+}
+
+
+bool pcapfs::CobaltStrike::isCommandWithEmbeddedFiles(const std::string &cmd) {
+    return CSCommands::commandsWithEmbeddedFiles.find(cmd) != CSCommands::commandsWithEmbeddedFiles.end();
+}
