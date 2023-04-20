@@ -35,7 +35,7 @@ namespace pcapfs {
         // functions which call cobalt strike components
         int readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         int calculateProcessedSizeCS(const Index &idx, bool fromClient);
-        std::vector<uint64_t> checkEmbeddedCSFiles(const Index &idx);
+        std::map<uint64_t,std::string> checkEmbeddedCSFiles(const Index &idx);
 
 
         //functions used for http parsing

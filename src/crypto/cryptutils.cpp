@@ -18,8 +18,8 @@ std::string const pcapfs::crypto::convertToPem(const Bytes &input) {
     // convert raw DER content to internal X509 structure
     x509 = d2i_X509(&x509, &c, input.size());
     if (!x509) {
-        LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content:";
-        ERR_print_errors_fp(stderr);
+        LOG_WARNING << "Openssl: Failed to read in raw ssl certificate content";
+        //ERR_print_errors_fp(stderr);
         X509_free(x509);
         return result;
     }
@@ -111,7 +111,7 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
             OUTPUT_SIZE = 48;
             if (handshakeData->extendedMasterSecret) {
                 if (handshakeData->sessionHash.empty()) {
-                    LOG_ERROR << "Failed to derive extended master secret because session hash could not be calculuated";
+                    LOG_ERROR << "Failed to derive extended master secret because session hash could not be calculated";
                     return output;
                 }
                 LABEL_SIZE = 22;

@@ -247,7 +247,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                     resultPtr->cobaltStrikeKey = connData->aesKey;
                 resultPtr->fromClient = false;
 
-                for (uint64_t index : resultPtr->checkEmbeddedCSFiles(idx)) {
+                for (auto mapEntry : resultPtr->checkEmbeddedCSFiles(idx)) {
                     std::shared_ptr<HttpFile> embeddedFilePtr = std::make_shared<HttpFile>();
                     Fragment embeddedFragment;
                     embeddedFragment.id = filePtr->getIdInIndex();
@@ -258,11 +258,20 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                     embeddedFilePtr->setFilesizeRaw(embeddedFragment.length);
                     embeddedFilePtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
-                    embeddedFilePtr->csEmbeddedFileIndex = index;
+                    embeddedFilePtr->csEmbeddedFileIndex = mapEntry.first;
 
                     embeddedFilePtr->setOffsetType(filePtr->getFiletype());
                     embeddedFilePtr->setFiletype("http");
-                    embeddedFilePtr->setFilename(requestedFilename + "_embedded_file"+std::to_string(index));
+
+                    if (!mapEntry.second.empty()) {
+                            if (boost::ends_with(mapEntry.second, "_part"))
+                                embeddedFilePtr->setFilename(requestedFilename + "_" + mapEntry.second + std::to_string(mapEntry.first));
+                            else
+                                embeddedFilePtr->setFilename(requestedFilename + "_" + mapEntry.second);
+                    }
+                    else
+                        embeddedFilePtr->setFilename(requestedFilename + "_embedded_file"+std::to_string(mapEntry.first));
+
                     embeddedFilePtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
                     embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
                     embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
@@ -353,7 +362,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 }
 
 
-std::vector<uint64_t> pcapfs::HttpFile::checkEmbeddedCSFiles(const Index &idx) {
+std::map<uint64_t,std::string> pcapfs::HttpFile::checkEmbeddedCSFiles(const Index &idx) {
     Bytes rawData, decryptedData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);

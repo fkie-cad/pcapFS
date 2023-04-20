@@ -83,7 +83,9 @@ pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, con
     }
 
     Bytes decryptedData, dataToDecrypt;
+    // truncate hmac at the end
     if (fromClient) {
+        // client data has additional field in front to truncate
         decryptedData.resize(input.size() - 20);
         dataToDecrypt.assign(input.begin()+4, input.end()-16);
     } else {
@@ -102,9 +104,10 @@ pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, con
 
 int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData) {
 
+    // we can't use the crypto::opensslDecrypt function because
+    // cobalt strike pads in a way that EVP_DecryptFinal doesn't like
+    // => we have to unpad manually later on
     int error = 0;
-    // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
         LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
@@ -178,26 +181,34 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Byte
 
 pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
     Bytes temp(data.begin(), data.end());
-
     Bytes output;
-    const uint32_t timestamp_raw = be32toh(*((uint32_t*) temp.data()));
-    const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
-    std::stringstream ss;
-    ss << "Timestamp: " << timestamp_raw << "\nData Size: " << data_size;
 
+    const time_t timestamp = be32toh(*((uint32_t*) temp.data()));
+    const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
+    if (data_size > data.size()) {
+        LOG_INFO << "cobalt strike: parsed length of server message is invalid";
+        return data;
+    }
+
+    std::stringstream ss;
+    ss << "Timestamp: " << std::put_time(std::localtime(&timestamp), "%Y-%m-%d %I:%M:%S %p")
+        << "\nData Size: " << data_size;
     const std::string header = ss.str();
     output.insert(output.end(), header.begin(), header.end());
 
     temp.erase(temp.begin(), temp.begin()+8);
 
-    uint32_t curr_len = 8; // header size with timestamp and data_size
+    // one server message can contain multiple consecutive commands incl. parameters
+    // we move along the parsed length fields
+    uint32_t curr_len = 8; // after the "global" header with timestamp and data_size
     while (curr_len <= data_size) {
         ss.str("");
         ss << "\n---------------------------------------------------------\n";
 
         uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
-        if (command_code > 102) { // we have probably no command content
-            output.assign(data.begin(), data.end());
+        if (command_code > 102) {
+            // we have probably no command content
+            LOG_WARNING << "cobalt strike: parsed server command is invalid";
             return data;
         }
         std::string command = CSCommands::codes[command_code];
@@ -206,8 +217,10 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
             << "\nArgs Len: " << args_len << std::endl;
 
         temp.erase(temp.begin(), temp.begin()+8);
-        if (args_len + 8 > data_size)
-            break;
+        if (args_len + 8 > data_size) {
+            LOG_WARNING << "cobalt strike: parsed argument length of server command is invalid";
+            return data;
+        }
 
         if (command == "COMMAND_LS") {
             uint32_t ls_counter = be32toh(*((uint32_t*) temp.data()));
@@ -236,13 +249,56 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
-        } else if (!isCommandWithEmbeddedFiles(command)){
+        } else if (command == "COMMAND_EXECUTE_JOB") {
+            size_t args_len_without_padding = getLengthWithoutPadding(temp, args_len);
+            size_t currPos = 0;
+            while (currPos < args_len_without_padding) {
+                uint32_t tempLen = be32toh(*((uint32_t*) (temp.data()+currPos)));
+                if (tempLen > args_len_without_padding - currPos) {
+                    LOG_WARNING << "cobalt strike: parsed argument length of COMMAND_EXECUTE_JOB is invalid";
+                    return data;
+                }
+                std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
+                ss << "Argument: " << argument << std::endl;
+                currPos += tempLen + 4;
+            }
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
-            output.insert(output.end(), temp.begin(), temp.begin()+args_len);
+
+        } else if (command == "COMMAND_JOB_REGISTER") {
+            size_t currPos = 8; // we have 2 unknown additional fields in front
+            while (currPos < args_len) {
+                uint32_t tempLen = be32toh(*((uint32_t*) (temp.data()+currPos)));
+                if (tempLen > args_len - currPos) {
+                    LOG_WARNING << "cobalt strike: parsed argument length of COMMAND_JOB_REGISTER is invalid";
+                    return data;
+                }
+                std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
+                ss << "Argument: " << argument << std::endl;
+                currPos += tempLen + 4;
+            }
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
+            uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
+            if (filenameLen > args_len) {
+                LOG_WARNING << "cobalt strike: parsed filename length of upload command is invalid";
+                return data;
+            }
+            const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
+            ss << "File: " << filename;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_INLINE_EXECUTE_OBJECT" || command == "COMMAND_SPAWN_TOKEN_X86") {
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
         } else {
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
+            output.insert(output.end(), temp.begin(), temp.begin()+args_len);
         }
 
         curr_len += args_len + 8;
@@ -251,6 +307,13 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
 
     return output;
  }
+
+
+size_t pcapfs::CobaltStrike::getLengthWithoutPadding(const Bytes &input, uint32_t inputLength) {
+    Bytes temp(input.begin(), input.begin()+inputLength);
+    temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
+    return temp.size();
+}
 
 
  pcapfs::Bytes const pcapfs::CobaltStrike::decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey, uint64_t index) {
@@ -281,14 +344,21 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
         uint32_t argsLen = be32toh(*((uint32_t*) (temp.data()+4)));
 
         temp.erase(temp.begin(), temp.begin()+8);
-        if (argsLen + 8 > dataSize)
-            break;
+        if (argsLen + 8 > dataSize) {
+            LOG_WARNING << "cobalt strike: parsed argument length of server command is invalid";
+            return input;
+        }
 
         if (currIndex == index) {
             if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
                 return Bytes(temp.begin(), temp.begin()+argsLen);
             } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
-                return Bytes(temp.begin()+4, temp.begin()+argsLen);
+                uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
+                if (filenameLen > argsLen) {
+                    LOG_WARNING << "cobalt strike: parsed filename length of upload command is invalid";
+                    return input;
+                }
+                return Bytes(temp.begin()+4+filenameLen, temp.begin()+argsLen);
             }
         }
         currOffset += argsLen + 8;
@@ -299,10 +369,11 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
 
 
 /**
- * returns a vector of indices indicating which commands contain an embedded file as argument
+ * returns a map with indices indicating which commands contain an embedded file as argument and the file name
+ * for upload commands
 */
-std::vector<uint64_t> pcapfs::CobaltStrike::extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey) {
-    std::vector<uint64_t> result(0);
+std::map<uint64_t,std::string> pcapfs::CobaltStrike::extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey) {
+    std::map<uint64_t,std::string> result;
 
     if (input.size() < 32 || aesKey.empty())
         return result;
@@ -334,17 +405,28 @@ std::vector<uint64_t> pcapfs::CobaltStrike::extractEmbeddedFileInfos(const Bytes
         if (argsLen + 8 > dataSize)
             break;
 
-        if (isCommandWithEmbeddedFiles(command))
-            result.push_back(currIndex);
+        if (command == "COMMAND_UPLOAD") {
+            uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
+            if (filenameLen < argsLen) {
+                const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
+                result[currIndex] = filename;
+            } else
+                result[currIndex] = "";
+        }
+        else if (command == "COMMAND_UPLOAD_CONTINUE"){
+            uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
+            if (filenameLen < argsLen) {
+                const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
+                result[currIndex] = filename + "_part";
+            } else
+                result[currIndex] = "";
+        }
+        else if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT")
+            result[currIndex] = "";
 
         currOffset += argsLen + 8;
         temp.erase(temp.begin(), temp.begin()+argsLen);
     }
 
     return result;
-}
-
-
-bool pcapfs::CobaltStrike::isCommandWithEmbeddedFiles(const std::string &cmd) {
-    return CSCommands::commandsWithEmbeddedFiles.find(cmd) != CSCommands::commandsWithEmbeddedFiles.end();
 }
