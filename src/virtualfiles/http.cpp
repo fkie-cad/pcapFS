@@ -1,6 +1,5 @@
 #include "http.h"
 
-#include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
@@ -12,7 +11,7 @@
 
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../cobaltstrike.h"
+#include "../cobaltstrike/cs_manager.h"
 
 /*
  * HTTP Parsing function.
@@ -97,7 +96,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             const std::string requestMethod = requestMethodToString(getRequestMethod(data, offset, size));
 
             if (requestMethod == "GET" && header.find("cookie") != header.end()) {
-                CobaltStrike::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"));
+                CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"),
+                                                                filePtr->getProperty("dstPort"),  filePtr->getProperty("srcIP"));
             }
 
             if (requestedFilename != "") {
@@ -154,19 +154,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
             }
 
-            if (requestMethod == "POST" && CobaltStrike::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))) {
-                resultPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
-                CobaltStrikeConnectionPtr connData = CobaltStrike::getInstance().getConnectionData(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"));
-                if (connData)
-                    resultPtr->cobaltStrikeKey = connData->aesKey;
-                resultPtr->fromClient = true;
-                resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSizeCS(idx, true));
-                resultPtr->flags.set(pcapfs::flags::PROCESSED);
-            } else {
-                resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-            }
-
+            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
             resultVector.push_back(resultPtr);
+
         } else if (isHTTPResponse(data, offset, size)) {
             size_t firstLine = getResponseLineLength(data, offset, size);
             size_t headerLength = parseHeaderFields(data, header, offset + firstLine, size - firstLine);
@@ -240,64 +230,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
 
-            if (CobaltStrike::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"))) {
-                resultPtr->flags.set(pcapfs::flags::COBALT_STRIKE);
-                CobaltStrikeConnectionPtr connData = CobaltStrike::getInstance().getConnectionData(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"));
-                if (connData)
-                    resultPtr->cobaltStrikeKey = connData->aesKey;
-                resultPtr->fromClient = false;
-
-                for (auto mapEntry : resultPtr->checkEmbeddedCSFiles(idx)) {
-                    std::shared_ptr<HttpFile> embeddedFilePtr = std::make_shared<HttpFile>();
-                    Fragment embeddedFragment;
-                    embeddedFragment.id = filePtr->getIdInIndex();
-                    embeddedFragment.start = fragment.start;
-                    embeddedFragment.length = fragment.length;
-
-                    embeddedFilePtr->fragments.push_back(embeddedFragment);
-                    embeddedFilePtr->setFilesizeRaw(embeddedFragment.length);
-                    embeddedFilePtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-
-                    embeddedFilePtr->csEmbeddedFileIndex = mapEntry.first;
-
-                    embeddedFilePtr->setOffsetType(filePtr->getFiletype());
-                    embeddedFilePtr->setFiletype("http");
-
-                    if (!mapEntry.second.empty()) {
-                            if (boost::ends_with(mapEntry.second, "_part"))
-                                embeddedFilePtr->setFilename(requestedFilename + "_" + mapEntry.second + std::to_string(mapEntry.first));
-                            else
-                                embeddedFilePtr->setFilename(requestedFilename + "_" + mapEntry.second);
-                    }
-                    else
-                        embeddedFilePtr->setFilename(requestedFilename + "_embedded_file"+std::to_string(mapEntry.first));
-
-                    embeddedFilePtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-                    embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-                    embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-                    embeddedFilePtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-                    embeddedFilePtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
-                    embeddedFilePtr->setProperty("domain", requestedHost);
-                    embeddedFilePtr->setProperty("uri", requestedUri);
-                    embeddedFilePtr->setProperty("protocol", "http");
-                    embeddedFilePtr->flags.set(pcapfs::flags::IS_EMBEDDED_FILE);
-                    embeddedFilePtr->flags.set(pcapfs::flags::PROCESSED);
-                    embeddedFilePtr->flags.set(pcapfs::flags::COBALT_STRIKE);
-
-                    if (connData)
-                        embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
-                    embeddedFilePtr->fromClient = false;
-                    embeddedFilePtr->setFilesizeProcessed(embeddedFilePtr->calculateProcessedSizeCS(idx, false));
-
-                    resultVector.push_back(embeddedFilePtr);
-                }
-
-                resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSizeCS(idx, false));
-                resultPtr->flags.set(pcapfs::flags::PROCESSED);
-            } else {
-                resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
-            }
-
+            resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
@@ -362,29 +295,6 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 }
 
 
-std::map<uint64_t,std::string> pcapfs::HttpFile::checkEmbeddedCSFiles(const Index &idx) {
-    Bytes rawData, decryptedData;
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    return CobaltStrike::getInstance().extractEmbeddedFileInfos(rawData, cobaltStrikeKey);
-}
-
-
-int pcapfs::HttpFile::calculateProcessedSizeCS(const Index &idx, bool fromClient) {
-    Bytes rawData, decryptedData;
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    if (flags.test(pcapfs::flags::IS_EMBEDDED_FILE))
-        return CobaltStrike::getInstance().decryptEmbeddedFile(rawData, cobaltStrikeKey, csEmbeddedFileIndex).size();
-    else
-        return CobaltStrike::getInstance().decryptPayload(rawData, cobaltStrikeKey, fromClient).size();
-}
-
-
 size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
         return readGzip(startOffset, length, idx, buf);
@@ -392,27 +302,9 @@ size_t pcapfs::HttpFile::read(uint64_t startOffset, size_t length, const Index &
         return readDeflate(startOffset, length, idx, buf);
     } else if (flags.test(pcapfs::flags::CHUNKED)) {
         return readChunked(startOffset, length, idx, buf);
-    } else if (flags.test(pcapfs::flags::COBALT_STRIKE)) {
-        return readCS(startOffset, length, idx, buf);
     } else {
         return readRaw(startOffset, length, idx, buf);
     }
-}
-
-
-int pcapfs::HttpFile::readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Fragment fragment = fragments.at(0);
-    Bytes rawData(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-
-    Bytes decryptedData;
-    if (flags.test(pcapfs::flags::IS_EMBEDDED_FILE))
-        decryptedData = CobaltStrike::getInstance().decryptEmbeddedFile(rawData, cobaltStrikeKey, csEmbeddedFileIndex);
-    else
-        decryptedData = CobaltStrike::getInstance().decryptPayload(rawData, cobaltStrikeKey, fromClient);
-    memcpy(buf, decryptedData.data() + startOffset, length);
-    return std::min(decryptedData.size() - startOffset, length);
 }
 
 
@@ -968,27 +860,6 @@ size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t start
         return (endOfFirstLine - (char *) (data.data() + startOffset) + 1);
     } else {
         return 0;
-    }
-}
-
-void pcapfs::HttpFile::serialize(boost::archive::text_oarchive &archive) {
-    VirtualFile::serialize(archive);
-    if (flags.test(pcapfs::flags::COBALT_STRIKE)) {
-        archive << cobaltStrikeKey;
-        archive << (fromClient ? 1 : 0);
-        archive << csEmbeddedFileIndex;
-    }
-
-}
-
-void pcapfs::HttpFile::deserialize(boost::archive::text_iarchive &archive) {
-    VirtualFile::deserialize(archive);
-    if (flags.test(pcapfs::flags::COBALT_STRIKE)) {
-        int i;
-        archive >> cobaltStrikeKey;
-        archive >> i;
-        fromClient = i ? true : false;
-        archive >> csEmbeddedFileIndex;
     }
 }
 

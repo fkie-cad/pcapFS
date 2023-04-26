@@ -5,7 +5,6 @@
 #include <pcapplusplus/HttpLayer.h>
 
 #include "virtualfile.h"
-#include "../cobaltstrike.h"
 
 
 namespace pcapfs {
@@ -31,12 +30,6 @@ namespace pcapfs {
         int readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf);
 
         int calculateProcessedSize(const Index &idx);
-
-        // functions which call cobalt strike components
-        int readCS(uint64_t startOffset, size_t length, const Index &idx, char *buf);
-        int calculateProcessedSizeCS(const Index &idx, bool fromClient);
-        std::map<uint64_t,std::string> checkEmbeddedCSFiles(const Index &idx);
-
 
         //functions used for http parsing
         static bool isHttpTraffic(const Bytes& data);
@@ -69,18 +62,8 @@ namespace pcapfs {
 
         static bool usesValidHTTPVersion(const Bytes &data, uint64_t startOffset = 0, size_t length = 0);
 
-        void serialize(boost::archive::text_oarchive &archive) override;
-
-        void deserialize(boost::archive::text_iarchive &archive) override;
-
     protected:
         static bool registeredAtFactory;
-
-        // values needed to be memorized for cobalt strike handling
-        Bytes cobaltStrikeKey;
-        bool fromClient;
-        uint64_t csEmbeddedFileIndex;
-
     };
 
 }

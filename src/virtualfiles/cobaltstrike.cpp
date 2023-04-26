@@ -1,84 +1,177 @@
 #include "cobaltstrike.h"
-
-#include <boost/beast/core/detail/base64.hpp>
+#include "../filefactory.h"
+#include "../logging.h"
+#include "../cobaltstrike/cs_manager.h"
+#include "../cobaltstrike/cs_callback_codes.h"
+#include "../cobaltstrike/cs_command_codes.h"
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <endian.h>
 #include <sstream>
-#include "crypto/cryptutils.h"
-#include "cobaltstrike/cs_callback_codes.h"
-#include "cobaltstrike/cs_command_codes.h"
+#include <boost/tokenizer.hpp>
+#include <boost/algorithm/string.hpp>
 
-void pcapfs::CobaltStrike::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort) {
 
-    if (isKnownConnection(dstIp, dstPort) || cookie.length() <= 34)
-        // when the cookie is shorter than 34 characters, the raw key can't be encoded in it
-        return;
+std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, Index &idx) {
+    Bytes data = filePtr->getBuffer();
+    std::vector<FilePtr> resultVector(0);
+    if (filePtr->getFiletype() != "http"|| filePtr->flags.test(pcapfs::flags::IS_METADATA) ||
+        (!CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP")) &&
+        !CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("srcIP"), filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"))))
+//(!isHttpPost(filePtr->getFilename()) && !isHttpResponse(filePtr->getFilename(), filePtr->getProperty("uri"))))
+        return resultVector;
+    
+    //isHttpResponse(filePtr->getFilename(), filePtr->getProperty("uri"));
 
-    LOG_TRACE << "HTTP Header Cookie: " << cookie;
-    LOG_TRACE << "check if cookie belongs to cobalt strike";
+    std::shared_ptr<CobaltStrikeFile> resultPtr = std::make_shared<CobaltStrikeFile>();
 
-    Bytes toDecrypt(3*(cookie.length()/4) - 1); // TODO: change size of toDecrypt?
-    boost::beast::detail::base64::decode(toDecrypt.data(), cookie.c_str(), cookie.length());
+    Fragment fragment;
+    fragment.id = filePtr->getIdInIndex();
+    fragment.start = 0;
+    fragment.length = filePtr->getFilesizeRaw();
+    resultPtr->fragments.push_back(fragment);
+    resultPtr->setFilesizeRaw(fragment.length);
+    resultPtr->setOffsetType(filePtr->getFiletype());
+    resultPtr->setFiletype("cobaltstrike");
+    resultPtr->setTimestamp(filePtr->getTimestamp());
+    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    resultPtr->setProperty("protocol", "cobaltstrike");
+    resultPtr->setProperty("domain", filePtr->getProperty("domain"));
+    resultPtr->setProperty("uri", filePtr->getProperty("uri"));
+    
+    if (isHttpPost(filePtr->getFilename())) {
+        resultPtr->cobaltStrikeKey = CobaltStrikeManager::getInstance().getConnectionData(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"),
+                                                                                            filePtr->getProperty("srcIP"))->aesKey;
 
-    Bytes result(toDecrypt.size());
-    for(const std::string &privKey : privKeyCandidates) {
-        result = crypto::rsaPrivateDecrypt(toDecrypt, Bytes(privKey.begin(), privKey.end()), false);
-        if (!result.empty()) {
+        resultPtr->setFilename(filePtr->getProperty("srcPort") + "_response");
+        resultPtr->fromClient = true;
+        resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+        resultPtr->flags.set(pcapfs::flags::PROCESSED);
+        resultVector.push_back(resultPtr);
 
-            if (matchMagicBytes(result)) {
-                LOG_INFO << "found cobalt strike communication";
-                // extract symmetric key material
-                Bytes rawKey(result.begin()+8, result.begin()+8+16);
-                addConnectionData(rawKey, dstIp, dstPort);
+    //} else if(isHttpResponse(filePtr->getFilename(), filePtr->getProperty("uri"))) {
+    } else {
+        resultPtr->setFilename(filePtr->getProperty("dstPort") + "_command");
+        CobaltStrikeConnectionPtr connData = CobaltStrikeManager::getInstance().getConnectionData(filePtr->getProperty("srcIP"), filePtr->getProperty("srcPort"),
+                                                                                                    filePtr->getProperty("dstIP"));
+        resultPtr->cobaltStrikeKey = connData->aesKey;
+        resultPtr->fromClient = false;
+
+        for (auto mapEntry : resultPtr->checkEmbeddedFiles(idx)) {
+            std::shared_ptr<CobaltStrikeFile> embeddedFilePtr = std::make_shared<CobaltStrikeFile>();
+            Fragment embeddedFragment;
+            embeddedFragment.id = filePtr->getIdInIndex();
+            embeddedFragment.start = fragment.start;
+            embeddedFragment.length = fragment.length;
+
+            embeddedFilePtr->fragments.push_back(embeddedFragment);
+            embeddedFilePtr->setFilesizeRaw(embeddedFragment.length);
+            embeddedFilePtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
+
+            embeddedFilePtr->embeddedFileIndex = mapEntry.first;
+
+            embeddedFilePtr->setOffsetType(filePtr->getFiletype());
+            embeddedFilePtr->setFiletype("cobaltstrike");
+
+            if (!mapEntry.second.empty()) {
+                if (boost::ends_with(mapEntry.second, "_part"))
+                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + mapEntry.second + std::to_string(mapEntry.first));
+                else
+                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + mapEntry.second);
             }
+            else
+                embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + "embedded_file"+std::to_string(mapEntry.first));
+
+            embeddedFilePtr->setTimestamp(filePtr->getTimestamp());
+            embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
+            embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
+            embeddedFilePtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
+            embeddedFilePtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            embeddedFilePtr->setProperty("domain", filePtr->getProperty("domain"));
+            embeddedFilePtr->setProperty("uri", filePtr->getProperty("uri"));
+            embeddedFilePtr->setProperty("protocol", "cobaltstrike");
+            embeddedFilePtr->flags.set(pcapfs::flags::IS_EMBEDDED_FILE);
+            embeddedFilePtr->flags.set(pcapfs::flags::PROCESSED);
+
+            embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
+            embeddedFilePtr->fromClient = false;
+            embeddedFilePtr->setFilesizeProcessed(embeddedFilePtr->calculateProcessedSize(idx));
+
+            resultVector.push_back(embeddedFilePtr);
         }
+
+        resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+        //if (resultPtr->getFilesizeProcessed() == resultPtr->getFilesizeRaw()) {
+        //    // parsing failed, we probably have no command in the payload
+        //    // then this might be the beacon config file
+        //    resultPtr->setFilename(filePtr->getFilename());
+        //}
+        resultPtr->flags.set(pcapfs::flags::PROCESSED);
+        resultVector.push_back(resultPtr);
+
     }
+
+    return resultVector;
 }
 
 
-bool pcapfs::CobaltStrike::isKnownConnection(const std::string &ServerIp, const std::string &ServerPort) {
-    return std::any_of(connections.begin(), connections.end(),
-                        [ServerIp,ServerPort](const CobaltStrikeConnectionPtr &conn){ return conn->identifier() == std::make_pair(ServerIp, ServerPort); });
+size_t pcapfs::CobaltStrikeFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+    Fragment fragment = fragments.at(0);
+    Bytes rawData(fragment.length);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+
+    Bytes decryptedData;
+    if (flags.test(pcapfs::flags::IS_EMBEDDED_FILE))
+        decryptedData = decryptEmbeddedFile(rawData);
+    else
+        decryptedData = decryptPayload(rawData);
+    memcpy(buf, decryptedData.data() + startOffset, length);
+    return std::min(decryptedData.size() - startOffset, length);
 }
 
 
-bool pcapfs::CobaltStrike::matchMagicBytes(const Bytes& input) {
-    const Bytes magicBytes = {0x00, 0x00, 0xbe, 0xef};
-    for (int i = 0; i < 4; ++i) {
-        if (input[i] != magicBytes [i])
-            return false;
+bool pcapfs::CobaltStrikeFile::isHttpPost(const std::string &filename) {
+    boost::char_separator<char> sep("_");
+    boost::tokenizer<boost::char_separator<char>> tokens(filename, sep);
+    for (const auto& t : tokens) {
+        if (t.rfind("POST", 0) == 0)
+            return true;
     }
-    return true;
+    return false;
+}
+
+/**
+bool pcapfs::CobaltStrikeFile::isHttpResponse(const std::string &filename, const std::string &uri) {
+    boost::char_separator<char> sep("_");
+    boost::tokenizer<boost::char_separator<char>> tokens(filename, sep);
+    for (const auto& t : tokens) {
+        //LOG_ERROR << t;
+        if (t == uri)
+            return true;
+    }
+    return false;
+}
+**/
+
+int pcapfs::CobaltStrikeFile::calculateProcessedSize(const Index &idx) {
+    Bytes rawData, decryptedData;
+    Fragment fragment = fragments.at(0);
+    rawData.resize(fragment.length);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+    if (flags.test(pcapfs::flags::IS_EMBEDDED_FILE))
+        return decryptEmbeddedFile(rawData).size();
+    else
+        return decryptPayload(rawData).size();
 }
 
 
-void pcapfs::CobaltStrike::addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort) {
-    Bytes digest = crypto::calculateSha256(rawKey);
-    if (digest.empty())
-        return;
-
-    CobaltStrikeConnectionPtr newConnection = std::make_shared<CobaltStrikeConnection>();
-    newConnection->aesKey = Bytes(digest.begin(), digest.begin()+16);
-    //newConnection->hmacKey = Bytes(digest.begin()+16, digest.end());
-    newConnection->serverIp = dstIp;
-    newConnection->serverPort = dstPort;
-    connections.push_back(newConnection);
-}
-
-
-pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrike::getConnectionData(const std::string &serverIp, const std::string &serverPort) {
-    CobaltStrikeConnectionPtr result;
-    auto it = std::find_if(connections.cbegin(), connections.cend(),
-                         [serverIp,serverPort](const CobaltStrikeConnectionPtr &conn){ return conn->identifier() == std::make_pair(serverIp, serverPort); });
-    if (it != connections.cend())
-        result = *it;
-    return result;
-}
-
-
-pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient) {
-    if (input.size() < 32 || aesKey.empty()) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptPayload(const Bytes &input) {
+    if (input.size() < 32 || cobaltStrikeKey.empty()) {
         return input;
     }
 
@@ -93,16 +186,20 @@ pcapfs::Bytes const pcapfs::CobaltStrike::decryptPayload(const Bytes &input, con
         dataToDecrypt.assign(input.begin(), input.end()-16);
     }
 
-    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
+    if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         return input;
     }
 
-    return fromClient ? parseDecryptedClientContent(decryptedData) : parseDecryptedServerContent(decryptedData);
+    Bytes result = fromClient ? parseDecryptedClientContent(decryptedData) : parseDecryptedServerContent(decryptedData);
+    if (result.empty())
+        result = input;
+    
+    return result;
 }
 
 
-int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData) {
+int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData) {
 
     // we can't use the crypto::opensslDecrypt function because
     // cobalt strike pads in a way that EVP_DecryptFinal doesn't like
@@ -113,11 +210,11 @@ int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Byt
         LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
         error = 1;
     }
-    if (EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop", 0) != 1) {
+    if (EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), nullptr, cobaltStrikeKey.data(), (const unsigned char*) "abcdefghijklmnop", 0) != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() failed" << std::endl;
         error = 1;
     }
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop") != 1) {
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, cobaltStrikeKey.data(), (const unsigned char*) "abcdefghijklmnop") != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() failed" << std::endl;
         error = 1;
     }
@@ -136,10 +233,11 @@ int pcapfs::CobaltStrike::opensslDecryptCS(const Bytes &dataToDecrypt, const Byt
  }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Bytes &data) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedClientContent(const Bytes &data) {
     Bytes result;
     Bytes temp(data.begin(), data.end());
-    uint32_t counter = be32toh(*((uint32_t*) temp.data()));
+
+    uint32_t counter = be32toh(*((uint32_t*) (temp.data())));
     //uint32_t data_length = be32toh(*((uint32_t*) (tempc+4))); // is including padding bytes and additional values at the end
     uint32_t callback_code = be32toh(*((uint32_t*) (temp.data()+8)));
     const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
@@ -179,7 +277,7 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedClientContent(const Byte
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Bytes &data) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const Bytes &data) {
     Bytes temp(data.begin(), data.end());
     Bytes output;
 
@@ -187,7 +285,8 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
     const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
     if (data_size > data.size()) {
         LOG_INFO << "cobalt strike: parsed length of server message is invalid";
-        return data;
+        //return data;
+        return Bytes();
     }
 
     std::stringstream ss;
@@ -309,21 +408,31 @@ pcapfs::Bytes const pcapfs::CobaltStrike::parseDecryptedServerContent(const Byte
  }
 
 
-size_t pcapfs::CobaltStrike::getLengthWithoutPadding(const Bytes &input, uint32_t inputLength) {
+size_t pcapfs::CobaltStrikeFile::getLengthWithoutPadding(const Bytes &input, uint32_t inputLength) {
     Bytes temp(input.begin(), input.begin()+inputLength);
     temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
     return temp.size();
 }
 
 
- pcapfs::Bytes const pcapfs::CobaltStrike::decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey, uint64_t index) {
-    if (input.size() < 32 || aesKey.empty())
+std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::checkEmbeddedFiles(const Index &idx) {
+    Bytes rawData, decryptedData;
+    Fragment fragment = fragments.at(0);
+    rawData.resize(fragment.length);
+    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+    return extractEmbeddedFileInfos(rawData);
+}
+
+
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptEmbeddedFile(const Bytes &input) {
+    if (input.size() < 32 || cobaltStrikeKey.empty())
         return input;
 
     Bytes decryptedData(input.size() - 16);
     Bytes dataToDecrypt(input.begin(), input.end() - 16);
 
-    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
+    if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         return input;
     }
@@ -349,7 +458,7 @@ size_t pcapfs::CobaltStrike::getLengthWithoutPadding(const Bytes &input, uint32_
             return input;
         }
 
-        if (currIndex == index) {
+        if (currIndex == embeddedFileIndex) {
             if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
                 return Bytes(temp.begin(), temp.begin()+argsLen);
             } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
@@ -372,16 +481,16 @@ size_t pcapfs::CobaltStrike::getLengthWithoutPadding(const Bytes &input, uint32_
  * returns a map with indices indicating which commands contain an embedded file as argument and the file name
  * for upload commands
 */
-std::map<uint64_t,std::string> pcapfs::CobaltStrike::extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey) {
+std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfos(const Bytes &input) {
     std::map<uint64_t,std::string> result;
 
-    if (input.size() < 32 || aesKey.empty())
+    if (input.size() < 32 || cobaltStrikeKey.empty())
         return result;
 
     Bytes decryptedData(input.size() - 16);
     Bytes dataToDecrypt(input.begin(), input.end() - 16);
 
-    if (opensslDecryptCS(dataToDecrypt, aesKey, decryptedData)) {
+    if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
         LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
         return result;
     }
@@ -430,3 +539,27 @@ std::map<uint64_t,std::string> pcapfs::CobaltStrike::extractEmbeddedFileInfos(co
 
     return result;
 }
+
+
+
+void pcapfs::CobaltStrikeFile::serialize(boost::archive::text_oarchive &archive) {
+    VirtualFile::serialize(archive);
+    archive << cobaltStrikeKey;
+    archive << (fromClient ? 1 : 0);
+    archive << embeddedFileIndex;
+
+}
+
+
+void pcapfs::CobaltStrikeFile::deserialize(boost::archive::text_iarchive &archive) {
+    VirtualFile::deserialize(archive);
+    int i;
+    archive >> cobaltStrikeKey;
+    archive >> i;
+    fromClient = i ? true : false;
+    archive >> embeddedFileIndex;
+}
+
+
+bool pcapfs::CobaltStrikeFile::registeredAtFactory =
+        pcapfs::FileFactory::registerAtFactory("cobaltstrike", pcapfs::CobaltStrikeFile::create, pcapfs::CobaltStrikeFile::parse);

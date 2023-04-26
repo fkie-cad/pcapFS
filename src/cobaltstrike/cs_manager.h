@@ -1,49 +1,40 @@
-#ifndef PCAPFS_COBALTSTRIKE_H
-#define PCAPFS_COBALTSTRIKE_H
+#ifndef PCAPFS_CS_MANAGER_H
+#define PCAPFS_CS_MANAGER_H
 
 #include <set>
-#include "commontypes.h"
+#include "../commontypes.h"
 
 namespace pcapfs {
 
     typedef struct CobaltStrikeConnection {
         std::string serverIp;
         std::string serverPort;
+        std::string clientIp;
         Bytes aesKey;
 
-        std::pair<std::string,std::string> identifier() {
-            return std::make_pair(serverIp, serverPort);
-        }
     } CobaltStrikeConnection;
 
     typedef std::shared_ptr<CobaltStrikeConnection> CobaltStrikeConnectionPtr;
 
-    class CobaltStrike {
+    class CobaltStrikeManager {
     public:
-        static CobaltStrike& getInstance() {
-            static CobaltStrike instance;
+        static CobaltStrikeManager& getInstance() {
+            static CobaltStrikeManager instance;
             return instance;
         }
 
-        CobaltStrike(CobaltStrike const&) = delete;
-        void operator=(CobaltStrike const&) = delete;
+        CobaltStrikeManager(CobaltStrikeManager const&) = delete;
+        void operator=(CobaltStrikeManager const&) = delete;
 
-        void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort);
-        bool isKnownConnection(const std::string &ServerIp, const std::string &ServerPort);
-        Bytes const decryptPayload(const Bytes &input, const Bytes &aesKey, bool fromClient);
-        Bytes const decryptEmbeddedFile(const Bytes &input, const Bytes &aesKey, uint64_t index);
-        CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort);
-        std::map<uint64_t,std::string>  extractEmbeddedFileInfos(const Bytes &input, const Bytes &aesKey);
+        void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp);
+        CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
+        bool isKnownConnection(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
 
     private:
-        CobaltStrike() {}
+        CobaltStrikeManager() {}
 
         bool matchMagicBytes(const Bytes& input);
-        void addConnectionData(const Bytes& rawKey, const std::string &dstIp, const std::string &dstPort);
-        int opensslDecryptCS(const Bytes &dataToDecrypt, const Bytes &aesKey, Bytes &decryptedData);
-        Bytes const parseDecryptedClientContent(const Bytes &data);
-        Bytes const parseDecryptedServerContent(const Bytes &data);
-        size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
+        void addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
 
@@ -221,4 +212,4 @@ namespace pcapfs {
     };
 }
 
-#endif // PCAPFS_COBALTSTRIKE_H
+#endif // PCAPFS_CS_MANAGER_H

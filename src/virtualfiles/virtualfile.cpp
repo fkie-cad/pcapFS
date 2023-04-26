@@ -7,6 +7,9 @@
 
 std::string pcapfs::VirtualFile::getFilename() {
     std::string temp;
+    if (filetype == "cobaltstrike")
+        return filename;
+
     if (fragments.empty()) {
         LOG_ERROR << "found no fragment in file " << filename << " with index "
                   << filetype << std::to_string(this->getIdInIndex());

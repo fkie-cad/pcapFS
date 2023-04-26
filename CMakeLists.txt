@@ -42,7 +42,7 @@ set(PCAPFS_COMMON_SOURCES
         src/crypto/cryptutils.cpp
         src/cobaltstrike/cs_callback_codes.h
         src/cobaltstrike/cs_command_codes.h
-        src/cobaltstrike.cpp
+        src/cobaltstrike/cs_manager.cpp
         src/keyfiles/sslkey.cpp
         src/keyfiles/xorkey.cpp
         src/virtualfiles/virtualfile.cpp
@@ -57,6 +57,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/tcp.cpp
         src/virtualfiles/udp.cpp
         src/virtualfiles/xor.cpp
+        src/virtualfiles/cobaltstrike.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES
