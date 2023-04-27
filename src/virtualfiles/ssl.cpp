@@ -363,7 +363,8 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 	}
     resultPtr->setOffsetType(filePtr->getFiletype());
     resultPtr->setFiletype("ssl");
-    resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
+    if (handshakeData->cipherSuite)
+        resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
     resultPtr->setSslVersion(handshakeData->sslVersion);
@@ -617,22 +618,25 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshak
 
 
 int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
-	pcpp::SSLCipherSuite *cipherSuite = pcpp::SSLCipherSuite::getCipherSuiteByName(getCipherSuite());
 
-    switch (cipherSuite->getSymKeyAlg()) {
+	pcpp::SSLCipherSuite *cipher = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+    if (!cipher)
+        return 1;
+
+    switch (cipher->getSymKeyAlg()) {
         case pcpp::SSL_SYM_RC4_128:
         {
-            crypto::decrypt_RC4_128(input, output, cipherSuite->getMACAlg());
+            crypto::decrypt_RC4_128(input, output, cipher->getMACAlg());
             break;
         }
         case pcpp::SSL_SYM_AES_128_CBC:
         {
-            crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 16);
+            crypto::decrypt_AES_CBC(input, output, cipher->getMACAlg(), 16);
             break;
         }
         case pcpp::SSL_SYM_AES_256_CBC:
         {
-            crypto::decrypt_AES_CBC(input, output, cipherSuite->getMACAlg(), 32);
+            crypto::decrypt_AES_CBC(input, output, cipher->getMACAlg(), 32);
             break;
         }
         case pcpp::SSL_SYM_AES_128_GCM:
@@ -646,7 +650,7 @@ int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
             break;
         }
         default:
-            LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipherSuite->asString();
+            LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipher->asString();
             return 0;
     }
     return 1;
