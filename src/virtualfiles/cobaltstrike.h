@@ -16,7 +16,7 @@ namespace pcapfs {
 
         //static bool isHttpResponse(const std::string &filename, const std::string &uri);
 
-        int calculateProcessedSize(const Index &idx);
+        size_t calculateProcessedSize(const Index &idx);
 
         Bytes const decryptPayload(const Bytes &input);
 
