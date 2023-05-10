@@ -45,6 +45,7 @@ set(PCAPFS_COMMON_SOURCES
         src/cobaltstrike/cs_manager.cpp
         src/keyfiles/sslkey.cpp
         src/keyfiles/xorkey.cpp
+        src/keyfiles/cskey.cpp
         src/virtualfiles/virtualfile.cpp
         src/virtualfiles/ftp.cpp
         src/virtualfiles/ftpcontrol.cpp

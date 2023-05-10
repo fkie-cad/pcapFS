@@ -95,9 +95,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             const std::string requestMethod = requestMethodToString(getRequestMethod(data, offset, size));
 
+            // TODO: filePtr->meetsDecodeMapCriteria("cobaltstrike")
             if (requestMethod == "GET" && header.find("cookie") != header.end()) {
-                CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"),
-                                                                filePtr->getProperty("dstPort"),  filePtr->getProperty("srcIP"));
+                CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"),
+                                                                    filePtr->getProperty("srcIP"), idx);
             }
 
             if (requestedFilename != "") {

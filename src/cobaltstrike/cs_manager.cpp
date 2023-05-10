@@ -2,9 +2,11 @@
 
 #include <boost/beast/core/detail/base64.hpp>
 #include "../crypto/cryptutils.h"
+#include "../keyfiles/cskey.h"
 
 
-void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp) {
+void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort,
+                                                const std::string &srcIp, const pcapfs::Index &idx) {
 
     if (isKnownConnection(dstIp, dstPort, srcIp) || cookie.length() <= 34)
         // when the cookie is shorter than 34 characters, the raw key can't be encoded in it
@@ -17,8 +19,15 @@ void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const
     boost::beast::detail::base64::decode(toDecrypt.data(), cookie.c_str(), cookie.length());
 
     Bytes result(toDecrypt.size());
-    for(const std::string &privKey : privKeyCandidates) {
-        result = crypto::rsaPrivateDecrypt(toDecrypt, Bytes(privKey.begin(), privKey.end()), false);
+    std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("cskey");
+    for (auto &keyFile: keyFiles) {
+        std::shared_ptr<CSKeyFile> csKeyFile = std::dynamic_pointer_cast<CSKeyFile>(keyFile);
+        if (!csKeyFile) {
+            LOG_ERROR << "dynamic_pointer_cast failed for cs key file";
+            continue;
+        }
+        const Bytes privKey = csKeyFile->getRsaPrivateKey();
+        result = crypto::rsaPrivateDecrypt(toDecrypt, privKey, false);
         if (!result.empty()) {
 
             if (matchMagicBytes(result)) {

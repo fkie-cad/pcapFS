@@ -78,10 +78,16 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             embeddedFilePtr->setFiletype("cobaltstrike");
 
             if (!mapEntry.second.empty()) {
-                if (boost::ends_with(mapEntry.second, "_part"))
-                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + mapEntry.second + std::to_string(mapEntry.first));
+                std::string filename = mapEntry.second;
+                if (filename.find("\\") != std::string::npos) {
+                    std::vector<std::string> tokens;
+                    boost::split(tokens, filename, [](char c) { return c == 0x5C; });
+                    filename = tokens.back();
+                }
+                if (boost::ends_with(filename, "_part"))
+                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + filename + std::to_string(mapEntry.first));
                 else
-                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + mapEntry.second);
+                    embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + filename);
             }
             else
                 embeddedFilePtr->setFilename(filePtr->getProperty("dstPort") + "_command_" + "embedded_file"+std::to_string(mapEntry.first));
@@ -143,6 +149,7 @@ size_t pcapfs::CobaltStrikeFile::read(uint64_t startOffset, size_t length, const
 bool pcapfs::CobaltStrikeFile::isHttpPost(const std::string &filename) {
     boost::char_separator<char> sep("_");
     boost::tokenizer<boost::char_separator<char>> tokens(filename, sep);
+    // better: use boost:split
     for (const auto& t : tokens) {
         if (t.rfind("POST", 0) == 0)
             return true;
@@ -370,7 +377,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const 
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
-        } else if (command == "COMMAND_JOB_REGISTER") {
+        } else if (command == "COMMAND_JOB_REGISTER" || command == "COMMAND_JOB_REGISTER_MSGMODE") {
             size_t currPos = 8; // we have 2 unknown additional fields in front
             while (currPos < args_len) {
                 uint32_t tempLen = be32toh(*((uint32_t*) (temp.data()+currPos)));
@@ -378,7 +385,8 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const 
                     LOG_WARNING << "cobalt strike: parsed argument length of COMMAND_JOB_REGISTER is invalid";
                     return data;
                 }
-                std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
+                //std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
+                std::string argument(temp.begin()+4+currPos, std::find_if(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen, [](unsigned char c){ return c == 0x00; }));
                 ss << "Argument: " << argument << std::endl;
                 currPos += tempLen + 4;
             }
@@ -396,7 +404,8 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const 
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
-        } else if (command == "COMMAND_INLINE_EXECUTE_OBJECT" || command == "COMMAND_SPAWN_TOKEN_X86") {
+        } else if (command == "COMMAND_INLINE_EXECUTE_OBJECT" || command == "COMMAND_SPAWN_TOKEN_X86" ||
+                    command == "COMMAND_SPAWNX64" || command == "COMMAND_SPAWN_TOKEN_X64") {
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
@@ -465,7 +474,8 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptEmbeddedFile(const Bytes &i
         }
 
         if (currIndex == embeddedFileIndex) {
-            if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
+            if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_SPAWN_TOKEN_X64" ||
+                command == "COMMAND_SPAWNX64" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
                 return Bytes(temp.begin(), temp.begin()+argsLen);
             } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
                 uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
@@ -536,7 +546,8 @@ std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfo
             } else
                 result[currIndex] = "";
         }
-        else if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_INLINE_EXECUTE_OBJECT")
+        else if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_SPAWN_TOKEN_X64" ||
+                command == "COMMAND_SPAWNX64" || command == "COMMAND_INLINE_EXECUTE_OBJECT")
             result[currIndex] = "";
 
         currOffset += argsLen + 8;
@@ -545,7 +556,6 @@ std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfo
 
     return result;
 }
-
 
 
 void pcapfs::CobaltStrikeFile::serialize(boost::archive::text_oarchive &archive) {

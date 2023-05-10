@@ -20,6 +20,7 @@
 #include "capturefiles/capturefile.h"
 #include "keyfiles/sslkey.h"
 #include "keyfiles/xorkey.h"
+#include "keyfiles/cskey.h"
 #include "virtualfiles/tcp.h"
 #include "virtualfiles/udp.h"
 #include "virtualfiles/xor.h"
@@ -123,6 +124,8 @@ int main(int argc, const char *argv[]) {
         std::vector<pcapfs::FilePtr> keyFiles = pcapfs::SSLKeyFile::parseCandidates(config.keyFiles);
         index.insertKeyCandidates(keyFiles);
         keyFiles = pcapfs::XORKeyFile::parseCandidates(config.keyFiles);
+        index.insertKeyCandidates(keyFiles);
+        keyFiles = pcapfs::CSKeyFile::parseCandidates(config.keyFiles);
         index.insertKeyCandidates(keyFiles);
     }
 
