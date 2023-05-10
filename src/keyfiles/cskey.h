@@ -22,8 +22,6 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parseCandidates(const Paths &keyFiles);
 
-        //static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(const Bytes &keyMaterial);
-
         Bytes getRsaPrivateKey() { return rsaPrivateKey; };
 
         size_t read(uint64_t, size_t, const Index &, char *) override { return 0; };
@@ -35,7 +33,7 @@ namespace pcapfs {
         void deserialize(boost::archive::text_iarchive &archive) override;
 
         static bool registeredAtFactory;
-    
+
     private:
         Bytes rsaPrivateKey;
     };

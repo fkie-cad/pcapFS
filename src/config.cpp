@@ -90,13 +90,25 @@ namespace {
         const auto keyfiles = section->get_array_of<std::string>("keyfiles");
         if (keyfiles) {
             for (const auto &k : *keyfiles) {
-                const auto path = boost::filesystem::canonical(k, configPath);
+                boost::filesystem::path path;
+                try {
+                    path = boost::filesystem::canonical(k, configPath);
+                } catch (boost::filesystem::filesystem_error &err) {
+                    LOG_ERROR << "invalid key file path in config file: " << err.what();
+                    continue;
+                }
                 const auto paths = pcapfs::utils::getFilesFromPath(path, "");
                 files.insert(files.end(), paths.cbegin(), paths.cend());
             }
         } else {
             const auto keyfile = section->get_as<std::string>("keyfiles");
-            const auto path = boost::filesystem::canonical(*keyfile, configPath);
+            boost::filesystem::path path;
+            try {
+                path = boost::filesystem::canonical(*keyfile, configPath);
+            } catch (boost::filesystem::filesystem_error &err) {
+                LOG_ERROR << "invalid key file path in config file: " << err.what();
+                return files;
+            }
             if (keyfile) {
                 const auto paths = pcapfs::utils::getFilesFromPath(path, "");
                 files.insert(files.end(), paths.cbegin(), paths.cend());
@@ -191,6 +203,7 @@ namespace {
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
+                    ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
                     ("version,V", "show version information and exit");
 
             po::typed_value<std::string, char>* verbosity;
@@ -247,6 +260,7 @@ namespace {
             if (vm.count("rewrite")) { opts.config.rewrite = true; }
             if (vm.count("show-all")) { opts.config.showAll = true; }
             if (vm.count("show-metadata")) { opts.config.showMetadata = true; }
+            if (vm.count("no-cs")) { opts.config.noCS = true; }
             if (vm.count("verbosity")) {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }

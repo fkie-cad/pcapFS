@@ -27,7 +27,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CSKeyFile::parseCandidates(const std::vecto
                 keyPtr->setFiletype("cskey");
                 resultVector.push_back(keyPtr);
 
-            } 
+            }
         }
     }
     return resultVector;

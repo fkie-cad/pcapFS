@@ -26,6 +26,7 @@ namespace pcapfs {
             bool rewrite = false;
             bool noMount = false;
             bool showMetadata = false;
+            bool noCS = false;
             bool showAll = false;
             bool indexInMemory = false;
             bool allowHTTP09 = true;
