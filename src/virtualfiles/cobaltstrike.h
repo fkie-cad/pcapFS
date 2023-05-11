@@ -14,9 +14,11 @@ namespace pcapfs {
 
         static bool isHttpPost(const std::string &filename);
 
-        //static bool isHttpResponse(const std::string &filename, const std::string &uri);
+        static bool isHttpResponse(const std::string &filename);
 
-        size_t calculateProcessedSize(const Index &idx);
+        size_t calculateProcessedSize(const Index &idx, std::string &command);
+
+        std::string const extractServerCommand(const Bytes &payload);
 
         Bytes const decryptPayload(const Bytes &input);
 

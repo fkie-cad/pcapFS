@@ -92,7 +92,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             const std::string requestMethod = requestMethodToString(getRequestMethod(data, offset, size));
 
-            if (!config.noCS && requestMethod == "GET" && header.find("cookie") != header.end() &&
+            if (!config.noCS && requestMethod == "GET" && header.find("cookie") != header.end() && !idx.getCandidatesOfType("cskey").empty() &&
                 ((config.getDecodeMapFor("cobaltstrike").empty()) || filePtr->meetsDecodeMapCriteria("cobaltstrike"))) {
                 // when no decode config for cobaltstrike is supplied we check all HTTP GET cookies
                 // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config
@@ -660,6 +660,7 @@ std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::Http
 
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
         LOG_ERROR << "not a valid http method!";
+        return "UNKNOWN";
     }
     return methodEnumToString[method];
 }
