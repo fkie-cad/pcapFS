@@ -103,10 +103,10 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
                 embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_embedded_file" + std::to_string(mapEntry.first));
 
             embeddedFilePtr->setTimestamp(filePtr->getTimestamp());
-            embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-            embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-            embeddedFilePtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-            embeddedFilePtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+            embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+            embeddedFilePtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+            embeddedFilePtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
             embeddedFilePtr->setProperty("domain", filePtr->getProperty("domain"));
             embeddedFilePtr->setProperty("uri", filePtr->getProperty("uri"));
             embeddedFilePtr->setProperty("protocol", "cobaltstrike");

@@ -345,7 +345,10 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, p
 
 void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const TLSHandshakeDataPtr &handshakeData, Index &idx){
 	//search for master secret in candidates
-    if (handshakeData->processedTLSHandshake && handshakeData->cipherSuite) {
+    if ((config.getDecodeMapFor("ssl").empty() || filePtr->meetsDecodeMapCriteria("ssl")) &&
+        handshakeData->processedTLSHandshake && handshakeData->cipherSuite) {
+        // when no decode config for ssl is supplied we try to decrypt all ssl traffic (with the resp. keys)
+        // when an ssl decode config is supplied we only decrypt ssl traffic which meets the given config
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
 			Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
@@ -494,8 +497,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                      * Prevent the run of the calculation stub in the first execution of the loop, there is no data ready.
                      */
                     if(resultPtr->filesizeRaw > 0) {
-                        size_t calculated_size = resultPtr->calculateProcessedSize(idx);
-                        resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + calculated_size);
+                        if (resultPtr->flags.test(flags::HAS_DECRYPTION_KEY))
+                            resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + resultPtr->calculateProcessedSize(idx));
+                        else
+                            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
                         visitedVirtualSslFile = true;
                     }
 
@@ -550,7 +555,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
              * Idea: Just one decryption after all ciphertext is available. We need to keep track
              * of all connection breaks and package breaks. Then we can reconstruct it here inside the parser.
              */
-            if(sslLayer == nullptr && visitedVirtualSslFile == true && resultPtr->flags.test(flags::PROCESSED)) {
+            if(!sslLayer && visitedVirtualSslFile && resultPtr->flags.test(flags::PROCESSED)) {
                 LOG_DEBUG << "Fixing the fileSizeProcessed, setting it to the full size of plaintext.";
                 size_t calculated_size = resultPtr->calculateProcessedSize(idx);
                 /*
