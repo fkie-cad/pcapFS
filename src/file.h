@@ -30,6 +30,7 @@ namespace pcapfs {
         const unsigned char HAS_DECRYPTION_KEY = 8;
         const unsigned char PARSED = 9;
         const unsigned char IS_EMBEDDED_FILE = 10;
+        const unsigned char CS_DO_NOT_SHOW = 11;
     }
 
     typedef std::pair<uint64_t, TimePoint> OffsetWithTime;
@@ -91,7 +92,7 @@ namespace pcapfs {
         bool meetsDecodeMapCriteria(const std::string &file);
 
         //std::bitset<11> flags;
-        std::bitset<11> flags;
+        std::bitset<12> flags;
 
         std::vector<OffsetWithTime> connectionBreaks; //TODO: are they good here?
 

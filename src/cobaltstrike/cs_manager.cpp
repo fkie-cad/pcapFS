@@ -65,7 +65,6 @@ void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const s
 
     CobaltStrikeConnectionPtr newConnection = std::make_shared<CobaltStrikeConnection>();
     newConnection->aesKey = Bytes(digest.begin(), digest.begin()+16);
-    //newConnection->hmacKey = Bytes(digest.begin()+16, digest.end());
     newConnection->serverIp = dstIp;
     newConnection->serverPort = dstPort;
     newConnection->clientIp = srcIp;
@@ -81,4 +80,45 @@ pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrikeManager::getConnectionData
     if (it != connections.cend())
         result = *it;
     return result;
+}
+
+
+void pcapfs::CobaltStrikeManager::addFilePtrToUploadedFiles(const std::string &filename, const FilePtr& fileToAdd, bool isFirstChunk) {
+    if (std::find_if(uploadedFiles.begin(), uploadedFiles.end(), [filename](const auto &entry){
+                        return entry.first == filename; }) != uploadedFiles.end()) {
+        if (isFirstChunk)
+            uploadedFiles[filename]->firstFileChunk = fileToAdd;
+        else
+            uploadedFiles[filename]->fileChunks.push_back(fileToAdd);
+    } else {
+        CsEmbeddedFileChunksPtr entry = std::make_shared<CsEmbeddedFileChunks>();
+        if (isFirstChunk)
+            entry->firstFileChunk = fileToAdd;
+        else
+            entry->fileChunks.push_back(fileToAdd);
+        uploadedFiles[filename] = entry;
+    }
+}
+
+
+std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeManager::getUploadedFileChunks(const FilePtr& uploadedFile) {
+
+    auto it = std::find_if(uploadedFiles.begin(), uploadedFiles.end(), [uploadedFile](const auto &entry){
+                        return entry.second->firstFileChunk == uploadedFile; });
+
+    if (it != uploadedFiles.end()) {
+        std::vector<FilePtr> result;
+        std::vector<FilePtr> fileChunks = it->second->fileChunks;
+        result.push_back(uploadedFile);
+        result.insert(result.end(), fileChunks.begin(), fileChunks.end());
+        return result;
+
+    } else {
+        return std::vector<FilePtr>(0);
+    }
+}
+
+
+bool pcapfs::CobaltStrikeManager::isFirstPartOfUploadedFile(const FilePtr &file) {
+    return std::any_of(uploadedFiles.begin(), uploadedFiles.end(), [file](const auto &entry){ return file == entry.second->firstFileChunk; });
 }

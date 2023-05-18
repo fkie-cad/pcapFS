@@ -12,6 +12,7 @@
 #include <chrono>
 #include <boost/algorithm/string.hpp>
 #include <regex>
+#include <numeric>
 
 
 std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, Index &idx) {
@@ -71,36 +72,36 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             resultPtr->setFilename(timestamp + "-beaconconfig");
         }
 
-        for (auto mapEntry : resultPtr->checkEmbeddedFiles(idx)) {
+        for (auto embeddedFileInfo : resultPtr->checkEmbeddedFiles(idx)) {
             std::shared_ptr<CobaltStrikeFile> embeddedFilePtr = std::make_shared<CobaltStrikeFile>();
             Fragment embeddedFragment;
             embeddedFragment.id = filePtr->getIdInIndex();
-            embeddedFragment.start = fragment.start;
+            embeddedFragment.start = 0;
             embeddedFragment.length = fragment.length;
-
             embeddedFilePtr->fragments.push_back(embeddedFragment);
-            embeddedFilePtr->setFilesizeRaw(embeddedFragment.length);
-            embeddedFilePtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
 
-            embeddedFilePtr->embeddedFileIndex = mapEntry.first;
+            embeddedFilePtr->setFilesizeRaw(embeddedFileInfo->size);
+            embeddedFilePtr->setFilesizeProcessed(embeddedFileInfo->size);
+
+            embeddedFilePtr->embeddedFileIndex = embeddedFileInfo->id;
 
             embeddedFilePtr->setOffsetType(filePtr->getFiletype());
             embeddedFilePtr->setFiletype("cobaltstrike");
 
-            if (!mapEntry.second.empty()) {
-                std::string filename = mapEntry.second;
+            if (!embeddedFileInfo->filename.empty()) {
+                std::string filename = embeddedFileInfo->filename;
                 if (filename.find("\\") != std::string::npos) {
                     std::vector<std::string> tokens;
                     boost::split(tokens, filename, [](char c) { return c == 0x5C; });
                     filename = tokens.back();
                 }
-                if (boost::ends_with(filename, "_part"))
-                    embeddedFilePtr->setFilename(resultPtr->getFilename() + "_" + filename + std::to_string(mapEntry.first));
+                if (embeddedFileInfo->isChunk)
+                    embeddedFilePtr->setFilename(resultPtr->getFilename() + "_" + filename + "_part" + std::to_string(embeddedFileInfo->id));
                 else
                     embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_" + filename);
             }
             else
-                embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_embedded_file" + std::to_string(mapEntry.first));
+                embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_embedded_file" + std::to_string(embeddedFileInfo->id));
 
             embeddedFilePtr->setTimestamp(filePtr->getTimestamp());
             embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
@@ -110,13 +111,22 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             embeddedFilePtr->setProperty("domain", filePtr->getProperty("domain"));
             embeddedFilePtr->setProperty("uri", filePtr->getProperty("uri"));
             embeddedFilePtr->setProperty("protocol", "cobaltstrike");
-            embeddedFilePtr->flags.set(pcapfs::flags::IS_EMBEDDED_FILE);
-            embeddedFilePtr->flags.set(pcapfs::flags::PROCESSED);
+
 
             embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
             embeddedFilePtr->fromClient = false;
-            embeddedFilePtr->setFilesizeProcessed(embeddedFilePtr->calculateProcessedSize(idx, command));
+            embeddedFilePtr->flags.set(pcapfs::flags::IS_EMBEDDED_FILE);
+            embeddedFilePtr->flags.set(pcapfs::flags::PROCESSED);
 
+            const std::string embeddedFileCommand = embeddedFileInfo->command;
+            if (embeddedFileCommand == "COMMAND_UPLOAD") {
+                CobaltStrikeManager::getInstance().addFilePtrToUploadedFiles(embeddedFileInfo->filename, embeddedFilePtr, true);
+                embeddedFilePtr->flags.set(pcapfs::flags::CS_DO_NOT_SHOW);
+
+            } else if (embeddedFileCommand == "COMMAND_UPLOAD_CONTINUE") {
+                CobaltStrikeManager::getInstance().addFilePtrToUploadedFiles(embeddedFileInfo->filename, embeddedFilePtr, false);
+                embeddedFilePtr->flags.set(pcapfs::flags::CS_DO_NOT_SHOW);
+            }
             resultVector.push_back(embeddedFilePtr);
         }
 
@@ -327,7 +337,6 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const 
     const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
     if (data_size > data.size()) {
         LOG_INFO << "cobalt strike: parsed length of server message is invalid";
-        //return data;
         throw PcapFsException("parsed length of server message is invalid");
     }
 
@@ -415,7 +424,8 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedServerContent(const 
                     return data;
                 }
                 //std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
-                std::string argument(temp.begin()+4+currPos, std::find_if(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen, [](unsigned char c){ return c == 0x00; }));
+                std::string argument(temp.begin()+4+currPos, std::find_if(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen,
+                                                                        [](unsigned char c){ return c == 0x00; }));
                 ss << "Argument: " << argument << std::endl;
                 currPos += tempLen + 4;
             }
@@ -459,7 +469,7 @@ size_t pcapfs::CobaltStrikeFile::getLengthWithoutPadding(const Bytes &input, uin
 }
 
 
-std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::checkEmbeddedFiles(const Index &idx) {
+std::vector<pcapfs::EmbeddedFileInfoPtr> pcapfs::CobaltStrikeFile::checkEmbeddedFiles(const Index &idx) {
     Bytes rawData, decryptedData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);
@@ -522,12 +532,8 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptEmbeddedFile(const Bytes &i
  }
 
 
-/**
- * returns a map with indices indicating which commands contain an embedded file as argument and the file name
- * for upload commands
-*/
-std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfos(const Bytes &input) {
-    std::map<uint64_t,std::string> result;
+std::vector<pcapfs::EmbeddedFileInfoPtr> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfos(const Bytes &input) {
+    std::vector<EmbeddedFileInfoPtr> result;
 
     if (input.size() < 32 || cobaltStrikeKey.empty())
         return result;
@@ -547,6 +553,7 @@ std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfo
 
     uint32_t currOffset = 8; // header size with timestamp and data_size
     for (uint64_t currIndex = 0; currOffset < dataSize; ++currIndex) {
+        EmbeddedFileInfoPtr embeddedFileInfo = std::make_shared<CsEmbeddedFileInfo>();
 
         uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
         if (command_code > 102) { // we have probably no command content
@@ -560,30 +567,52 @@ std::map<uint64_t,std::string> pcapfs::CobaltStrikeFile::extractEmbeddedFileInfo
             break;
 
         if (command == "COMMAND_UPLOAD") {
+            embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->command = command;
+            embeddedFileInfo->size = argsLen - 4;
             uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
             if (filenameLen < argsLen) {
                 const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
-                result[currIndex] = filename;
-            } else
-                result[currIndex] = "";
-        }
-        else if (command == "COMMAND_UPLOAD_CONTINUE"){
-            uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
-            if (filenameLen < argsLen) {
-                const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
-                result[currIndex] = filename + "_part";
-            } else
-                result[currIndex] = "";
-        }
-        else if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_SPAWN_TOKEN_X64" ||
-                command == "COMMAND_SPAWNX64" || command == "COMMAND_INLINE_EXECUTE_OBJECT")
-            result[currIndex] = "";
+                embeddedFileInfo->filename = filename;
+                embeddedFileInfo->size = embeddedFileInfo->size - filenameLen;
 
+            }
+            result.push_back(embeddedFileInfo);
+
+        } else if (command == "COMMAND_UPLOAD_CONTINUE"){
+            embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->command = command;
+            embeddedFileInfo->size = argsLen - 4;
+            embeddedFileInfo->isChunk = true;
+            uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
+            if (filenameLen < argsLen) {
+                const std::string filename(temp.begin()+4, temp.begin()+4+filenameLen);
+                embeddedFileInfo->filename = filename;
+                embeddedFileInfo->size = embeddedFileInfo->size - filenameLen;
+            }
+            result.push_back(embeddedFileInfo);
+
+        } else if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_SPAWN_TOKEN_X64" ||
+                command == "COMMAND_SPAWNX64" || command == "COMMAND_INLINE_EXECUTE_OBJECT") {
+            embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->command = command;
+            embeddedFileInfo->size = argsLen;
+            result.push_back(embeddedFileInfo);
+        }
         currOffset += argsLen + 8;
         temp.erase(temp.begin(), temp.begin()+argsLen);
     }
 
     return result;
+}
+
+
+bool pcapfs::CobaltStrikeFile::showFile() {
+    if (config.showAll)
+        return true;
+    else if (flags.test(flags::IS_EMBEDDED_FILE))
+        return !flags.test(flags::CS_DO_NOT_SHOW);
+    return true;
 }
 
 
@@ -608,3 +637,62 @@ void pcapfs::CobaltStrikeFile::deserialize(boost::archive::text_iarchive &archiv
 
 bool pcapfs::CobaltStrikeFile::registeredAtFactory =
         pcapfs::FileFactory::registerAtFactory("cobaltstrike", pcapfs::CobaltStrikeFile::create, pcapfs::CobaltStrikeFile::parse);
+
+
+
+
+std::vector<pcapfs::FilePtr> pcapfs::CsUploadedFile::parse(FilePtr filePtr, Index &idx) {
+    (void)idx;
+    Bytes data = filePtr->getBuffer();
+    std::vector<FilePtr> resultVector(0);
+    if (!filePtr->flags.test(flags::IS_EMBEDDED_FILE) || !CobaltStrikeManager::getInstance().isFirstPartOfUploadedFile(filePtr))
+        return resultVector;
+
+    std::shared_ptr<CsUploadedFile> resultPtr = std::make_shared<CsUploadedFile>();
+    resultPtr->setOffsetType(filePtr->getFiletype());
+    resultPtr->setFiletype("cs_uploadedfile");
+    resultPtr->setTimestamp(filePtr->getTimestamp());
+    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    resultPtr->setProperty("protocol", "cobaltstrike");
+    resultPtr->setProperty("domain", filePtr->getProperty("domain"));
+    resultPtr->setProperty("uri", filePtr->getProperty("uri"));
+    resultPtr->setFilename(filePtr->getFilename());
+
+    std::vector<FilePtr> uploadedFileChunks = CobaltStrikeManager::getInstance().getUploadedFileChunks(filePtr);
+    for (const FilePtr &fileChunk : uploadedFileChunks) {
+        Fragment fragment;
+        fragment.id = fileChunk->getIdInIndex();
+        fragment.start = 0;
+        fragment.length = fileChunk->getFilesizeProcessed();
+        resultPtr->fragments.push_back(fragment);
+    }
+
+    resultPtr->setFilesizeRaw(std::accumulate(uploadedFileChunks.begin(), uploadedFileChunks.end(), 0,
+                                                [](size_t counter, const FilePtr &file){ return counter + file->getFilesizeProcessed(); }));
+
+    resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
+
+    resultPtr->flags.set(pcapfs::flags::PROCESSED);
+    resultVector.push_back(resultPtr);
+    return resultVector;
+}
+
+
+size_t pcapfs::CsUploadedFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf){
+    Bytes totalContent;
+    for (Fragment fragment: fragments) {
+        Bytes rawData(fragment.length);
+        FilePtr filePtr = idx.get({offsetType, fragment.id});
+        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+        totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
+    }
+    memcpy(buf, totalContent.data() + startOffset, length);
+    return std::min(totalContent.size() - startOffset, length);
+}
+
+
+bool pcapfs::CsUploadedFile::registeredAtFactory =
+        pcapfs::FileFactory::registerAtFactory("cs_uploadedfile", pcapfs::CsUploadedFile::create, pcapfs::CsUploadedFile::parse);

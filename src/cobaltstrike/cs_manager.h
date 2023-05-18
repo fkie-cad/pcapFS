@@ -4,18 +4,27 @@
 #include <set>
 #include "../commontypes.h"
 #include "../index.h"
+#include "../virtualfiles/cobaltstrike.h"
 
 namespace pcapfs {
 
-    typedef struct CobaltStrikeConnection {
+    struct CobaltStrikeConnection {
         std::string serverIp;
         std::string serverPort;
         std::string clientIp;
         Bytes aesKey;
 
-    } CobaltStrikeConnection;
+    };
 
     typedef std::shared_ptr<CobaltStrikeConnection> CobaltStrikeConnectionPtr;
+
+    struct CsEmbeddedFileChunks {
+        FilePtr firstFileChunk;
+        std::vector<FilePtr> fileChunks;
+    };
+
+    typedef std::shared_ptr<CsEmbeddedFileChunks> CsEmbeddedFileChunksPtr;
+
 
     class CobaltStrikeManager {
     public:
@@ -31,6 +40,11 @@ namespace pcapfs {
         CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
         bool isKnownConnection(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
 
+        // functions managing fragmented file uploads
+        void addFilePtrToUploadedFiles(const std::string &filename, const FilePtr& fileToAdd, bool isFirstChunk);
+        std::vector<FilePtr> getUploadedFileChunks(const FilePtr& uploadedFile);
+        bool isFirstPartOfUploadedFile(const FilePtr &file);
+
     private:
         CobaltStrikeManager() {}
 
@@ -38,6 +52,10 @@ namespace pcapfs {
         void addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
+
+        CobaltStrikeFilePtr currUploadedFile;
+        // key: filename, values: files where the upload happens
+        std::map<std::string, CsEmbeddedFileChunksPtr> uploadedFiles;
     };
 }
 

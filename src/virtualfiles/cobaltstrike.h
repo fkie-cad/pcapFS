@@ -4,6 +4,17 @@
 #include "virtualfile.h"
 
 namespace pcapfs {
+
+    struct CsEmbeddedFileInfo{
+        uint64_t id;
+        std::string command;
+        std::string filename;
+        size_t size;
+        bool isChunk;
+    };
+
+    typedef std::shared_ptr<CsEmbeddedFileInfo> EmbeddedFileInfoPtr;
+
     class CobaltStrikeFile : public VirtualFile {
     public:
         static FilePtr create() { return std::make_shared<CobaltStrikeFile>(); };
@@ -30,11 +41,13 @@ namespace pcapfs {
 
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
 
-        std::map<uint64_t,std::string> checkEmbeddedFiles(const Index &idx);
+        std::vector<EmbeddedFileInfoPtr> checkEmbeddedFiles(const Index &idx);
 
         Bytes const decryptEmbeddedFile(const Bytes &input);
 
-        std::map<uint64_t,std::string> extractEmbeddedFileInfos(const Bytes &input);
+        std::vector<EmbeddedFileInfoPtr> extractEmbeddedFileInfos(const Bytes &input);
+
+        bool showFile() override;
 
         void serialize(boost::archive::text_oarchive &archive) override;
 
@@ -47,6 +60,21 @@ namespace pcapfs {
         bool fromClient;
         uint64_t embeddedFileIndex;
 
+    };
+
+    typedef std::shared_ptr<CobaltStrikeFile> CobaltStrikeFilePtr;
+
+
+    class CsUploadedFile : public VirtualFile {
+    public:
+        static FilePtr create() { return std::make_shared<CsUploadedFile>(); };
+
+        static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
+
+        size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
+
+    protected:
+        static bool registeredAtFactory;
     };
 
 }
