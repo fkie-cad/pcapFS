@@ -89,11 +89,16 @@ pcapfs::FtpControlFile::parseUSERCredentials(std::shared_ptr<pcapfs::FtpControlF
 }
 
 
-void pcapfs::FtpControlFile::parsePASSCredentials(const pcapfs::FilePtr &filePtr,
+void pcapfs::FtpControlFile::parsePASSCredentials(pcapfs::FilePtr &filePtr,
                                                          std::shared_ptr<pcapfs::FtpControlFile> &result,
-                                                         const std::shared_ptr<pcapfs::FtpControlFile> &credentials,
+                                                         std::shared_ptr<pcapfs::FtpControlFile> &credentials,
                                                          size_t i) {
     parseCredentials(credentials, filePtr, i);
+     if (i == 0) {
+        // USER part is available, we have to initialize the result file nevertheless
+        fillGlobalProperties(credentials, filePtr);
+        credentials->setFilename(".credentials");
+     }
     result->setProperty("PASS", "");
 }
 

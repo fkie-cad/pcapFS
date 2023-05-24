@@ -48,8 +48,8 @@ namespace pcapfs {
         static void parseUSERCredentials(std::shared_ptr<FtpControlFile> &result, size_t i, FilePtr &filePtr,
                                          std::shared_ptr<FtpControlFile> &credentials);
 
-        static void parsePASSCredentials(const FilePtr &filePtr, std::shared_ptr<FtpControlFile> &result,
-                                         const std::shared_ptr<FtpControlFile> &credentials, size_t i);
+        static void parsePASSCredentials(FilePtr &filePtr, std::shared_ptr<FtpControlFile> &result,
+                                         std::shared_ptr<FtpControlFile> &credentials, size_t i);
 
         static void
         parseCredentials(std::shared_ptr<pcapfs::FtpControlFile> result, pcapfs::FilePtr filePtr, size_t i);
