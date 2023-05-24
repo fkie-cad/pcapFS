@@ -78,40 +78,53 @@ namespace {
 
     void parseGeneralSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config) {
         if (!section) { return; }
-        const auto sortby = section->get_as<std::string>("sortby");
-        if (sortby) {
-            config.sortby = *sortby;
+
+        for (const auto &opt : *section) {
+            if (opt.first == "sortby") {
+                const auto sortby = section->get_as<std::string>("sortby");
+                if (sortby)
+                    config.sortby = *sortby;
+            } else
+                LOG_WARNING << "Invalid general option in config file: " << opt.first;
         }
     }
 
 
+
     pcapfs::Paths getKeyFiles(const std::shared_ptr<toml::table> &section, const pcapfs::Path &configPath) {
         pcapfs::Paths files;
-        const auto keyfiles = section->get_array_of<std::string>("keyfiles");
-        if (keyfiles) {
-            for (const auto &k : *keyfiles) {
-                boost::filesystem::path path;
-                try {
-                    path = boost::filesystem::canonical(k, configPath);
-                } catch (boost::filesystem::filesystem_error &err) {
-                    LOG_ERROR << "invalid key file path in config file: " << err.what();
-                    continue;
+
+        for (const auto &entry : *section) {
+            if (entry.first != "keyfiles")
+                LOG_WARNING << "Invalid keys option in config file: " << entry.first;
+            else {
+                const auto keyfiles = section->get_array_of<std::string>("keyfiles");
+                if (keyfiles) {
+                    for (const auto &k : *keyfiles) {
+                        boost::filesystem::path path;
+                        try {
+                            path = boost::filesystem::canonical(k, configPath);
+                        } catch (boost::filesystem::filesystem_error &err) {
+                            LOG_ERROR << "Invalid key file path in config file: " << err.what();
+                            continue;
+                        }
+                        const auto paths = pcapfs::utils::getFilesFromPath(path, "");
+                        files.insert(files.end(), paths.cbegin(), paths.cend());
+                    }
+                } else {
+                    const auto keyfile = section->get_as<std::string>("keyfiles");
+                    boost::filesystem::path path;
+                    try {
+                        path = boost::filesystem::canonical(*keyfile, configPath);
+                    } catch (boost::filesystem::filesystem_error &err) {
+                        LOG_ERROR << "Invalid key file path in config file: " << err.what();
+                        return files;
+                    }
+                    if (keyfile) {
+                        const auto paths = pcapfs::utils::getFilesFromPath(path, "");
+                        files.insert(files.end(), paths.cbegin(), paths.cend());
+                    }
                 }
-                const auto paths = pcapfs::utils::getFilesFromPath(path, "");
-                files.insert(files.end(), paths.cbegin(), paths.cend());
-            }
-        } else {
-            const auto keyfile = section->get_as<std::string>("keyfiles");
-            boost::filesystem::path path;
-            try {
-                path = boost::filesystem::canonical(*keyfile, configPath);
-            } catch (boost::filesystem::filesystem_error &err) {
-                LOG_ERROR << "invalid key file path in config file: " << err.what();
-                return files;
-            }
-            if (keyfile) {
-                const auto paths = pcapfs::utils::getFilesFromPath(path, "");
-                files.insert(files.end(), paths.cbegin(), paths.cend());
             }
         }
         return files;
@@ -136,8 +149,20 @@ namespace {
     void parseDecodeSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config) {
         if (!section) { return; }
 
+        const std::set<std::string> validDecodeTypes = {"xor", "ssl", "cobaltstrike"};
+
         for (const auto &subsection : *section) {
+            if (std::find_if(validDecodeTypes.begin(), validDecodeTypes.end(), [subsection](const std::string &s){
+                            return subsection.first == s; }) == validDecodeTypes.end()) {
+                LOG_WARNING << "Invalid decode type in config file: " << subsection.first;
+                continue;
+            }
+
             const auto &subsectionTable = subsection.second->as_table();
+            if (!subsectionTable) {
+                LOG_WARNING << "Empty decode table in config file";
+                continue;
+            }
             const auto &subsectionKey = subsectionTable->get_as<std::string>("withKey");
             if (subsectionKey) {
                 //TODO
@@ -372,11 +397,25 @@ const pcapfs::options::ConfigFileOptions pcapfs::options::configfile::parse(cons
         throw pcapfs::ArgumentError("Configuration file '" + configfile.string() +
                                     "' does not exists or is not a regular file.");
     }
-    const auto conf = toml::parse_file(configfile.string());
+
     ConfigFileOptions config;
-    parseGeneralSection(conf->get_table("general"), config);
-    parseKeysSection(conf->get_table("keys"), config, configfile.parent_path());
-    parseDecodeSection(conf->get_table("decode"), config);
+    std::shared_ptr<toml::table> conf;
+    try {
+        conf = toml::parse_file(configfile.string());
+    } catch (toml::parse_exception &err) {
+        LOG_ERROR << "Failed to parse config file: " << err.what();
+        return config;
+    }
+    for (const auto &c : *conf) {
+        if (c.first == "general")
+            parseGeneralSection(conf->get_table("general"), config);
+        else if (c.first == "keys")
+            parseKeysSection(conf->get_table("keys"), config, configfile.parent_path());
+        else if (c.first == "decode")
+            parseDecodeSection(conf->get_table("decode"), config);
+        else
+            LOG_WARNING << "Invalid config file option: " << c.first;
+    }
     return config;
 }
 
