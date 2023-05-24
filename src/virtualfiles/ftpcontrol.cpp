@@ -95,7 +95,7 @@ void pcapfs::FtpControlFile::parsePASSCredentials(pcapfs::FilePtr &filePtr,
                                                          size_t i) {
     parseCredentials(credentials, filePtr, i);
      if (i == 0) {
-        // USER part is available, we have to initialize the result file nevertheless
+        // USER part is not available, we have to initialize the result file nevertheless
         fillGlobalProperties(credentials, filePtr);
         credentials->setFilename(".credentials");
      }
