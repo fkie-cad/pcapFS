@@ -24,6 +24,7 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 - TLS 1.0-1.2
 - DNS
 - XOR
+- Cobalt Strike C2 (only prototypical)
 
 # Getting pcapFS
 We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not
@@ -277,6 +278,13 @@ Currently supported cipher suites are:
 | 0x006D | `TLS_DH_anon_WITH_AES_256_CBC_SHA256` | 0xC030 | `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` |
 | 0x009C | `TLS_RSA_WITH_AES_128_GCM_SHA256` |
 
+### Decrypting Cobalt Strike C2 Traffic
+pcapFS supports prototypical decryption of Cobalt Strike C2 traffic as long as the Cobalt Strike default profile is used.
+In order to successfully decrypt the C2 traffic, the team server's private RSA key is required which has to be passed as a key file via the command line (`-k` or
+`--keys`) or via the [configuration file](#configuration-file). The Cobalt Strike functionality of pcapFS includes decryption of server commands and the respective answers from beacons as well as extraction of transferred files.
+
+With the command line option `--no-cs` set, pcapFS does not try to decrypt Cobalt Strike traffic which may improve the overall performance.
+
 ## Configuration File
 pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file
 looks like this:
@@ -306,6 +314,11 @@ looks like this:
   srcIP = "1.2.3.4"
   srcPort = 8080
 
+[[decode.cobaltstrike.properties]]
+  dstIP = "5.6.7.8"
+  srcIP = "8.7.6.5"
+  dstPort = 8080
+
 ```
 The `[general]` section allows setting the `sortby` option described above.
 
@@ -313,10 +326,13 @@ The `[keys]` section allows you to define a list of paths to key files. Note tha
 relative to the config file. Just as with the `-k` command line option, you are free to use files or directories here.
 
 The `[decode]` section can be used to provide custom protocol parsing and decoding rules. That is, you can tell pcapFS
-which parser to use for connections meeting given criteria. The example config above defines three rules, two for XOR
-decoding and one for SSL. As the `properties` key implies, you can use pcapFS properties to define your decoding rules.
+which parser to use for connections meeting given criteria. The example config above defines four rules, two for XOR
+decoding, one for SSL and one for Cobalt Strike. As the `properties` key implies, you can use pcapFS properties to define your decoding rules.
 In case of the SSL example above, all connections from source IP 1.2.3.4 and source Port 8080 would be parsed with the
 SSL protocol parser. For XOR we defined two rules both stating that connection meeting the criteria should be parsed
 with the XOR parser: the first one matches all connections from source IP 1.2.3.4 to destination IP 4.3.2.1 and
 destination port 2345, the second one matches all UDP "connections" from source port 1111 to destination port 2222.
+
+Providing properties in the decode section can improve the runtime of pcapFS since only connections which meet the given criteria are decoded. If no decoding properties or no configuration file is provided, *all* XOR, SSL and Cobalt Strike traffic is tried to be decrypted using the keyfiles passed to pcapFS.
+
 Note that decoding options are independent from an implemented protocol detection. E.g. you can specify a certain port for HTTP decoding, but the HTTP parser still checks if the transferred data over this port is valid HTTP.
