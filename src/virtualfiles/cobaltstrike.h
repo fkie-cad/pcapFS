@@ -35,7 +35,7 @@ namespace pcapfs {
 
         int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
 
-        Bytes const parseDecryptedClientContent(const Bytes &data);
+        Bytes const parseDecryptedClientContent(const std::vector<Bytes> &decryptedChunks);
 
         Bytes const parseDecryptedServerContent(const Bytes &data);
 

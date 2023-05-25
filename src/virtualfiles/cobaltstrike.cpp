@@ -227,27 +227,48 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptPayload(const Bytes &input)
         return input;
     }
 
-    Bytes decryptedData, dataToDecrypt;
-    // truncate hmac at the end
+    // both client and server messages can contain multiple commands or callbacks
+    // client callbacks are encrypted separately in blocks whereas
+    // all server commands contained in a packet are encrypted together in one piece
     if (fromClient) {
-        // client data has additional field in front to truncate
-        decryptedData.resize(input.size() - 20);
-        dataToDecrypt.assign(input.begin()+4, input.end()-16);
+        std::vector<Bytes> decryptedChunks(0);
+        Bytes temp = input;
+        uint32_t currLen = 0;
+        while (currLen < input.size()) {
+            uint32_t chunkLen = be32toh(*((uint32_t*) (temp.data())));
+            if (chunkLen > input.size() || chunkLen < 16) {
+                LOG_ERROR << "cobalt strike: parsed length of encrypted client message is invalid";
+                return input;
+            }
+            temp.erase(temp.begin(), temp.begin()+4);
+            Bytes encryptedChunk(temp.begin(), temp.begin()+chunkLen - 16); // exclude hmac
+            Bytes decryptedChunk(chunkLen - 16);
+            if (opensslDecryptCS(encryptedChunk, decryptedChunk)) {
+                LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+                return input;
+            }
+            decryptedChunks.push_back(decryptedChunk);
+            currLen += chunkLen + 4; // plus field of chunkLen
+            temp.erase(temp.begin(), temp.begin()+chunkLen);
+        }
+
+        Bytes result = parseDecryptedClientContent(decryptedChunks);
+        if (result.empty())
+            result = input;
+        return result;
+
     } else {
-        decryptedData.resize(input.size() - 16);
-        dataToDecrypt.assign(input.begin(), input.end()-16);
+        Bytes decryptedData(input.size() - 16);
+        Bytes dataToDecrypt(input.begin(), input.end()-16);
+        if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
+            LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+            return input;
+        }
+        Bytes result = parseDecryptedServerContent(decryptedData);
+        if (result.empty())
+            result = input;
+        return result;
     }
-
-    if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
-        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
-        return input;
-    }
-
-    Bytes result = fromClient ? parseDecryptedClientContent(decryptedData) : parseDecryptedServerContent(decryptedData);
-    if (result.empty())
-        result = input;
-
-    return result;
 }
 
 
@@ -285,44 +306,42 @@ int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes
  }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedClientContent(const Bytes &data) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseDecryptedClientContent(const std::vector<Bytes> &decryptedChunks) {
+
+    const std::string SEP_LINE = "\n---------------------------------------------------------\n";
     Bytes result;
-    Bytes temp(data.begin(), data.end());
 
-    uint32_t counter = be32toh(*((uint32_t*) (temp.data())));
-    //uint32_t data_length = be32toh(*((uint32_t*) (tempc+4))); // is including padding bytes and additional values at the end
-    uint32_t callback_code = be32toh(*((uint32_t*) (temp.data()+8)));
-    const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
+    for (const Bytes &decryptedChunk : decryptedChunks) {
 
-    std::stringstream ss;
-    ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << callback_string;
-
-    if (callback_string == "CALLBACK_ERROR" && std::isprint(*(temp.begin()+24))) {
-        auto zero_it = std::find_if(temp.begin()+24, temp.end(), [](unsigned char c){ return c == 0x00; });
-        const std::string param(temp.begin()+24, zero_it);
-        ss << "\nParameter: " << param << "\n---------------------------------------------------------\n";
-        const std::string metadata = ss.str();
-        //Bytes weirdPayload(std::find_if(zero_it, temp.end(), [](unsigned char c){ return c != 0x00; }), temp.end());
-        //if (weirdPayload.back() == 0x00)
-        //    weirdPayload.erase(std::find_if(weirdPayload.rbegin(), weirdPayload.rend(), [](unsigned char c){ return c != 0x00; }).base(), weirdPayload.end());
-        result.insert(result.end(), metadata.begin(), metadata.end());
-        //result.insert(result.end(), weirdPayload.begin(), weirdPayload.end());
-
-    } else {
-        temp.erase(temp.begin(), temp.begin()+12);
-        //temp.erase(temp.begin()+data_length, temp.end());
-        if (callback_string == "CALLBACK_PENDING") {
-            temp.erase(temp.begin(), temp.begin()+4); // has an additional field to exclude
-            if (temp.back() == 0x00)
-                temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c != 0x00; }).base(), temp.end());
-        } else if (std::isprint(temp.front()) || std::isspace(temp.front())) {
-            temp.erase(std::find_if(temp.rbegin(), temp.rend(), [](unsigned char c){ return c == 0x0A; }).base(), temp.end());
+        const uint32_t counter = be32toh(*((uint32_t*) (decryptedChunk.data())));
+        const uint32_t data_size = be32toh(*((uint32_t*) (decryptedChunk.data()+4)));
+        if (data_size > decryptedChunk.size()) {
+            LOG_INFO << "cobalt strike: parsed length of decrypted client message is invalid";
+            return result;
         }
+        const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
+        const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
 
-        ss << "\n---------------------------------------------------------\n";
+        std::stringstream ss;
+        ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << callback_string << "\n\n";
+
         const std::string metadata = ss.str();
         result.insert(result.end(), metadata.begin(), metadata.end());
-        result.insert(result.end(), temp.begin(), temp.end());
+
+        if (callback_string == "CALLBACK_PENDING") {
+            // CALLBACK_PENDING payload starts 4 bytes shifted
+            result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.begin()+data_size+8);
+        } else if (callback_string == "CALLBACK_ERROR") {
+            ss.str("");
+            // these arguments are numbers which maybe indicate further error information
+            ss << "Argument: " << be32toh(*((uint32_t*) (decryptedChunk.data()+12))) << "\nArgument: "
+                << be32toh(*((uint32_t*) (decryptedChunk.data()+16)));
+            const std::string params = ss.str();
+            result.insert(result.end(), params.begin(), params.end());
+        } else {
+            result.insert(result.end(), decryptedChunk.begin()+12, decryptedChunk.begin()+data_size+8);
+        }
+        result.insert(result.end(), SEP_LINE.begin(), SEP_LINE.end());
     }
 
     return result;
