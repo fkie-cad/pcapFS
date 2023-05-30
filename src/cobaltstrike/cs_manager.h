@@ -37,12 +37,12 @@ namespace pcapfs {
         void operator=(CobaltStrikeManager const&) = delete;
 
         void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp, const Index &idx);
-        CobaltStrikeConnectionPtr getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
+        CobaltStrikeConnectionPtr const getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
         bool isKnownConnection(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
 
         // functions managing fragmented file uploads
         void addFilePtrToUploadedFiles(const std::string &filename, const FilePtr& fileToAdd, bool isFirstChunk);
-        std::vector<FilePtr> getUploadedFileChunks(const FilePtr& uploadedFile);
+        std::vector<FilePtr> const getUploadedFileChunks(const FilePtr& uploadedFile);
         bool isFirstPartOfUploadedFile(const FilePtr &file);
 
     private:

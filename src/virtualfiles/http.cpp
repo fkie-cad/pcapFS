@@ -92,10 +92,12 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             const std::string requestMethod = requestMethodToString(getRequestMethod(data, offset, size));
 
-            if (!config.noCS && requestMethod == "GET" && header.find("cookie") != header.end() && !idx.getCandidatesOfType("cskey").empty() &&
-                ((config.getDecodeMapFor("cobaltstrike").empty()) || filePtr->meetsDecodeMapCriteria("cobaltstrike"))) {
-                // when no decode config for cobaltstrike is supplied we check all HTTP GET cookies
+            if ((!config.noCS && requestMethod == "GET" && header.find("cookie") != header.end() && !idx.getCandidatesOfType("cskey").empty() &&
+                (config.getDecodeMapFor("cobaltstrike").empty() || filePtr->meetsDecodeMapCriteria("cobaltstrike"))) ||
+                (config.noCS && filePtr->meetsDecodeMapCriteria("cobaltstrike"))) {
+                // when no decode config for cobaltstrike is supplied but a cobaltstrike key, we check all HTTP GET cookies
                 // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config
+                // if the flag --no-cs is set we handle the cookie nevertheless if the tcp file meets a given config
                 CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"),
                                                                     filePtr->getProperty("srcIP"), idx);
             }

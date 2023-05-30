@@ -19,8 +19,8 @@ void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const
     boost::beast::detail::base64::decode(toDecrypt.data(), cookie.c_str(), cookie.length());
 
     Bytes result(toDecrypt.size());
-    std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("cskey");
-    for (auto &keyFile: keyFiles) {
+    const std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("cskey");
+    for (const auto &keyFile: keyFiles) {
         std::shared_ptr<CSKeyFile> csKeyFile = std::dynamic_pointer_cast<CSKeyFile>(keyFile);
         if (!csKeyFile) {
             LOG_ERROR << "dynamic_pointer_cast failed for cs key file";
@@ -59,7 +59,7 @@ bool pcapfs::CobaltStrikeManager::matchMagicBytes(const Bytes& input) {
 
 
 void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp) {
-    Bytes digest = crypto::calculateSha256(rawKey);
+    const Bytes digest = crypto::calculateSha256(rawKey);
     if (digest.empty())
         return;
 
@@ -72,9 +72,9 @@ void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const s
 }
 
 
-pcapfs::CobaltStrikeConnectionPtr pcapfs::CobaltStrikeManager::getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp) {
+pcapfs::CobaltStrikeConnectionPtr const pcapfs::CobaltStrikeManager::getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp) {
     CobaltStrikeConnectionPtr result;
-    auto it = std::find_if(connections.cbegin(), connections.cend(),
+    const auto it = std::find_if(connections.cbegin(), connections.cend(),
                          [serverIp,serverPort,clientIp](const CobaltStrikeConnectionPtr &conn){
                             return (conn->serverIp == serverIp && conn->serverPort == serverPort && conn->clientIp == clientIp); });
     if (it != connections.cend())
@@ -101,16 +101,16 @@ void pcapfs::CobaltStrikeManager::addFilePtrToUploadedFiles(const std::string &f
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeManager::getUploadedFileChunks(const FilePtr& uploadedFile) {
+std::vector<pcapfs::FilePtr> const pcapfs::CobaltStrikeManager::getUploadedFileChunks(const FilePtr& uploadedFile) {
 
-    auto it = std::find_if(uploadedFiles.begin(), uploadedFiles.end(), [uploadedFile](const auto &entry){
+    const auto it = std::find_if(uploadedFiles.cbegin(), uploadedFiles.cend(), [uploadedFile](const auto &entry){
                         return entry.second->firstFileChunk == uploadedFile; });
 
     if (it != uploadedFiles.end()) {
         std::vector<FilePtr> result;
-        std::vector<FilePtr> fileChunks = it->second->fileChunks;
+        const std::vector<FilePtr> fileChunks = it->second->fileChunks;
         result.push_back(uploadedFile);
-        result.insert(result.end(), fileChunks.begin(), fileChunks.end());
+        result.insert(result.end(), fileChunks.cbegin(), fileChunks.cend());
         return result;
 
     } else {

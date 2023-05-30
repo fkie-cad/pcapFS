@@ -41,11 +41,11 @@ namespace pcapfs {
 
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
 
-        std::vector<EmbeddedFileInfoPtr> checkEmbeddedFiles(const Index &idx);
+        std::vector<EmbeddedFileInfoPtr> const checkEmbeddedFiles(const Index &idx);
 
         Bytes const decryptEmbeddedFile(const Bytes &input);
 
-        std::vector<EmbeddedFileInfoPtr> extractEmbeddedFileInfos(const Bytes &input);
+        std::vector<EmbeddedFileInfoPtr> const extractEmbeddedFileInfos(const Bytes &input);
 
         bool showFile() override;
 
