@@ -11,7 +11,7 @@
 
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../cobaltstrike/cs_manager.h"
+#include "cobaltstrike/cs_manager.h"
 
 /*
  * HTTP Parsing function.

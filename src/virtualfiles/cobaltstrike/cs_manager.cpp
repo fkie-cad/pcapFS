@@ -1,8 +1,8 @@
 #include "cs_manager.h"
 
 #include <boost/beast/core/detail/base64.hpp>
-#include "../crypto/cryptutils.h"
-#include "../keyfiles/cskey.h"
+#include "../../crypto/cryptutils.h"
+#include "../../keyfiles/cskey.h"
 
 
 void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort,

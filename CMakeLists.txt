@@ -40,9 +40,9 @@ set(PCAPFS_COMMON_SOURCES
         src/capturefiles/pcapng.cpp
         src/crypto/decryptSymmetric.cpp
         src/crypto/cryptutils.cpp
-        src/cobaltstrike/cs_callback_codes.h
-        src/cobaltstrike/cs_command_codes.h
-        src/cobaltstrike/cs_manager.cpp
+        src/virtualfiles/cobaltstrike/cs_callback_codes.h
+        src/virtualfiles/cobaltstrike/cs_command_codes.h
+        src/virtualfiles/cobaltstrike/cs_manager.cpp
         src/keyfiles/sslkey.cpp
         src/keyfiles/xorkey.cpp
         src/keyfiles/cskey.cpp

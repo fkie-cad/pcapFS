@@ -12,45 +12,45 @@ namespace pcapfs {
         size_t size;
         bool isChunk;
     };
-
     typedef std::shared_ptr<CsEmbeddedFileInfo> EmbeddedFileInfoPtr;
+
+    struct CsContentInfo{
+        size_t filesize;
+        std::string command;
+        std::vector<EmbeddedFileInfoPtr> embeddedFileInfos;
+    };
+    typedef std::shared_ptr<CsContentInfo> CsContentInfoPtr;
+
 
     class CobaltStrikeFile : public VirtualFile {
     public:
         static FilePtr create() { return std::make_shared<CobaltStrikeFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
-
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
         static bool isHttpPost(const std::string &filename);
-
         static bool isHttpResponse(const std::string &filename);
-
-        size_t calculateProcessedSize(const Index &idx, std::string &command);
-
-        std::string const extractServerCommand(const Bytes &payload);
-
-        Bytes const decryptPayload(const Bytes &input);
 
         int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
 
-        Bytes const parseDecryptedClientContent(const std::vector<Bytes> &decryptedChunks);
+        CsContentInfoPtr const extractContentInformation(const Index &idx);
+        CsContentInfoPtr const extractServerContent(const Bytes &input);
+        CsContentInfoPtr const extractClientContent(const Bytes &input);
 
+        Bytes const decryptPayload(const Bytes &input);
+        Bytes const parseDecryptedClientContent(const std::vector<Bytes> &decryptedChunks);
         Bytes const parseDecryptedServerContent(const Bytes &data);
 
+        Bytes const decryptEmbeddedServerFile(const Bytes &input);
+        Bytes const decryptEmbeddedClientFile(const Bytes &input);
+
+        std::string const extractServerCommand(const std::string &input);
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
-
-        std::vector<EmbeddedFileInfoPtr> const checkEmbeddedFiles(const Index &idx);
-
-        Bytes const decryptEmbeddedFile(const Bytes &input);
-
-        std::vector<EmbeddedFileInfoPtr> const extractEmbeddedFileInfos(const Bytes &input);
+        size_t getEndOfJpgFile(const Bytes &input);
 
         bool showFile() override;
-
         void serialize(boost::archive::text_oarchive &archive) override;
-
         void deserialize(boost::archive::text_iarchive &archive) override;
 
     protected:
@@ -70,7 +70,6 @@ namespace pcapfs {
         static FilePtr create() { return std::make_shared<CsUploadedFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
-
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
     protected:

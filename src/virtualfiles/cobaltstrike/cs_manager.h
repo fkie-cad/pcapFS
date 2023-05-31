@@ -2,9 +2,9 @@
 #define PCAPFS_CS_MANAGER_H
 
 #include <set>
-#include "../commontypes.h"
-#include "../index.h"
-#include "../virtualfiles/cobaltstrike.h"
+#include "../../commontypes.h"
+#include "../../index.h"
+#include "../cobaltstrike.h"
 
 namespace pcapfs {
 
