@@ -21,6 +21,9 @@ namespace pcapfs {
     };
     typedef std::shared_ptr<CsContentInfo> CsContentInfoPtr;
 
+    class CobaltStrikeFile;
+    typedef std::shared_ptr<CobaltStrikeFile> CobaltStrikeFilePtr;
+
 
     class CobaltStrikeFile : public VirtualFile {
     public:
@@ -32,19 +35,22 @@ namespace pcapfs {
         static bool isHttpPost(const std::string &filename);
         static bool isHttpResponse(const std::string &filename);
 
-        int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
+        std::vector<Bytes>  const decryptClientPayload(const Bytes &input);
+        Bytes const decryptServerPayload(const Bytes &input);
 
         CsContentInfoPtr const extractContentInformation(const Index &idx);
         CsContentInfoPtr const extractServerContent(const Bytes &input);
         CsContentInfoPtr const extractClientContent(const Bytes &input);
 
-        Bytes const decryptPayload(const Bytes &input);
-        Bytes const parseDecryptedClientContent(const std::vector<Bytes> &decryptedChunks);
-        Bytes const parseDecryptedServerContent(const Bytes &data);
+        static void fillEmbeddedFileProperties(CobaltStrikeFilePtr &embeddedFilePtr, const FilePtr &filePtr,
+                                                const EmbeddedFileInfoPtr &embeddedFileInfo);
 
-        Bytes const decryptEmbeddedServerFile(const Bytes &input);
-        Bytes const decryptEmbeddedClientFile(const Bytes &input);
+        Bytes const parseClientContent(const Bytes &input);
+        Bytes const parseServerContent(const Bytes &input);
+        Bytes const parseEmbeddedServerFile(const Bytes &input);
+        Bytes const parseEmbeddedClientFile(const Bytes &input);
 
+        int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
         std::string const extractServerCommand(const std::string &input);
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
         size_t getEndOfJpgFile(const Bytes &input);
@@ -62,7 +68,6 @@ namespace pcapfs {
 
     };
 
-    typedef std::shared_ptr<CobaltStrikeFile> CobaltStrikeFilePtr;
 
 
     class CsUploadedFile : public VirtualFile {
