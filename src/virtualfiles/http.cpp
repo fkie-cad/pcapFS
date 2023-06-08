@@ -99,7 +99,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config
                 // if the flag --no-cs is set we handle the cookie nevertheless if the tcp file meets a given config
                 CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"),
-                                                                    filePtr->getProperty("srcIP"), idx);
+                                                                filePtr->getProperty("srcIP"), idx);
             }
 
             if (requestedFilename != "") {

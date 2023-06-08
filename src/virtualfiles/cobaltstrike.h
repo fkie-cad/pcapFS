@@ -32,13 +32,14 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
+        static bool meetsParsingRequirements(const FilePtr &filePtr);
+
         static bool isHttpPost(const std::string &filename);
         static bool isHttpResponse(const std::string &filename);
 
         std::vector<Bytes>  const decryptClientPayload(const Bytes &input);
         Bytes const decryptServerPayload(const Bytes &input);
 
-        CsContentInfoPtr const extractContentInformation(const Index &idx);
         CsContentInfoPtr const extractServerContent(const Bytes &input);
         CsContentInfoPtr const extractClientContent(const Bytes &input);
 

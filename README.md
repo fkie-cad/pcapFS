@@ -24,7 +24,7 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 - TLS 1.0-1.2
 - DNS
 - XOR
-- Cobalt Strike C2 (only prototypical)
+- Cobalt Strike C2 (default profile)
 
 # Getting pcapFS
 We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not

@@ -16,12 +16,12 @@
 
 
 std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, Index &idx) {
+    (void)idx; // prevent unused variable warning
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
-    if (filePtr->getFiletype() != "http"|| filePtr->flags.test(pcapfs::flags::IS_METADATA) ||
-        (!CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP")) &&
-        !CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("srcIP"), filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"))))
+    if (!meetsParsingRequirements(filePtr)) {
         return resultVector;
+    }
 
     std::shared_ptr<CobaltStrikeFile> resultPtr = std::make_shared<CobaltStrikeFile>();
 
@@ -52,7 +52,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
         resultPtr->cobaltStrikeKey = connData->aesKey;
         resultPtr->setFilename(timestamp + "-response");
         resultPtr->fromClient = true;
-        const CsContentInfoPtr contentInfo = resultPtr->extractContentInformation(idx);
+        const CsContentInfoPtr contentInfo = resultPtr->extractClientContent(data);
         resultPtr->setFilesizeProcessed(contentInfo->filesize);
 
         for (const auto &embeddedFileInfo : contentInfo->embeddedFileInfos) {
@@ -64,7 +64,15 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             embeddedFilePtr->fragments.push_back(embeddedFragment);
 
             fillEmbeddedFileProperties(embeddedFilePtr, filePtr, embeddedFileInfo);
-            embeddedFilePtr->setFilename(resultPtr->getFilename() + "_" + "screenshot" + std::to_string(embeddedFileInfo->id));
+            std::string filename = embeddedFileInfo->filename;
+            if (filename.find("\\") != std::string::npos) {
+                // cut off path to file
+                std::vector<std::string> tokens;
+                boost::split(tokens, filename, [](char c) { return c == 0x5C; });
+                filename = tokens.back();
+            }
+            embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_" + filename);
+
             embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
             embeddedFilePtr->fromClient = true;
 
@@ -83,7 +91,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
 
         CsContentInfoPtr contentInfo;
         try {
-            contentInfo = resultPtr->extractContentInformation(idx);
+            contentInfo = resultPtr->extractServerContent(data);
         } catch (PcapFsException &err) {
             // this might be a beacon config file
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
@@ -141,8 +149,16 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
         resultPtr->flags.set(pcapfs::flags::PROCESSED);
         resultVector.push_back(resultPtr);
     }
-
     return resultVector;
+}
+
+
+bool pcapfs::CobaltStrikeFile::meetsParsingRequirements(const FilePtr &filePtr) {
+    return (filePtr->getFiletype() == "http" && !filePtr->flags.test(pcapfs::flags::IS_METADATA) &&
+        (CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("dstIP"),
+                                    filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP")) ||
+        CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("srcIP"),
+                                    filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"))));
 }
 
 
@@ -198,16 +214,6 @@ void pcapfs::CobaltStrikeFile::fillEmbeddedFileProperties(CobaltStrikeFilePtr &e
 }
 
 
-pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractContentInformation(const Index &idx) {
-    Bytes rawData;
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    return fromClient ? extractClientContent(rawData) : extractServerContent(rawData);
-}
-
-
 pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(const Bytes &input) {
     const std::string SEP_LINE = "\n---------------------------------------------------------\n";
     CsContentInfoPtr result = std::make_shared<CsContentInfo>();
@@ -219,6 +225,8 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
 
     Bytes parsedData;
     uint64_t currIndex = 0;
+    uint32_t filesize = 0;
+    std::string filename;
     for (const Bytes &decryptedChunk : decryptedChunks) {
 
         const uint32_t counter = be32toh(*((uint32_t*) (decryptedChunk.data())));
@@ -249,6 +257,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
         } else if (callback_string == "CALLBACK_SCREENSHOT") {
             EmbeddedFileInfoPtr embeddedFileInfo = std::make_shared<CsEmbeddedFileInfo>();
             embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->filename = "screenshot";
             const size_t jpg_eof = getEndOfJpgFile(decryptedChunk);
             if (jpg_eof != 0) {
                 const Bytes additional_chunk(decryptedChunk.begin()+jpg_eof+4, decryptedChunk.end());
@@ -270,6 +279,23 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
                 embeddedFileInfo->size = decryptedChunk.size() - 16;
                 result->embeddedFileInfos.push_back(embeddedFileInfo);
             }
+
+        } else if (callback_string == "CALLBACK_FILE") {
+            ss.str("");
+            filesize = be32toh(*((uint32_t*) (decryptedChunk.data()+16)));
+            ss << "File Size: " << filesize;
+            filename.assign(decryptedChunk.begin()+20, decryptedChunk.begin()+data_size+8);
+            ss << "\nFile: " << filename;
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
+
+        } else if (callback_string == "CALLBACK_FILE_WRITE" && filesize == data_size - 8) {
+            EmbeddedFileInfoPtr embeddedFileInfo = std::make_shared<CsEmbeddedFileInfo>();
+            embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->size = filesize;
+            embeddedFileInfo->filename = filename;
+            result->embeddedFileInfos.push_back(embeddedFileInfo);
+
         } else {
             parsedData.insert(parsedData.end(), decryptedChunk.begin()+12, decryptedChunk.begin()+data_size+8);
         }
@@ -322,7 +348,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             result->command = extractServerCommand(command);
 
         const uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
-        if (args_len + 8 > data_size)
+        if (args_len + 8 > temp.size())
             return result;
 
         ss << "Command: " << command_code << " " << command
@@ -356,13 +382,31 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             const std::string params = ss.str();
             parsedData.insert(parsedData.end(), params.begin(), params.end());
 
+        } else if (command == "COMMAND_GETPRIVS") {
+            Bytes privPayload(temp.begin(), temp.end());
+            const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
+            privPayload.erase(privPayload.begin(), privPayload.begin()+2);
+            ss << "Privileges:\n";
+            uint32_t currPrivLen;
+            std::string currPriv;
+            for (uint16_t i = 0; i < numPrivs; ++i) {
+                currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
+                if (currPrivLen > privPayload.size() - 4)
+                    break;
+                currPriv.assign(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
+                ss << currPriv << std::endl;
+                privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
+            }
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
+
         } else if (command == "COMMAND_EXECUTE_JOB") {
             const size_t args_len_without_padding = getLengthWithoutPadding(temp, args_len);
             size_t currPos = 0;
             while (currPos < args_len_without_padding) {
                 const uint32_t tempLen = be32toh(*((uint32_t*) (temp.data()+currPos)));
                 if (tempLen > args_len_without_padding - currPos) {
-                    // parsed argument length is invalid";
+                    // parsed argument length is invalid
                     return result;
                 }
                 const std::string argument(temp.begin()+4+currPos, temp.begin()+4+currPos+tempLen);
@@ -417,6 +461,14 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             embeddedFileInfo->command = command;
             embeddedFileInfo->size = args_len;
             result->embeddedFileInfos.push_back(embeddedFileInfo);
+
+        } else if (args_len == 4) {
+            if (command == "COMMAND_KILL" || command == "COMMAND_STEALTOKEN")
+                ss << "PID: " << be32toh(*((uint32_t*) temp.data()));
+            else
+                ss << "Argument: " << be32toh(*((uint32_t*) temp.data()));
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
 
         } else {
             const std::string params = ss.str();
@@ -540,7 +592,17 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseClientContent(const Bytes &in
                 const std::string params = ss.str();
                 result.insert(result.end(), params.begin(), params.end());
             }
-        } else {
+
+        } else if (callback_string == "CALLBACK_FILE") {
+            ss.str("");
+            const uint32_t filesize = be32toh(*((uint32_t*) (decryptedChunk.data()+16)));
+            ss << "File Size: " << filesize;
+            const std::string filename(decryptedChunk.begin()+20, decryptedChunk.begin()+data_size+8);
+            ss << "\nFile: " << filename;
+            const std::string params = ss.str();
+            result.insert(result.end(), params.begin(), params.end());
+
+        } else if (callback_string != "CALLBACK_FILE_WRITE") {
             result.insert(result.end(), decryptedChunk.begin()+12, decryptedChunk.begin()+data_size+8);
         }
         result.insert(result.end(), SEP_LINE.begin(), SEP_LINE.end());
@@ -588,14 +650,14 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
         }
         const std::string command = CSCommands::codes[command_code];
         const uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
-        ss << "Command: " << command_code << " " << command
-            << "\nArgs Len: " << args_len << std::endl;
-
-        temp.erase(temp.begin(), temp.begin()+8);
-        if (args_len + 8 > data_size) {
+        if (args_len + 8 > temp.size()) {
             LOG_WARNING << "cobalt strike: parsed argument length of server command is invalid";
             return input;
         }
+
+        ss << "Command: " << command_code << " " << command
+            << "\nArgs Len: " << args_len << std::endl;
+        temp.erase(temp.begin(), temp.begin()+8);
 
         if (command == "COMMAND_LS") {
             const uint32_t ls_counter = be32toh(*((uint32_t*) temp.data()));
@@ -621,6 +683,24 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
             const uint32_t sleep = be32toh(*((uint32_t*) temp.data()));
             const uint32_t jitter = be32toh(*((uint32_t*) (temp.data()+4)));
             ss << "Sleep: " << sleep << "\nJitter: " << jitter;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_GETPRIVS") {
+            Bytes privPayload(temp.begin(), temp.end());
+            const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
+            privPayload.erase(privPayload.begin(), privPayload.begin()+2);
+            ss << "Privileges:\n";
+            uint32_t currPrivLen;
+            std::string currPriv;
+            for (uint16_t i = 0; i < numPrivs; ++i) {
+                currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
+                if (currPrivLen > privPayload.size() - 4)
+                    break;
+                currPriv.assign(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
+                ss << currPriv << std::endl;
+                privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
+            }
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
@@ -673,6 +753,14 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
+        } else if (args_len == 4) {
+            if (command == "COMMAND_KILL" || command == "COMMAND_STEALTOKEN")
+                ss << "PID: " << be32toh(*((uint32_t*) temp.data()));
+            else
+                ss << "Argument: " << be32toh(*((uint32_t*) temp.data()));
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
         } else {
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
@@ -697,14 +785,20 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseEmbeddedClientFile(const Byte
     uint64_t currIndex = 0;
     for (const Bytes &decryptedChunk : decryptedChunks) {
         if (currIndex == embeddedFileIndex) {
-            // at the moment only screenshot files
-            //const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
-            //const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
-            const size_t jpg_eof = getEndOfJpgFile(decryptedChunk);
-            if (jpg_eof != 0)
-                result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.begin()+jpg_eof);
-            else
-                result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.end());
+            const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
+            const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
+
+            if (callback_string == "CALLBACK_SCREENSHOT") {
+                const size_t jpg_eof = getEndOfJpgFile(decryptedChunk);
+                if (jpg_eof != 0)
+                    result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.begin()+jpg_eof);
+                else
+                    result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.end());
+
+            } else if (callback_string == "CALLBACK_FILE_WRITE") {
+                const uint32_t data_size = be32toh(*((uint32_t*) (decryptedChunk.data()+4)));
+                result.insert(result.end(), decryptedChunk.begin()+16, decryptedChunk.begin()+data_size+8);
+            }
         }
         currIndex++;
     }
@@ -863,7 +957,6 @@ bool pcapfs::CobaltStrikeFile::registeredAtFactory =
 */
 std::vector<pcapfs::FilePtr> pcapfs::CsUploadedFile::parse(FilePtr filePtr, Index &idx) {
     (void)idx; // prevent unused variable warning
-    Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
     if (!filePtr->flags.test(flags::IS_EMBEDDED_FILE) || !CobaltStrikeManager::getInstance().isFirstPartOfUploadedFile(filePtr))
         return resultVector;
