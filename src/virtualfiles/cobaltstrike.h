@@ -43,13 +43,15 @@ namespace pcapfs {
         CsContentInfoPtr const extractServerContent(const Bytes &input);
         CsContentInfoPtr const extractClientContent(const Bytes &input);
 
+        std::string const handleKeystrokes(const std::string& input);
+
         static void fillEmbeddedFileProperties(CobaltStrikeFilePtr &embeddedFilePtr, const FilePtr &filePtr,
                                                 const EmbeddedFileInfoPtr &embeddedFileInfo);
 
-        Bytes const parseClientContent(const Bytes &input);
-        Bytes const parseServerContent(const Bytes &input);
-        Bytes const parseEmbeddedServerFile(const Bytes &input);
-        Bytes const parseEmbeddedClientFile(const Bytes &input);
+        Bytes const readClientContent(const Bytes &input);
+        Bytes const readServerContent(const Bytes &input);
+        Bytes const readEmbeddedServerFile(const Bytes &input);
+        Bytes const readEmbeddedClientFile(const Bytes &input);
 
         int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
         std::string const extractServerCommand(const std::string &input);

@@ -143,6 +143,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
                 CobaltStrikeManager::getInstance().addFilePtrToUploadedFiles(embeddedFileInfo->filename, embeddedFilePtr, false);
                 embeddedFilePtr->flags.set(pcapfs::flags::CS_DO_NOT_SHOW);
             }
+
             resultVector.push_back(embeddedFilePtr);
         }
 
@@ -296,6 +297,29 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
             embeddedFileInfo->filename = filename;
             result->embeddedFileInfos.push_back(embeddedFileInfo);
 
+        } else if (callback_string == "CALLBACK_KEYSTROKES") {
+            Bytes keystrokesChunk(decryptedChunk.begin()+12, decryptedChunk.end());
+            const uint32_t keystrokes_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (keystrokes_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string keystrokes = handleKeystrokes(std::string(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+keystrokes_len));
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4+keystrokes_len);
+            const uint32_t session = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4);
+            const uint32_t title_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (title_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string title(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+title_len);
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4+title_len);
+            const uint32_t user_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (user_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string user(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+user_len);
+            ss.str("");
+            ss << "User: " << user << "\nSession: " << session << "\nTitle: " << title << "\nKeystrokes:\n" << keystrokes;
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
+
         } else {
             parsedData.insert(parsedData.end(), decryptedChunk.begin()+12, decryptedChunk.begin()+data_size+8);
         }
@@ -304,6 +328,17 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
     }
 
     result->filesize = parsedData.size();
+    return result;
+}
+
+
+std::string const pcapfs::CobaltStrikeFile::handleKeystrokes(const std::string& input) {
+    std::string result;
+    try {
+        result = std::regex_replace(input, std::regex("\x03[A-Z0-9]|\x0f"), "");
+    } catch (std::regex_error &err) {
+        return input;
+    }
     return result;
 }
 
@@ -383,7 +418,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             parsedData.insert(parsedData.end(), params.begin(), params.end());
 
         } else if (command == "COMMAND_GETPRIVS") {
-            Bytes privPayload(temp.begin(), temp.end());
+            Bytes privPayload(temp.begin(), temp.begin()+args_len);
             const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
             privPayload.erase(privPayload.begin(), privPayload.begin()+2);
             ss << "Privileges:\n";
@@ -397,6 +432,25 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
                 ss << currPriv << std::endl;
                 privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
             }
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_MAKE_TOKEN") {
+            Bytes tokenPayload(temp.begin(), temp.begin()+args_len);
+            uint32_t len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return result;
+            ss << "Domain: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
+            tokenPayload.erase(tokenPayload.begin(), tokenPayload.begin()+4+len);
+            len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return result;
+            ss << "\nUser: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
+            tokenPayload.erase(tokenPayload.begin(), tokenPayload.begin()+4+len);
+            len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return result;
+            ss << "\nPassword: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
             const std::string params = ss.str();
             parsedData.insert(parsedData.end(), params.begin(), params.end());
 
@@ -460,6 +514,18 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             embeddedFileInfo->id = currIndex;
             embeddedFileInfo->command = command;
             embeddedFileInfo->size = args_len;
+            result->embeddedFileInfos.push_back(embeddedFileInfo);
+
+        } else if (command == "COMMAND_INJECT_PID" || command == "COMMAND_INJECTX64_PID") {
+            const uint32_t pid = be32toh(*((uint32_t*) temp.data()));
+            ss << "PID: " << pid;
+            const std::string params = ss.str();
+            parsedData.insert(parsedData.end(), params.begin(), params.end());
+
+            EmbeddedFileInfoPtr embeddedFileInfo = std::make_shared<CsEmbeddedFileInfo>();
+            embeddedFileInfo->id = currIndex;
+            embeddedFileInfo->command = command;
+            embeddedFileInfo->size = args_len - 8;
             result->embeddedFileInfos.push_back(embeddedFileInfo);
 
         } else if (args_len == 4) {
@@ -533,16 +599,16 @@ size_t pcapfs::CobaltStrikeFile::read(uint64_t startOffset, size_t length, const
 
     Bytes decryptedData;
     if (flags.test(pcapfs::flags::IS_EMBEDDED_FILE))
-        decryptedData = fromClient ? parseEmbeddedClientFile(rawData): parseEmbeddedServerFile(rawData);
+        decryptedData = fromClient ? readEmbeddedClientFile(rawData): readEmbeddedServerFile(rawData);
     else
-        decryptedData = fromClient ? parseClientContent(rawData): parseServerContent(rawData);
+        decryptedData = fromClient ? readClientContent(rawData): readServerContent(rawData);
 
     memcpy(buf, decryptedData.data() + startOffset, length);
     return std::min(decryptedData.size() - startOffset, length);
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseClientContent(const Bytes &input) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::readClientContent(const Bytes &input) {
 
     const std::string SEP_LINE = "\n---------------------------------------------------------\n";
     Bytes result;
@@ -602,9 +668,33 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseClientContent(const Bytes &in
             const std::string params = ss.str();
             result.insert(result.end(), params.begin(), params.end());
 
+        } else if (callback_string == "CALLBACK_KEYSTROKES") {
+            Bytes keystrokesChunk(decryptedChunk.begin()+12, decryptedChunk.end());
+            const uint32_t keystrokes_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (keystrokes_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string keystrokes = handleKeystrokes(std::string(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+keystrokes_len));
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4+keystrokes_len);
+            const uint32_t session = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4);
+            const uint32_t title_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (title_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string title(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+title_len);
+            keystrokesChunk.erase(keystrokesChunk.begin(), keystrokesChunk.begin()+4+title_len);
+            const uint32_t user_len = le32toh(*((uint32_t*) keystrokesChunk.data()));
+            if (user_len > keystrokesChunk.size() - 4)
+                continue;
+            const std::string user(keystrokesChunk.begin()+4, keystrokesChunk.begin()+4+user_len);
+            ss.str("");
+            ss << "User: " << user << "\nSession: " << session << "\nTitle: " << title << "\nKeystrokes:\n" << keystrokes;
+            const std::string params = ss.str();
+            result.insert(result.end(), params.begin(), params.end());
+
         } else if (callback_string != "CALLBACK_FILE_WRITE") {
             result.insert(result.end(), decryptedChunk.begin()+12, decryptedChunk.begin()+data_size+8);
         }
+
         result.insert(result.end(), SEP_LINE.begin(), SEP_LINE.end());
     }
 
@@ -612,7 +702,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseClientContent(const Bytes &in
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &input) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &input) {
 
     const Bytes data = decryptServerPayload(input);
     if (data.empty())
@@ -687,7 +777,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
             output.insert(output.end(), params.begin(), params.end());
 
         } else if (command == "COMMAND_GETPRIVS") {
-            Bytes privPayload(temp.begin(), temp.end());
+            Bytes privPayload(temp.begin(), temp.begin()+args_len);
             const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
             privPayload.erase(privPayload.begin(), privPayload.begin()+2);
             ss << "Privileges:\n";
@@ -701,6 +791,25 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
                 ss << currPriv << std::endl;
                 privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
             }
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
+        } else if (command == "COMMAND_MAKE_TOKEN") {
+            Bytes tokenPayload(temp.begin(), temp.begin()+args_len);
+            uint32_t len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return input;
+            ss << "Domain: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
+            tokenPayload.erase(tokenPayload.begin(), tokenPayload.begin()+4+len);
+            len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return input;
+            ss << "\nUser: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
+            tokenPayload.erase(tokenPayload.begin(), tokenPayload.begin()+4+len);
+            len = be32toh(*((uint32_t*) tokenPayload.data()));
+            if (len > tokenPayload.size() - 4)
+                return input;
+            ss << "\nPassword: " << std::string(tokenPayload.begin()+4, tokenPayload.begin()+4+len);
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
@@ -753,6 +862,12 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
             const std::string params = ss.str();
             output.insert(output.end(), params.begin(), params.end());
 
+        } else if (command == "COMMAND_INJECT_PID" || command == "COMMAND_INJECTX64_PID") {
+            const uint32_t pid = be32toh(*((uint32_t*) temp.data()));
+            ss <<"PID: " << pid;
+            const std::string params = ss.str();
+            output.insert(output.end(), params.begin(), params.end());
+
         } else if (args_len == 4) {
             if (command == "COMMAND_KILL" || command == "COMMAND_STEALTOKEN")
                 ss << "PID: " << be32toh(*((uint32_t*) temp.data()));
@@ -775,7 +890,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseServerContent(const Bytes &in
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseEmbeddedClientFile(const Bytes &input) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedClientFile(const Bytes &input) {
 
     std::vector<Bytes> decryptedChunks = decryptClientPayload(input);
     if (decryptedChunks.empty())
@@ -807,7 +922,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseEmbeddedClientFile(const Byte
 }
 
 
-pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseEmbeddedServerFile(const Bytes &input) {
+pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedServerFile(const Bytes &input) {
 
     const Bytes decryptedData = decryptServerPayload(input);
     if (decryptedData.empty())
@@ -838,6 +953,10 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::parseEmbeddedServerFile(const Byte
             if (command == "COMMAND_SPAWN_TOKEN_X86" || command == "COMMAND_SPAWN_TOKEN_X64" ||
                 command == "COMMAND_SPAWNX64" || command == "COMMAND_INLINE_EXECUTE_OBJECT"){
                 return Bytes(temp.begin(), temp.begin()+argsLen);
+
+            } else if (command == "COMMAND_INJECT_PID" || command == "COMMAND_INJECTX64_PID") {
+                return Bytes(temp.begin()+8, temp.begin()+argsLen);
+
             } else if (command == "COMMAND_UPLOAD" || command == "COMMAND_UPLOAD_CONTINUE") {
                 const uint32_t filenameLen = be32toh(*((uint32_t*) temp.data()));
                 if (filenameLen > argsLen) {
