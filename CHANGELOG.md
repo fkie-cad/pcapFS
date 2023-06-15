@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.4.0]
+### Fixed
+- Fix crash at FTP handling when PASS credentials are parsed, but not the corresponding USER credentials
+- Add missing exception handling
+
+### Added
+- Decryption and parsing of Cobalt Strike C2 traffic when default profile is used and the team server's private RSA key is given, extraction and defragmentation of transferred files
+- Add --no-cs flag to deactivate Cobalt Strike parsing
+- Add support for multiple XOR key files
+- SSL/TLS:
+    - More cipher suites supported for TLS decryption
+    - Decryption when private RSA key of Server or RSA PreMaster secret is passed
+    - Support extended master secret and truncated HMAC extension, MAC-then-encrypt and encrypt-then-MAC
+    - Extraction of TLS certificates as metadata file
+    - Add SNI as domain property for TLS
+
+### Changed
+- Warning when config file is invalid
+- When decode properties are defined in config, pcapFS only tries to decrypt the connections which satisfy the properties 
+- Update PcapPlusPlus dependency because of bugfix
+- Buffering of once parsed and decoded content
+
 ## [0.3.1]
 ### Fixed
 - Pin libfuse to release 3.4.2 until Fusepp catches up with master branch of libfuse (https://github.com/fkie-cad/pcapFS/issues/13)
