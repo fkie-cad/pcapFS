@@ -33,6 +33,7 @@ std::vector<pcapfs::FilePtr> pcapfs::XORKeyFile::parseCandidates(const Paths &ke
             if (splitInput.at(0) == XOR_KEY_STRING) {
                 keyPtr->XORKey = utils::hexStringToBytes(splitInput.at(1));
                 keyPtr->setFiletype("xorkey");
+                keyPtr->setFilename(keyFile.filename().string());
             }
             resultVector.push_back(keyPtr);
         }

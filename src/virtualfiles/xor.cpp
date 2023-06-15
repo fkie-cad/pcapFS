@@ -13,9 +13,9 @@ namespace {
 
 std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx) {
     std::vector<FilePtr> resultVector;
-    bool condition = filePtr->meetsDecodeMapCriteria("xor");
-    //TODO: segfault if this is appliead to metadata (why?)
-    if (condition & (!filePtr->flags.test(pcapfs::flags::IS_METADATA))) {
+    //TODO: segfault if this is applied to metadata (why?)
+    const std::shared_ptr<XORKeyFile> keyPtr = getCorrectXorKeyFile(filePtr, idx);
+    if (keyPtr && !filePtr->flags.test(pcapfs::flags::IS_METADATA)) {
         std::shared_ptr<XorFile> resultPtr = std::make_shared<XorFile>();
         Fragment fragment{};
         fragment.start = 0;
@@ -37,15 +37,11 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->setProperty(pcapfs::prop::proto, FILE_TYPE_NAME);
         resultPtr->setFiletype(FILE_TYPE_NAME);
 
-        if (!idx.getCandidatesOfType("xorkey").empty()) {
-            std::vector<FilePtr> keyFiles = idx.getCandidatesOfType("xorkey");
-            //TODO: only one xor key possible!
-            std::shared_ptr<XORKeyFile> keyPtr = std::dynamic_pointer_cast<XORKeyFile>(keyFiles.at(0));
-            idx.insert(keyPtr);
-            resultPtr->keyIdInIndex = keyPtr->getIdInIndex();
-            resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
-            resultVector.push_back(resultPtr);
-        }
+        idx.insert(keyPtr);
+        resultPtr->keyIdInIndex = keyPtr->getIdInIndex();
+        resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+        resultVector.push_back(resultPtr);
+
     }
     return resultVector;
 }
@@ -67,6 +63,58 @@ size_t pcapfs::XorFile::read(uint64_t startOffset, size_t length, const Index &i
         return read_count;
     }
     return 0;
+}
+
+
+const std::shared_ptr<pcapfs::XORKeyFile> pcapfs::XorFile::getCorrectXorKeyFile(const FilePtr &filePtr, const Index &idx){
+    std::string keyFilename;
+    for (const auto &map : config.getDecodeMapFor("xor")) {
+        bool foundMatchingEntry = true;
+        for (const auto &entry: map) {
+            if (entry.first != "keyfile" && filePtr->getProperty(entry.first) != entry.second) {
+                foundMatchingEntry = false;
+                break;
+            } else if (entry.first == "keyfile")
+                keyFilename = entry.second;
+        }
+
+        if (foundMatchingEntry) {
+            // at this point, the decode map criteria is met and we get the corresponding xor key
+            if (!idx.getCandidatesOfType("xorkey").empty()) {
+                if (keyFilename.empty()) {
+                    // "keyfile" property in decode.xor.properties of the config is not set
+                    // then, we take the first xor file we find
+                    const std::vector<FilePtr> keyFiles = idx.getCandidatesOfType("xorkey");
+                    return std::dynamic_pointer_cast<XORKeyFile>(keyFiles.at(0));
+                } else {
+                    // else: get key file with matching filename
+                    const std::shared_ptr<XORKeyFile> keyPtr = getKeyFileFromName(idx, keyFilename);
+                    if(keyPtr)
+                        return keyPtr;
+                    else {
+                        LOG_WARNING << "XOR key file provided via decode.xor.properties not found.";
+                        return nullptr;
+                    }
+                }
+            } else {
+                LOG_WARNING << "Found fitting XOR decode property but no key file provided.";
+                return nullptr;
+            }
+        }
+
+        keyFilename = "";
+    }
+    return nullptr;
+}
+
+
+const std::shared_ptr<pcapfs::XORKeyFile> pcapfs::XorFile::getKeyFileFromName(const Index &idx, const std::string &name) {
+    const std::vector<FilePtr> keyFiles = idx.getCandidatesOfType("xorkey");
+    auto it = std::find_if(keyFiles.begin(), keyFiles.end(), [name](const auto &keyFile){ return keyFile->getFilename() == name; });
+    if (it != keyFiles.end())
+        return std::dynamic_pointer_cast<XORKeyFile>(*it);
+    else
+        return nullptr;
 }
 
 

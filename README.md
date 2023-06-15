@@ -328,7 +328,7 @@ relative to the config file. Just as with the `-k` command line option, you are 
 The `[decode]` section can be used to provide custom protocol parsing and decoding rules. That is, you can tell pcapFS
 which parser to use for connections meeting given criteria. The example config above defines four rules, two for XOR
 decoding, one for SSL and one for Cobalt Strike. As the `properties` key implies, you can use pcapFS properties to define your decoding rules.
-In case of the SSL example above, all connections from source IP 1.2.3.4 and source Port 8080 would be parsed with the
+In case of the SSL example above, all connections from source IP 1.2.3.4 and source port 8080 would be parsed with the
 SSL protocol parser. For XOR we defined two rules both stating that connection meeting the criteria should be parsed
 with the XOR parser: the first one matches all connections from source IP 1.2.3.4 to destination IP 4.3.2.1 and
 destination port 2345, the second one matches all UDP "connections" from source port 1111 to destination port 2222.
@@ -336,3 +336,29 @@ destination port 2345, the second one matches all UDP "connections" from source 
 Providing properties in the decode section can improve the runtime of pcapFS since only connections which meet the given criteria are decoded. If no decoding properties or no configuration file is provided, *all* XOR, SSL and Cobalt Strike traffic is tried to be decrypted using the keyfiles passed to pcapFS.
 
 Note that decoding options are independent from an implemented protocol detection. E.g. you can specify a certain port for HTTP decoding, but the HTTP parser still checks if the transferred data over this port is valid HTTP.
+
+
+### XOR Decryption with Multiple Key Files
+When using XOR decryption in pcapFS, a config file with `xor.decode.properties` is needed in order to match the connection to be decrypted.
+When more than one XOR key is given, pcapFS needs to know the corresponding key file per XOR-encrypted connection. For that, the `keyfile` property has to be set in the `xor.decode.properties` section like this:
+
+```toml
+[keys]
+  keyfiles = [
+    "/path/to/xor1.key",
+    "relative/path/to/xor2.key"
+  ]
+
+[[decode.xor.properties]]
+  srcIP = "1.2.3.4"
+  dstIP = "4.3.2.1"
+  dstPort = 1337
+  keyfile = "xor1.key"
+
+[[decode.xor.properties]]
+  srcIP = "1.2.3.4"
+  dstIP = "4.3.2.1"
+  dstPort = 1338
+  keyfile = "xor2.key"
+```
+Then, all connections with source IP 1.2.3.4, destination IP 4.3.2.1 and destination port 1337 would be decrypted using the XOR key provided by the keyfile `xor1.key` and connections with destination port 1338 would be decrypted using the XOR key provided by the keyfile `xor2.key`.

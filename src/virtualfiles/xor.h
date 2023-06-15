@@ -5,6 +5,7 @@
 #include <boost/archive/text_oarchive.hpp>
 
 #include "../file.h"
+#include "../keyfiles/xorkey.h"
 #include "virtualfile.h"
 
 
@@ -19,6 +20,10 @@ namespace pcapfs {
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
         void XOR(Bytes &data, char *key, size_t keySize);
+
+        static const std::shared_ptr<XORKeyFile> getCorrectXorKeyFile(const FilePtr &filePtr, const Index &idx);
+
+        static const std::shared_ptr<XORKeyFile> getKeyFileFromName(const Index &idx, const std::string &name);
 
     protected:
         static bool registeredAtFactory;

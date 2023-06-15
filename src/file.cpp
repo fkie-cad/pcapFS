@@ -58,9 +58,10 @@ bool pcapfs::File::meetsDecodeMapCriteria(const std::string &file) {
     for (const auto &entries : config.getDecodeMapFor(file)) {
         if (std::any_of(entries.begin(), entries.end(),
                         [this](const auto &it){ return this->getProperty(it.first) != it.second; })) {
-            return false;
+            continue;
+        } else {
+            return true;
         }
-        return true;
     }
     return false;
 }
