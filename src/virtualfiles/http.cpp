@@ -625,7 +625,7 @@ bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, ui
     if (length == 0) {
         length = data.size();
     }
-    LOG_INFO << "isHTTPRequest, early bird call: " << (char *) data.data() + startOffset;
+    LOG_TRACE << "isHTTPRequest, early bird call: " << (char *) data.data() + startOffset;
     pcpp::HttpRequestLayer::HttpMethod method = pcpp::HttpRequestFirstLine::parseMethod(
             (char *) data.data() + startOffset, length);
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
@@ -838,7 +838,7 @@ bool pcapfs::HttpFile::isHTTPResponse(const Bytes &data, uint64_t startOffset, s
     }
     if (getResponseStatusCode(data, startOffset, length) ==
         pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown) {
-    	LOG_INFO << "This is the content of isHTTPResponse: " << (char *) data.data() + startOffset;
+    	LOG_TRACE << "This is the content of isHTTPResponse: " << (char *) data.data() + startOffset;
         return false;
     }
     if (!usesValidHTTPVersion(data, startOffset, length)) {

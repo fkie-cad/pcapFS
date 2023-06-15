@@ -23,6 +23,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
         return resultVector;
     }
 
+    LOG_DEBUG << "begin to parse http file regarding cobalt strike";
     std::shared_ptr<CobaltStrikeFile> resultPtr = std::make_shared<CobaltStrikeFile>();
 
     Fragment fragment;
@@ -56,6 +57,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
         resultPtr->setFilesizeProcessed(contentInfo->filesize);
 
         for (const auto &embeddedFileInfo : contentInfo->embeddedFileInfos) {
+            LOG_DEBUG << "handle embedded file in cobalt strike callback";
             std::shared_ptr<CobaltStrikeFile> embeddedFilePtr = std::make_shared<CobaltStrikeFile>();
             Fragment embeddedFragment;
             embeddedFragment.id = filePtr->getIdInIndex();
@@ -94,6 +96,8 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             contentInfo = resultPtr->extractServerContent(data);
         } catch (PcapFsException &err) {
             // this might be a beacon config file
+            LOG_INFO << "found cobalt strike server payload which does not have a valid format to be a command";
+            LOG_INFO << "=> we assume this is a beacon config file";
             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
             resultPtr->setFilename(timestamp + "-beaconconfig");
             resultPtr->flags.set(pcapfs::flags::PROCESSED);
@@ -105,6 +109,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
         resultPtr->setFilename(timestamp + "-" + contentInfo->command);
 
         for (const auto &embeddedFileInfo : contentInfo->embeddedFileInfos) {
+            LOG_DEBUG << "handle embedded file in cobalt strike command";
             std::shared_ptr<CobaltStrikeFile> embeddedFilePtr = std::make_shared<CobaltStrikeFile>();
             Fragment embeddedFragment;
             embeddedFragment.id = filePtr->getIdInIndex();
@@ -140,6 +145,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
                 embeddedFilePtr->flags.set(pcapfs::flags::CS_DO_NOT_SHOW);
 
             } else if (embeddedFileCommand == "COMMAND_UPLOAD_CONTINUE") {
+                LOG_DEBUG << "noticed fragmented file upload";
                 CobaltStrikeManager::getInstance().addFilePtrToUploadedFiles(embeddedFileInfo->filename, embeddedFilePtr, false);
                 embeddedFilePtr->flags.set(pcapfs::flags::CS_DO_NOT_SHOW);
             }
@@ -216,6 +222,7 @@ void pcapfs::CobaltStrikeFile::fillEmbeddedFileProperties(CobaltStrikeFilePtr &e
 
 
 pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(const Bytes &input) {
+    LOG_DEBUG << "extract content information from cobalt strike callback";
     const std::string SEP_LINE = "\n---------------------------------------------------------\n";
     CsContentInfoPtr result = std::make_shared<CsContentInfo>();
     result->filesize = input.size();
@@ -233,11 +240,12 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
         const uint32_t counter = be32toh(*((uint32_t*) (decryptedChunk.data())));
         const uint32_t data_size = be32toh(*((uint32_t*) (decryptedChunk.data()+4)));
         if (data_size > decryptedChunk.size()) {
-            // parsed length of decrypted client message is invalid
+            LOG_DEBUG << "parsed length of decrypted client message is invalid";
             return result;
         }
         const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
         const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
+        LOG_DEBUG << "current callback: " << callback_string;
 
         std::stringstream ss;
         ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << callback_string << "\n\n";
@@ -277,6 +285,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
                 embeddedFileInfo->size = jpg_eof - 16;
                 result->embeddedFileInfos.push_back(embeddedFileInfo);
             } else {
+                LOG_DEBUG << "did not find end of screenshot file";
                 embeddedFileInfo->size = decryptedChunk.size() - 16;
                 result->embeddedFileInfos.push_back(embeddedFileInfo);
             }
@@ -327,6 +336,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractClientContent(co
         currIndex++;
     }
 
+    LOG_DEBUG << "extracted content information from cobalt strike callback successfully";
     result->filesize = parsedData.size();
     return result;
 }
@@ -344,6 +354,7 @@ std::string const pcapfs::CobaltStrikeFile::handleKeystrokes(const std::string& 
 
 
 pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(const Bytes &input) {
+    LOG_DEBUG << "extract content information from cobalt strike command";
     CsContentInfoPtr result = std::make_shared<CsContentInfo>();
     result->filesize = input.size();
 
@@ -376,16 +387,19 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
         const uint32_t command_code = be32toh(*((uint32_t*) (temp.data())));
         if (command_code > 102) {
             // we have probably no command content
+            LOG_DEBUG << "the parsed command code is not known";
             return result;
         }
         const std::string command = CSCommands::codes[command_code];
+        LOG_DEBUG << "current command: " << command;
         if (currIndex == 0)
             result->command = extractServerCommand(command);
 
         const uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
-        if (args_len + 8 > temp.size())
+        if (args_len + 8 > temp.size()) {
+            LOG_DEBUG << "the parsed argument length is invalid";
             return result;
-
+        }
         ss << "Command: " << command_code << " " << command
             << "\nArgs Len: " << args_len << std::endl;
         temp.erase(temp.begin(), temp.begin()+8);
@@ -545,14 +559,16 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
         temp.erase(temp.begin(), temp.begin()+args_len);
     }
 
+    LOG_DEBUG << "extracted content information from cobalt strike command successfully";
     result->filesize = parsedData.size();
     return result;
 }
 
 
 std::vector<pcapfs::Bytes>  const pcapfs::CobaltStrikeFile::decryptClientPayload(const Bytes &input) {
-
+    LOG_DEBUG << "decrypt cobalt strike client payload";
     if (input.size() < 32 || cobaltStrikeKey.empty()) {
+        LOG_DEBUG << "decryption requirements are not met";
         return std::vector<Bytes>(0);
     }
     std::vector<Bytes> decryptedChunks(0);
@@ -581,6 +597,11 @@ std::vector<pcapfs::Bytes>  const pcapfs::CobaltStrikeFile::decryptClientPayload
 
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptServerPayload(const Bytes &input) {
+    LOG_DEBUG << "decrypt cobalt strike server payload";
+    if (input.size() < 32 || cobaltStrikeKey.empty()) {
+        LOG_DEBUG << "decryption requirements are not met";
+        return Bytes();
+    }
     Bytes decryptedData(input.size() - 16);
     const Bytes dataToDecrypt(input.begin(), input.end() - 16); // exclude hmac
     if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
@@ -609,7 +630,7 @@ size_t pcapfs::CobaltStrikeFile::read(uint64_t startOffset, size_t length, const
 
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::readClientContent(const Bytes &input) {
-
+    LOG_DEBUG << "read cobalt strike client callback(s)";
     const std::string SEP_LINE = "\n---------------------------------------------------------\n";
     Bytes result;
     const std::vector<Bytes> decryptedChunks = decryptClientPayload(input);
@@ -703,7 +724,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readClientContent(const Bytes &inp
 
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &input) {
-
+    LOG_DEBUG << "read cobalt strike server command(s)";
     const Bytes data = decryptServerPayload(input);
     if (data.empty())
         return input;
@@ -714,7 +735,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &inp
     const time_t timestamp = be32toh(*((uint32_t*) temp.data()));
     const uint32_t data_size = be32toh(*((uint32_t*) (temp.data()+4)));
     if (data_size > data.size()) {
-        LOG_INFO << "cobalt strike: parsed length of server message is invalid";
+        //LOG_INFO << "cobalt strike: parsed length of server message is invalid";
         return input;
     }
 
@@ -891,7 +912,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &inp
 
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedClientFile(const Bytes &input) {
-
+    LOG_DEBUG << "read file embedded in cobalt strike client callback(s)";
     std::vector<Bytes> decryptedChunks = decryptClientPayload(input);
     if (decryptedChunks.empty())
         return input;
@@ -923,7 +944,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedClientFile(const Bytes
 
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedServerFile(const Bytes &input) {
-
+    LOG_DEBUG << "read file embedded in cobalt strike server command(s)";
     const Bytes decryptedData = decryptServerPayload(input);
     if (decryptedData.empty())
         return input;
@@ -1093,6 +1114,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CsUploadedFile::parse(FilePtr filePtr, Inde
     resultPtr->setProperty("uri", filePtr->getProperty("uri"));
     resultPtr->setFilename(filePtr->getFilename());
 
+    LOG_DEBUG << "defragment cobalt strike file upload";
     const std::vector<FilePtr> uploadedFileChunks = CobaltStrikeManager::getInstance().getUploadedFileChunks(filePtr);
     for (const FilePtr &fileChunk : uploadedFileChunks) {
         Fragment fragment;
@@ -1114,6 +1136,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CsUploadedFile::parse(FilePtr filePtr, Inde
 
 
 size_t pcapfs::CsUploadedFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf){
+    LOG_DEBUG << "read defragmented cobalt strike file upload";
     Bytes totalContent;
     for (Fragment fragment: fragments) {
         Bytes rawData(fragment.length);
