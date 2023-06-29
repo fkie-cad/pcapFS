@@ -22,8 +22,6 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parseCandidates(const Paths &keyFiles);
 
-        static std::shared_ptr<pcapfs::XORKeyFile> createKeyFile(const Bytes &key);
-
         Bytes getXORKey() { return XORKey; };
 
         size_t read(uint64_t, size_t, const Index &, char *) override { return 0; };

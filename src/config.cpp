@@ -146,7 +146,7 @@ namespace {
     }
 
 
-    void parseDecodeSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config) {
+    void parseDecodeSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config, const pcapfs::Path &configPath) {
         if (!section) { return; }
 
         const std::set<std::string> validDecodeTypes = {"xor", "ssl", "cobaltstrike"};
@@ -176,6 +176,28 @@ namespace {
                             "to use double brackets?");
                 }
                 config.decodeMap[subsection.first] = parseDecodeMapEntryFromPropertyList(*properties);
+
+                // add xor key files to keyFiles
+                if (subsection.first == "xor") {
+                    for(const auto &table : properties->get()) {
+                        cpptoml::option<std::string> keyfile;
+                        try {
+                            keyfile = table->get_as<std::string>("keyfile");
+                        } catch (std::out_of_range &err) {
+                            LOG_ERROR << "No keyfile property provided in xor decode config";
+                            continue;
+                        }
+                        boost::filesystem::path path;
+                        try {
+                            path = boost::filesystem::canonical(*keyfile, configPath);
+                        } catch (boost::filesystem::filesystem_error &err) {
+                            LOG_ERROR << "Invalid key file path in config file: " << err.what();
+                            continue;
+                        }
+                        if (keyfile)
+                            config.keyFiles.push_back(path);
+                    }
+                }
             }
         }
     }
@@ -412,7 +434,7 @@ const pcapfs::options::ConfigFileOptions pcapfs::options::configfile::parse(cons
         else if (c.first == "keys")
             parseKeysSection(conf->get_table("keys"), config, configfile.parent_path());
         else if (c.first == "decode")
-            parseDecodeSection(conf->get_table("decode"), config);
+            parseDecodeSection(conf->get_table("decode"), config, configfile.parent_path());
         else
             LOG_WARNING << "Invalid config file option: " << c.first;
     }

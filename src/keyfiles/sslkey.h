@@ -24,11 +24,6 @@ namespace pcapfs {
 
         static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(const Bytes &keyMaterial);
 
-        //TODO: remove key and mac size from arguments?
-        Bytes getClientWriteKey(uint64_t keySize, uint64_t macSize);
-
-        Bytes getServerWriteKey(uint64_t keySize, uint64_t macSize);
-
         Bytes getMasterSecret() { return masterSecret; };
 
         Bytes getPreMasterSecret() { return preMasterSecret; };

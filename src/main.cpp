@@ -86,8 +86,8 @@ int main(int argc, const char *argv[]) {
         options = pcapfs::parseOptions(argc, argv);
     } catch (pcapfs::ArgumentError &e) {
         pcapfs::options::commandline::printHelp();
-        std::cerr << e.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
-        std::cerr << "See help message above for usage information." << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+        std::cerr << e.what() << std::endl;
+        std::cerr << "See help message above for usage information." << std::endl;
 
         return 1;
     }
@@ -102,8 +102,8 @@ int main(int argc, const char *argv[]) {
         pcapfs::assertValidOptions(options);
     } catch (pcapfs::ArgumentError &e) {
         pcapfs::options::commandline::printHelp();
-        std::cerr << e.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
-        std::cerr << "See help message above for usage information." << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+        std::cerr << e.what() << std::endl;
+        std::cerr << "See help message above for usage information." << std::endl;
         return 1;
     }
     auto config = options.pcapfsOptions;
@@ -154,7 +154,7 @@ int main(int argc, const char *argv[]) {
             index.insert(tcpFiles);
             std::vector<pcapfs::FilePtr> udpFiles = pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(pcapFiles);
             index.insert(udpFiles);
-        } catch (const pcapfs::PcapFsException &err) {
+        } catch (const std::runtime_error &err) {
             std::cerr << "Error: " << err.what() << std::endl;
             return 2;
         }
@@ -194,7 +194,7 @@ int main(int argc, const char *argv[]) {
             index.read(config.indexFilePath);
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
-            std::cerr << "Error: " << err.what() << std::endl; // @suppress("Invalid overload") // @suppress("Symbol is not resolved")
+            std::cerr << "Error: " << err.what() << std::endl;
             return 3;
         }
     }

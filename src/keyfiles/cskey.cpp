@@ -11,6 +11,10 @@ std::vector<pcapfs::FilePtr> pcapfs::CSKeyFile::parseCandidates(const std::vecto
     std::vector<pcapfs::FilePtr> resultVector;
     for (auto &keyFile: keyFiles) {
         std::ifstream infile(keyFile.string());
+        if (!infile.is_open()) {
+            LOG_ERROR << "Failed to open key file " << keyFile.string();
+            continue;
+        }
         std::string line;
         while (std::getline(infile, line)) {
             std::shared_ptr<CSKeyFile> keyPtr = std::make_shared<CSKeyFile>();

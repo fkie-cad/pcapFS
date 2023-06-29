@@ -48,7 +48,6 @@ std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths 
             result.back()->setFilename(pcapName.string());
             result.back()->setFilesizeRaw(boost::filesystem::file_size(pcapName));
         } else if (boost::filesystem::extension(pcapName) == ".pcapng") {
-            LOG_ERROR << "pcapng is currently not supported";
             throw pcapfs::PcapFsException("pcapng is currently not supported");
         }
     }

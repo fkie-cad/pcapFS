@@ -22,6 +22,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
     std::vector<pcapfs::FilePtr> resultVector;
     for (auto &keyFile: keyFiles) {
         std::ifstream infile(keyFile.string());
+        if (!infile.is_open()) {
+            LOG_ERROR << "Failed to open key file " << keyFile.string();
+            continue;
+        }
         std::string line;
         while (std::getline(infile, line)) {
             std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
@@ -78,30 +82,6 @@ std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::createKeyFile(const Byte
     keyPtr->keyMaterial = keyMaterial;
     keyPtr->setFiletype("sslkey");
     return keyPtr;
-}
-
-
-pcapfs::Bytes pcapfs::SSLKeyFile::getClientWriteKey(uint64_t keySize, uint64_t macSize) {
-    if (keyMaterial.size() == 0) {
-        return pcapfs::Bytes();
-    }
-
-    pcapfs::Bytes clientWriteKey(keySize);
-    unsigned int clientWriteKeyOffset = 2 * macSize;
-    memcpy(clientWriteKey.data(), keyMaterial.data() + clientWriteKeyOffset, keySize);
-    return clientWriteKey;
-}
-
-
-pcapfs::Bytes pcapfs::SSLKeyFile::getServerWriteKey(uint64_t keySize, uint64_t macSize) {
-    if (keyMaterial.size() == 0) {
-        return pcapfs::Bytes();
-    }
-
-    pcapfs::Bytes serverWriteKey(keySize);
-    unsigned int serverWriteKeyOffset = 2 * macSize + keySize;
-    memcpy(serverWriteKey.data(), keyMaterial.data() + serverWriteKeyOffset, keySize);
-    return serverWriteKey;
 }
 
 

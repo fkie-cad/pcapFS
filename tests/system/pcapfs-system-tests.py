@@ -54,22 +54,6 @@ class TestSortByOption:
             assert get_file_list(mountpoint) == sorted(expected_files)
 
 
-class TestXor:
-    def test_with_single_xor_key_file(self, test_pcap, expected_files_with_xor):
-        with mount_pcap(
-            test_pcap,
-            params=[
-                "-c",
-                "{here}/configs/xor.toml".format(here=HERE),
-                "-k",
-                "{here}/keyfiles/xor.key".format(here=HERE),
-            ],
-        ) as mountpoint:
-            assert get_file_list(mountpoint) == expected_files_with_xor
-            with open(os.path.join(mountpoint, "xor/10-0_xor")) as f:
-                assert f.read() == "pcapFStest"
-
-
 class TestSsl:
     def test_with_single_ssl_key_file(self, test_pcap, expected_files_with_ssl):
         with mount_pcap(

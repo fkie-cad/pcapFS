@@ -13,7 +13,6 @@ namespace {
 
 std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx) {
     std::vector<FilePtr> resultVector;
-    //TODO: segfault if this is applied to metadata (why?)
     const std::shared_ptr<XORKeyFile> keyPtr = getCorrectXorKeyFile(filePtr, idx);
     if (keyPtr && !filePtr->flags.test(pcapfs::flags::IS_METADATA)) {
         std::shared_ptr<XorFile> resultPtr = std::make_shared<XorFile>();
@@ -81,23 +80,30 @@ const std::shared_ptr<pcapfs::XORKeyFile> pcapfs::XorFile::getCorrectXorKeyFile(
         if (foundMatchingEntry) {
             // at this point, the decode map criteria is met and we get the corresponding xor key
             if (!idx.getCandidatesOfType("xorkey").empty()) {
-                if (keyFilename.empty()) {
-                    // "keyfile" property in decode.xor.properties of the config is not set
-                    // then, we take the first xor file we find
-                    const std::vector<FilePtr> keyFiles = idx.getCandidatesOfType("xorkey");
-                    return std::dynamic_pointer_cast<XORKeyFile>(keyFiles.at(0));
-                } else {
-                    // else: get key file with matching filename
-                    const std::shared_ptr<XORKeyFile> keyPtr = getKeyFileFromName(idx, keyFilename);
+                if (!keyFilename.empty()) {
+                    // get key file with matching filename
+                    boost::filesystem::path absPathOfKeyFile;
+                    try {
+                        absPathOfKeyFile = boost::filesystem::canonical(keyFilename, config.configFilePath.parent_path());
+                    } catch (boost::filesystem::filesystem_error &err) {
+                        LOG_WARNING << "Invalid key file path in config file: " << err.what();
+                        return nullptr;
+                    }
+                    const std::shared_ptr<XORKeyFile> keyPtr = getKeyFileFromName(idx, absPathOfKeyFile.string());
                     if(keyPtr)
                         return keyPtr;
                     else {
                         LOG_WARNING << "XOR key file provided via decode.xor.properties not found.";
                         return nullptr;
                     }
+                } else {
+                    // "keyfile" property in decode.xor.properties is not set
+                    LOG_WARNING << "missing keyfile in XOR decode properties of config.";
+                    return nullptr;
                 }
             } else {
-                LOG_WARNING << "Found fitting XOR decode property but no key file provided.";
+                LOG_WARNING << "Found fitting XOR decode property but no key file provided correctly.";
+                LOG_WARNING << "Maybe forgot to pass the key file via the keyfile property in decode.xor.properties?";
                 return nullptr;
             }
         }

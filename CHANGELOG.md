@@ -20,7 +20,7 @@
 
 ### Changed
 - Warning when config file is invalid
-- When decode properties are defined in config, pcapFS only tries to decrypt the connections which satisfy the properties 
+- When decode properties are defined in config, pcapFS only tries to decrypt the connections which satisfy the properties
 - Update PcapPlusPlus dependency because of bugfix
 - Buffering of once parsed and decoded content
 
