@@ -13,6 +13,7 @@
 #include "../dirlayout.h"
 #include "../utils.h"
 #include "../capturefiles/pcap.h"
+#include "../capturefiles/pcapng.h"
 
 
 size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
@@ -97,7 +98,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer->setTimestamp(state->currentTimestamp);
         tcpPointer->setFilename("tcp" + std::to_string(state->nextUniqueId));
         tcpPointer->setIdInIndex(state->nextUniqueId);
-        tcpPointer->setOffsetType("pcap"); //tcp files point directly into the pcap
+        tcpPointer->setOffsetType(state->isPcapng ? "pcapng" : "pcap"); //tcp files point directly into the pcap
         tcpPointer->setFilesizeRaw(tcpData.getDataLength());
         tcpPointer->setFilesizeProcessed(tcpData.getDataLength());
         tcpPointer->setFiletype("tcp");
@@ -175,18 +176,23 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
     TCPIndexerState state;
     pcpp::TcpReassembly reassembly(&messageReadycallback, &state);
 
-    PcapPtr pcapPtr;
+    std::shared_ptr<CaptureFile> pcapPtr;
 
     int icmpPackets = 0;
 
     for (auto &pcap: pcapFiles) {
-        pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapFile>(pcap);
-
+        if (pcap->getFiletype() == "pcap"){
+            pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapFile>(pcap);
+            state.isPcapng = false;
+        } else {
+            pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapNgFile>(pcap);
+            state.isPcapng = true;
+        }
         state.currentPcapFileId = pcap->getIdInIndex();
         std::shared_ptr<pcpp::IFileReaderDevice> reader = pcapPtr->getReader();
         pcpp::RawPacket rawPacket;
 
-        size_t pcapPosition = pcapPtr->getGlobalHeaderLen();
+        size_t pcapPosition = pcapPtr->getOffsetFromLastBlock(0);
 
         for (size_t i = 1; reader->getNextPacket(rawPacket); i++) {
 
@@ -194,7 +200,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
             state.currentFragment.frameNr = i;
 
-            pcapPosition += pcapPtr->getPacketHeaderLen();
+            pcapPosition += pcapPtr->getOffsetFromLastBlock(i);
 
             if (parsedPacket.isPacketOfType(pcpp::TCP) && parsedPacket.isPacketOfType(pcpp::IP)) {
                 if (parsedPacket.isPacketOfType(pcpp::ICMP)) {
@@ -227,7 +233,8 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
                     }
                 }
             }
-            pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
+            if (pcapPtr->getFiletype() == "pcap")
+                pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
         }
         pcapPtr->closeReader();
     }

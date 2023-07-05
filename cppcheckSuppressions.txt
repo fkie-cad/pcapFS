@@ -6,3 +6,5 @@ unusedStructMember:src/virtualfiles/tcp.h
 unusedStructMember:src/virtualfiles/ftpcontrol.h
 unusedStructMember:src/virtualfiles/cobaltstrike.h
 variableScope:src/virtualfiles/cobaltstrike.cpp
+variableScope:src/capturefiles/pcapng.cpp
+unusedStructMember:src/capturefiles/pcapng.h

@@ -14,7 +14,7 @@ namespace pcapfs {
     class CaptureFile : public File {
 
     public:
-        CaptureFile() = default;
+        CaptureFile();
 
         ~CaptureFile();
 
@@ -28,9 +28,7 @@ namespace pcapfs {
 
         void closeReader();
 
-        virtual size_t getPacketHeaderLen() = 0;
-
-        virtual size_t getGlobalHeaderLen() = 0;
+        virtual size_t getOffsetFromLastBlock(size_t i) = 0;
 
     protected:
         std::ifstream fileHandle;

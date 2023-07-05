@@ -69,6 +69,7 @@ namespace pcapfs {
             uint64_t currentPcapFileId;
             TimePoint currentTimestamp;
             sideMap currentSide;
+            bool isPcapng;
         };
 
         static void messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie);

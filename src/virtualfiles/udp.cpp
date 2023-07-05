@@ -17,6 +17,7 @@
 #include "../filefactory.h"
 #include "../utils.h"
 #include "../capturefiles/pcap.h"
+#include "../capturefiles/pcapng.h"
 
 
 using namespace pcpp;
@@ -85,22 +86,27 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
     std::vector<pcapfs::FilePtr> result{};
     UdpIndexerState state{};
-    PcapPtr pcapPtr;
+    //PcapPtr pcapPtr;
+    std::shared_ptr<CaptureFile> pcapPtr;
 
     for (auto &pcap: pcapFiles) {
-        pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapFile>(pcap);
+        if (pcap->getFiletype() == "pcap")
+            pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapFile>(pcap);
+        else
+            pcapPtr = std::dynamic_pointer_cast<pcapfs::PcapNgFile>(pcap);
+
         state.currentPcapfileID = pcap->getIdInIndex();
         std::shared_ptr<pcpp::IFileReaderDevice> reader = pcapPtr->getReader();
 
         RawPacket rawPacket;
-        size_t pcapPosition = pcapPtr->getGlobalHeaderLen();
+        size_t pcapPosition = pcapPtr->getOffsetFromLastBlock(0);
 
         for (size_t i = 1; reader->getNextPacket(rawPacket); i++) {
 
             Packet parsedPacket = Packet(&rawPacket);
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
 
-            pcapPosition += pcapPtr->getPacketHeaderLen();
+            pcapPosition += pcapPtr->getOffsetFromLastBlock(i);
 
             if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(IP)) {
                 std::shared_ptr<pcapfs::UdpFile> udpPointer;
@@ -146,7 +152,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setTimestamp(state.currentTimestamp);
                     udpPointer->setFilename("UDPFILE" + std::to_string(state.nextUniqueId));
                     udpPointer->setIdInIndex(state.nextUniqueId);
-                    udpPointer->setOffsetType("pcap"); //udp files point directly into the pcap
+                    udpPointer->setOffsetType(pcapPtr->getFiletype()); //udp files point directly into the pcap
                     udpPointer->setFilesizeRaw(udpLayer->getDataLen());
                     udpPointer->setFilesizeProcessed(udpLayer->getDataLen());
                     udpPointer->setFiletype("udp");
@@ -168,7 +174,8 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     ++state.nextUniqueId;
                 }
             }
-            pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
+            if (pcap->getFiletype() == "pcap")
+                pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
         }
         pcapPtr->closeReader();
     }

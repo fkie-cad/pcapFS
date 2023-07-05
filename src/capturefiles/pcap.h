@@ -15,9 +15,7 @@ namespace pcapfs {
 
         static FilePtr create() { return std::make_shared<PcapFile>(); };
 
-        size_t getPacketHeaderLen() override { return 16; };
-
-        size_t getGlobalHeaderLen() override { return 24; };
+        size_t getOffsetFromLastBlock(size_t i) override;
 
     private:
         static bool registeredAtFactory;

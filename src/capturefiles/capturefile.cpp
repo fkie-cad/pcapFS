@@ -7,6 +7,13 @@
 #include "../exceptions.h"
 
 
+
+pcapfs::CaptureFile::CaptureFile(){
+    flags.set(pcapfs::flags::IS_REAL_FILE);
+    reader = nullptr;
+}
+
+
 size_t pcapfs::CaptureFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     //TODO: sanitize inputs with filesize
     if (!fileHandle.is_open()) {
@@ -44,11 +51,18 @@ std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths 
     std::vector<pcapfs::FilePtr> result;
     for (const auto &pcapName: pcapPaths) {
         if (boost::filesystem::extension(pcapName) == ".pcap") {
-            result.emplace_back(std::make_shared<pcapfs::PcapFile>());
-            result.back()->setFilename(pcapName.string());
-            result.back()->setFilesizeRaw(boost::filesystem::file_size(pcapName));
+            std::shared_ptr<PcapFile> pcapFile = std::make_shared<pcapfs::PcapFile>();
+            pcapFile->setFilename(pcapName.string());
+            pcapFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
+            pcapFile->setFiletype("pcap");
+            result.emplace_back(pcapFile);
         } else if (boost::filesystem::extension(pcapName) == ".pcapng") {
-            throw pcapfs::PcapFsException("pcapng is currently not supported");
+            std::shared_ptr<PcapNgFile> pcapngFile = std::make_shared<pcapfs::PcapNgFile>();
+            pcapngFile->setFilename(pcapName.string());
+            pcapngFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
+            pcapngFile->setFiletype("pcapng");
+            pcapngFile->parsePacketOffsets();
+            result.emplace_back(pcapngFile);
         }
     }
     return result;
