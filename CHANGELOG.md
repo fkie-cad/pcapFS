@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 - Add support for PCAPNG files
+- Support TLS decryption with key material which is embedded in PCAPNG files
 
 ## [0.4.0]
 ### Fixed

@@ -47,7 +47,7 @@ size_t pcapfs::CaptureFile::read(uint64_t startOffset, size_t length, const Inde
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths pcapPaths) {
+std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths pcapPaths, Index &idx) {
     std::vector<pcapfs::FilePtr> result;
     for (const auto &pcapName: pcapPaths) {
         if (boost::filesystem::extension(pcapName) == ".pcap") {
@@ -61,7 +61,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths 
             pcapngFile->setFilename(pcapName.string());
             pcapngFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
             pcapngFile->setFiletype("pcapng");
-            pcapngFile->parsePacketOffsets();
+            pcapngFile->parsePacketOffsets(idx);
             result.emplace_back(pcapngFile);
         }
     }

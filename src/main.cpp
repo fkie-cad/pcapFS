@@ -114,7 +114,7 @@ int main(int argc, const char *argv[]) {
     index.setCurrentWorkingDirectory(boost::filesystem::current_path().string());
     std::vector<pcapfs::FilePtr> pcapFiles(0);
     try {
-        pcapFiles = pcapfs::PcapFile::createFromPaths(config.pcaps);
+        pcapFiles = pcapfs::CaptureFile::createFromPaths(config.pcaps, index);
     } catch (const pcapfs::PcapFsException &err) {
         std::cerr << "Error: " << err.what() << std::endl;
         return 2;

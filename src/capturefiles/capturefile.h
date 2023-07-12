@@ -22,7 +22,7 @@ namespace pcapfs {
 
         bool showFile() override { return false; };
 
-        static std::vector<FilePtr> createFromPaths(pcapfs::Paths pcapPaths);
+        static std::vector<FilePtr> createFromPaths(pcapfs::Paths pcapPaths, Index &idx);
 
         std::shared_ptr<pcpp::IFileReaderDevice> getReader();
 

@@ -39,41 +39,51 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
                 while(infile.get(elem)) {
                     keyPtr->rsaPrivateKey.push_back(elem);
                 }
+
                 keyPtr->setFiletype("sslkey");
+                resultVector.push_back(keyPtr);
 
             } else {
-
-                std::vector<std::string> splitInput;
-                boost::split(splitInput, line, boost::is_any_of(" "));
-                //TODO: check this before?
-                if (splitInput.empty()) {
-                    LOG_ERROR << "empty key file!";
-                    continue;
-                }
-                if (splitInput.at(0) == CLIENT_RANDOM_STRING) {
-                    try {
-                        keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
-                        keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
-                        keyPtr->setFiletype("sslkey");
-                    } catch (std::out_of_range &e) {
-                        LOG_ERROR << "invalid key file format of " << keyFile.string();
-                        continue;
-                    }
-                } else if (splitInput.at(0) == RSA_STRING) {
-                    try {
-                        keyPtr->rsaIdentifier = utils::hexStringToBytes(splitInput.at(1));
-                        keyPtr->preMasterSecret = utils::hexStringToBytes(splitInput.at(2));
-                        keyPtr->setFiletype("sslkey");
-                    } catch (std::out_of_range &e) {
-                        LOG_ERROR << "invalid key file format of " << keyFile.string();
-                        continue;
-                    }
-                }
+                keyPtr = extractKeyContent(line);
+                if (keyPtr)
+                    resultVector.push_back(keyPtr);
             }
-            resultVector.push_back(keyPtr);
         }
     }
     return resultVector;
+}
+
+
+std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::extractKeyContent(const std::string &line) {
+    std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
+    std::vector<std::string> splitInput;
+    boost::split(splitInput, line, boost::is_any_of(" "));
+    //TODO: check this before?
+    if (splitInput.empty()) {
+        LOG_ERROR << "empty key file!";
+        return nullptr;
+    }
+    if (splitInput.at(0) == CLIENT_RANDOM_STRING) {
+        try {
+            keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
+            keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
+            keyPtr->setFiletype("sslkey");
+        } catch (std::out_of_range &e) {
+            LOG_ERROR << "invalid key file format of ssl key file";
+            return nullptr;
+        }
+    } else if (splitInput.at(0) == RSA_STRING) {
+        try {
+            keyPtr->rsaIdentifier = utils::hexStringToBytes(splitInput.at(1));
+            keyPtr->preMasterSecret = utils::hexStringToBytes(splitInput.at(2));
+            keyPtr->setFiletype("sslkey");
+        } catch (std::out_of_range &e) {
+            LOG_ERROR << "invalid key file format of ssl key file";
+            return nullptr;
+        }
+    }
+
+    return keyPtr;
 }
 
 
