@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Add support for PCAPNG files
 
 ## [0.4.0]
 ### Fixed

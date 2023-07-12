@@ -6,17 +6,17 @@ While there are already several tools out there which are able to extract data f
 features that make it different from these tools—most notably:
 
 - fast and direct access to the payload (i.e. without prior extraction)
-- support for multi/split PCAPs
+- support for multi/split PCAP and PCAPNG files
 - almost arbitrary sortable virtual directory hierarchy
 - on the fly decoding and decrypting
 
-Instead of extracting the payload (i.e. copying the data to disk), pcapFS provides direct access into the PCAP files.
+Instead of extracting the payload (i.e. copying the data to disk), pcapFS provides direct access into the PCAP/PCAPNG files.
 To speed the access up, an index is created when a PCAP is mounted for the first time. This takes almost the same time
 as opening a PCAP with Wireshark. After the index is created, we can use it for all further operations. Moreover, the
 index can be used to mount the PCAP any time later making the data available almost instantly.
 
 # Protocols and Decoders
-In pcapFS each protocol and decoder is implemented as a *virtual file*. These virtual files store references into other virtual files or directly into the PCAP, which are used to read their data. Currently the following protocols and decoders are supported:
+In pcapFS each protocol and decoder is implemented as a *virtual file*. These virtual files store references into other virtual files or directly into the PCAP/PCAPNG file, which are used to read their data. Currently the following protocols and decoders are supported:
 
 - raw TCP and UDP
 - HTTP 1.1
@@ -78,7 +78,7 @@ If you don't want your index to be written to disk, use the `-m` or `--in-memory
 the index which, of course, means that the index has to be rebuilt the next time you want to mount the PCAP.
 
 ## Mounting Multiple/Split PCAPs
-pcapFS lets you mount multiple PCAPs at the same time. The mount point will contain the payload of all PCAPs as if
+pcapFS lets you mount multiple PCAP/PCAPNG files at the same time. The mount point will contain the payload of all PCAPs as if
 only one PCAP would have been mounted. It makes no difference if the PCAPs you mount are completely unrelated or if
 you are providing a very long network capture split into several PCAPs. Note that conversations spanning over two or
 more PCAPs are entirely supported by pcapFS, i.e. no prior merging of PCAPs is required in order to extract your long
