@@ -13,20 +13,20 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 
 
 class TestBasicFunctionality:
-    def test_pcap_gets_mounted(self, test_pcap):
-        with mount_pcap(test_pcap) as mountpoint:
+    def test_pcap_gets_mounted(self, testpcap):
+        with mount_pcap(testpcap) as mountpoint:
             assert os.path.ismount(mountpoint)
 
-    def test_mount_point_is_not_empty(self, test_pcap):
-        with mount_pcap(test_pcap) as mountpoint:
+    def test_mount_point_is_not_empty(self, testpcap):
+        with mount_pcap(testpcap) as mountpoint:
             assert len(os.listdir(mountpoint)) > 0
 
-    def test_mount_point_contains_all_directories(self, test_pcap):
-        with mount_pcap(test_pcap) as mountpoint:
+    def test_mount_point_contains_all_directories(self, testpcap):
+        with mount_pcap(testpcap) as mountpoint:
             assert os.listdir(mountpoint) == ["http", "ssl", "tcp"]
 
-    def test_mount_point_contains_all_files(self, test_pcap, expected_files):
-        with mount_pcap(test_pcap) as mountpoint:
+    def test_mount_point_contains_all_files(self, testpcap, expected_files):
+        with mount_pcap(testpcap) as mountpoint:
             files = list()
             for d in ["http", "ssl", "tcp"]:
                 files.extend(
@@ -36,7 +36,7 @@ class TestBasicFunctionality:
 
 
 class TestSortByOption:
-    def test_src_port(self, test_pcap):
+    def test_src_port(self, testpcap):
         expected_files = (
             "12345/0-131_tcp9",
             "443/0-1838_SSL",
@@ -50,23 +50,23 @@ class TestSortByOption:
             "52240/8-308_png",
             "54321/0-139_tcp10",
         )
-        with mount_pcap(test_pcap, params=["--sortby=dstPort"]) as mountpoint:
+        with mount_pcap(testpcap, params=["--sortby=dstPort"]) as mountpoint:
             assert get_file_list(mountpoint) == sorted(expected_files)
 
 
 class TestSsl:
-    def test_with_single_ssl_key_file(self, test_pcap, expected_files_with_ssl):
+    def test_with_single_ssl_key_file(self, testpcap, expected_files_with_ssl):
         with mount_pcap(
-            test_pcap, params=["-k", "{here}/keyfiles/ssl.key".format(here=HERE)]
+            testpcap, params=["-k", "{here}/keyfiles/ssl.key".format(here=HERE)]
         ) as mountpoint:
             assert get_file_list(mountpoint) == expected_files_with_ssl
 
 
 class TestSslFileReadRaw:
     def test_read_raw_ssl_rc4_full_appdata(
-        self, test_pcap, content_tls_appdata_all_cipher
+        self, testpcap, content_tls_appdata_all_cipher
     ):
-        with mount_pcap(test_pcap) as mountpoint:
+        with mount_pcap(testpcap) as mountpoint:
             files = get_file_list(mountpoint)
             assert "ssl/0-1838_SSL" in files
             with open(os.path.join(mountpoint, "ssl/0-1838_SSL"), "rb") as f:
@@ -78,10 +78,10 @@ class TestSslFileReadRaw:
 
 class TestSslFileReadProcessed:
     def test_read_processed_ssl_rc4_full_appdata(
-        self, test_pcap, content_tls_appdata_all_plain
+        self, testpcap, content_tls_appdata_all_plain
     ):
         with mount_pcap(
-            test_pcap,
+            testpcap,
             params=["--show-all", "-k", "{here}/keyfiles/ssl.key".format(here=HERE)],
         ) as mountpoint:
             files = get_file_list(mountpoint)
@@ -93,10 +93,10 @@ class TestSslFileReadProcessed:
                 assert hexdata == content_tls_appdata_all_plain
 
     def test_read_processed_ssl_as_http(
-        self, test_pcap, content_tls_appdata_all_plain_response_body_only
+        self, testpcap, content_tls_appdata_all_plain_response_body_only
     ):
         with mount_pcap(
-            test_pcap,
+            testpcap,
             params=["--show-all", "-k", "{here}/keyfiles/ssl.key".format(here=HERE)],
         ) as mountpoint:
             files = get_file_list(mountpoint)
@@ -109,29 +109,29 @@ class TestSslFileReadProcessed:
 
 
 class TestConfigFile:
-    def test_with_a_single_key_file(self, test_pcap, expected_files_with_xor):
+    def test_with_a_single_key_file(self, testpcap, expected_files_with_xor):
         with mount_pcap(
-            test_pcap,
+            testpcap,
             params=["-c", "{here}/configs/xor-with-key-file.toml".format(here=HERE)],
         ) as mountpoint:
             assert get_file_list(mountpoint) == expected_files_with_xor
 
 
 class TestIndex:
-    def test_that_a_nonexisting_index_file_gets_written(self, test_pcap):
+    def test_that_a_nonexisting_index_file_gets_written(self, testpcap):
         with empty_index_file() as index:
             with mount_pcap(
-                test_pcap,
+                testpcap,
                 inmem=False,
                 params=["--index={idx}".format(idx=index), "--no-mount"],
             ):
                 assert os.path.isfile(index)
                 assert os.path.getsize(index) > 0
 
-    def test_that_an_empty_index_file_gets_overwritten(self, test_pcap):
+    def test_that_an_empty_index_file_gets_overwritten(self, testpcap):
         with empty_index_file(create=True) as index:
             with mount_pcap(
-                test_pcap,
+                testpcap,
                 inmem=False,
                 params=["--index={idx}".format(idx=index), "--no-mount"],
             ):
@@ -186,11 +186,13 @@ def generate_random_string(length):
     return "".join(random.choice(string.ascii_lowercase) for _ in range(length))
 
 
+"""
 @pytest.fixture
 def test_pcap():
     return os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "system-tests.pcap"
     )
+"""
 
 
 @pytest.fixture

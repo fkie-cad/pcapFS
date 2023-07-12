@@ -35,4 +35,7 @@ set +u
 source "${venv}/bin/activate"
 set -u
 
-py.test "${here}/pcapfs-system-tests.py" -vv
+echo -e "\033[1;33mTesting pcap file...\033[0m"
+py.test "${here}/pcapfs-system-tests.py" -vv --testpcap system-tests.pcap
+echo -e "\n\n\033[1;33mTesting pcapng file...\033[0m"
+py.test "${here}/pcapfs-system-tests.py" -vv --testpcap system-tests.pcapng
