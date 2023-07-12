@@ -86,7 +86,6 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
     std::vector<pcapfs::FilePtr> result{};
     UdpIndexerState state{};
-    //PcapPtr pcapPtr;
     std::shared_ptr<CaptureFile> pcapPtr;
 
     for (auto &pcap: pcapFiles) {

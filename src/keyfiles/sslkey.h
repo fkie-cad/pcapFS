@@ -21,6 +21,7 @@ namespace pcapfs {
         static FilePtr create() { return std::make_shared<SSLKeyFile>(); };
 
         static std::vector<FilePtr> parseCandidates(const Paths &keyFiles);
+
         static std::shared_ptr<SSLKeyFile> extractKeyContent(const std::string &line);
 
         static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(const Bytes &keyMaterial);

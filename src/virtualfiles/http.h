@@ -16,7 +16,6 @@ namespace pcapfs {
     public:
         static FilePtr create() { return std::make_shared<HttpFile>(); };
 
-        //TODO: make this virtual in superclass?
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;

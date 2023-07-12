@@ -46,7 +46,6 @@ namespace pcapfs {
 
         virtual ~File() = default;
 
-        //TODO: decide on arguments to read function!
         virtual size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) = 0;
 
         virtual bool showFile() = 0;
@@ -91,7 +90,6 @@ namespace pcapfs {
 
         bool meetsDecodeMapCriteria(const std::string &file);
 
-        //std::bitset<11> flags;
         std::bitset<12> flags;
 
         std::vector<OffsetWithTime> connectionBreaks; //TODO: are they good here?
