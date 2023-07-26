@@ -211,7 +211,7 @@ along with the protocol they origin from:
 | srcPort  | tcp, udp | Source port |
 | dstPort  | tcp, udp | Destination port |
 | domain   | http, ssl     | The domain parsed from the HTTP Host header and SNI|
-| path     | http     | The path parsed from a HTTP request |
+| uri     | http     | The requested URI parsed from the HTTP request|
 
 A protocol implemented in pcapFS can define its own properties based on values it parsed. Therefore, as more and more
 protocols are added to pcapFS, you will have very fine grained possibilities to build your directory hierarchy.

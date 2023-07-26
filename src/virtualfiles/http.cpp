@@ -1,4 +1,7 @@
 #include "http.h"
+#include "../filefactory.h"
+#include "../logging.h"
+#include "cobaltstrike/cs_manager.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/iostreams/copy.hpp>
@@ -9,16 +12,13 @@
 #include <pcapplusplus/RawPacket.h>
 #include <zlib.h>
 
-#include "../filefactory.h"
-#include "../logging.h"
-#include "cobaltstrike/cs_manager.h"
 
 /*
  * HTTP Parsing function.
  * Is always called for a file that is classified as HTTP.
  */
 std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
-    Bytes data = filePtr->getBuffer();
+    const Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
     if(!isHttpTraffic(data)){
@@ -26,17 +26,17 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     }
 
     size_t size = 0;
-    headerMap header;
     std::string requestedFilename;
     std::string requestedHost;
     std::string requestedUri;
     bool prevWasRequest = false;
-    size_t numElements = filePtr->connectionBreaks.size();
+    const size_t numElements = filePtr->connectionBreaks.size();
+    pcpp::Packet tmpPacket;
 
     LOG_TRACE << "HTTP parser, number of elements (connection breaks): " << numElements;
 
     for (unsigned int i = 0; i < numElements; ++i) {
-        uint64_t &offset = filePtr->connectionBreaks.at(i).first;
+        const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
@@ -57,50 +57,36 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             requestedUri = "";
         }
 
-        //TODO: create smaller functions for this big function!!
         if (isHTTPRequest(data, offset, size)) {
-            size_t firstLine = getRequestLineLength(data, offset, size);
-            size_t headerLength = parseHeaderFields(data, header, offset + firstLine, size - firstLine);
-            if (headerLength == 0) {
+            LOG_TRACE << "parsing http request";
+            const pcpp::HttpRequestLayer requestLayer((uint8_t *) (data.data() + offset), size, nullptr, &tmpPacket);
+            const size_t headerLength = requestLayer.getHeaderLen();
+            if (headerLength == 0 || headerLength > size) {
+                LOG_WARNING << "encountered invalid http header length, we skip that.";
                 continue;
             }
             prevWasRequest = true;
 
             //create header of http request
             fragmentHeader.start = offset;
-            fragmentHeader.length = firstLine + headerLength;
+            fragmentHeader.length = headerLength;
             resultHeaderPtr->fragments.push_back(fragmentHeader);
-            resultHeaderPtr->setOffsetType(filePtr->getFiletype());
-
             resultHeaderPtr->setFilesizeRaw(fragmentHeader.length);
-            resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
 
-            resultHeaderPtr->setFiletype("http");
-            requestedHost = header["host"];
+            const pcpp::HeaderField* hostField = requestLayer.getFieldByName("Host");
+            if (hostField)
+                requestedHost = hostField->getFieldValue();
 
-            requestedUri = getRequestUri(data, offset, size);
-            requestedFilename = requestedHost + requestedUri;
-            requestedFilename = uriToFilename(requestedFilename);
+            const pcpp::HttpRequestFirstLine* firstLine = requestLayer.getFirstLine();
+            requestedUri = firstLine->getUri();
+            requestedFilename = uriToFilename(requestedUri);
 
             LOG_TRACE << "requestedFilename: " << requestedFilename
             		<< " - requestedHost: " << requestedHost
         			<< " - requestedUri: " << requestedUri;
-
             LOG_TRACE << "fileSizeRaw: " << fragmentHeader.length;
 
-            resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-
-            const std::string requestMethod = requestMethodToString(getRequestMethod(data, offset, size));
-
-            if ((!config.noCS && requestMethod == "GET" && header.find("cookie") != header.end() && !idx.getCandidatesOfType("cskey").empty() &&
-                (config.getDecodeMapFor("cobaltstrike").empty() || filePtr->meetsDecodeMapCriteria("cobaltstrike"))) ||
-                (config.noCS && filePtr->meetsDecodeMapCriteria("cobaltstrike"))) {
-                // when no decode config for cobaltstrike is supplied but a cobaltstrike key, we check all HTTP GET cookies
-                // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config
-                // if the flag --no-cs is set we handle the cookie nevertheless if the tcp file meets a given config
-                CobaltStrikeManager::getInstance().handleHttpGet(header["cookie"], filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"),
-                                                                filePtr->getProperty("srcIP"), idx);
-            }
+            const std::string requestMethod = requestMethodToString(firstLine->getMethod());
 
             if (requestedFilename != "") {
                 resultHeaderPtr->setFilename(requestMethod + "-" + requestedFilename);
@@ -108,128 +94,109 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 resultHeaderPtr->setFilename(requestMethod);
             }
 
-            resultHeaderPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-            resultHeaderPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-            resultHeaderPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-            resultHeaderPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+            resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+            resultHeaderPtr->fillFileProperties(filePtr, true);
             resultHeaderPtr->setProperty("domain", requestedHost);
             resultHeaderPtr->setProperty("uri", requestedUri);
-            resultHeaderPtr->setProperty("protocol", "http");
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
-            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                resultHeaderPtr->flags.set(pcapfs::flags::MISSING_DATA);
-                LOG_DEBUG << "HTTP missing data.";
-            }
+
             resultVector.push_back(resultHeaderPtr);
 
-            LOG_TRACE << "size: " << size << " - firstLine: " << firstLine << " - headerLength: " << headerLength;
+            if ((!config.noCS && requestMethod == "GET" && requestLayer.getFieldByName("Cookie") && !idx.getCandidatesOfType("cskey").empty() &&
+                (config.getDecodeMapFor("cobaltstrike").empty() || filePtr->meetsDecodeMapCriteria("cobaltstrike"))) ||
+                (config.noCS && filePtr->meetsDecodeMapCriteria("cobaltstrike"))) {
+                // when no decode config for cobaltstrike is supplied but a cobaltstrike key, we check all HTTP GET cookies;
+                // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config;
+                // if the flag --no-cs is set we handle the cookie nevertheless if the tcp file meets a given config
+                CobaltStrikeManager::getInstance().handleHttpGet(requestLayer.getFieldByName("Cookie")->getFieldValue(), filePtr->getProperty("dstIP"),
+                                                                    filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP"), idx);
+            }
 
-            long diff = size - firstLine - headerLength;
-            if (diff <= 0) {
+            LOG_TRACE << "size: " << size << " - headerLength: " << headerLength;
+            // when there is no http request body, we continue
+            if (size - headerLength == 0) {
                 continue;
             }
 
             //create http request body
-            fragment.start = offset + firstLine + headerLength;
-            fragment.length = size - firstLine - headerLength;
-
+            LOG_TRACE << "parsing http request body";
+            fragment.start = offset + headerLength;
+            fragment.length = size - headerLength;
             resultPtr->fragments.push_back(fragment);
             resultPtr->setFilesizeRaw(fragment.length);
 
-            resultPtr->setOffsetType(filePtr->getFiletype());
-            resultPtr->setFiletype("http");
             if (requestedFilename != "") {
                 resultPtr->setFilename(requestMethod + "-" + requestedFilename);
             } else {
                 resultPtr->setFilename(requestMethod);
             }
+
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-            resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-            resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-            resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-            resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+            resultPtr->fillFileProperties(filePtr, true);
             resultPtr->setProperty("domain", requestedHost);
             resultPtr->setProperty("uri", requestedUri);
-            resultPtr->setProperty("protocol", "http");
-            //TODO: add compression here
-            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
-            }
 
-            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
             resultVector.push_back(resultPtr);
 
         } else if (isHTTPResponse(data, offset, size)) {
-            size_t firstLine = getResponseLineLength(data, offset, size);
-            size_t headerLength = parseHeaderFields(data, header, offset + firstLine, size - firstLine);
-            if (headerLength == 0) {
+            LOG_TRACE << "parsing http response";
+
+            const pcpp::HttpResponseLayer responseLayer((uint8_t *) (data.data() + offset), size, nullptr, &tmpPacket);
+            const size_t headerLength = responseLayer.getHeaderLen();
+            if (headerLength == 0 || headerLength > size) {
+                LOG_WARNING << "encountered invalid http header length, we skip that.";
                 continue;
             }
 
             //create header of http response
             fragmentHeader.start = offset;
-            fragmentHeader.length = firstLine + headerLength;
+            fragmentHeader.length = headerLength;
             resultHeaderPtr->fragments.push_back(fragmentHeader);
-            resultHeaderPtr->setOffsetType(filePtr->getFiletype());
-
             resultHeaderPtr->setFilesizeRaw(fragmentHeader.length);
-            resultHeaderPtr->setFilesizeProcessed(resultHeaderPtr->getFilesizeRaw());
-
-            resultHeaderPtr->setFiletype("http");
             resultHeaderPtr->setFilename(requestedFilename);
-            resultHeaderPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-            resultHeaderPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-            resultHeaderPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-            resultHeaderPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+            resultHeaderPtr->fillFileProperties(filePtr, false);
             resultHeaderPtr->setProperty("domain", requestedHost);
             resultHeaderPtr->setProperty("uri", requestedUri);
-            resultHeaderPtr->setProperty("protocol", "http");
-            resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
-            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                resultHeaderPtr->flags.set(pcapfs::flags::MISSING_DATA);
-            }
+
             resultVector.push_back(resultHeaderPtr);
 
-            long diff = size - firstLine - headerLength;
-            if (diff <= 0) {
+            // when there is no http response body, we continue
+            if (size - headerLength == 0) {
                 continue;
             }
 
             //create http response body
-            fragment.start = offset + firstLine + headerLength;
-            fragment.length = size - firstLine - headerLength;
-
+            LOG_TRACE << "parsing http response body";
+            fragment.start = offset + headerLength;
+            fragment.length = size - headerLength;
             resultPtr->fragments.push_back(fragment);
             resultPtr->setFilesizeRaw(fragment.length);
-            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-
-            resultPtr->setOffsetType(filePtr->getFiletype());
-            resultPtr->setFiletype("http");
             resultPtr->setFilename(requestedFilename);
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-            resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-            resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-            resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-            resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            resultPtr->fillFileProperties(filePtr, false);
             resultPtr->setProperty("domain", requestedHost);
             resultPtr->setProperty("uri", requestedUri);
-            resultPtr->setProperty("protocol", "http");
-            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
-            }
 
-            if (header["transfer-encoding"] == "chunked") {
+            if (responseLayer.getFieldByName("transfer-encoding") &&
+                responseLayer.getFieldByName("transfer-encoding")->getFieldValue() == "chunked") {
                 resultPtr->flags.set(pcapfs::flags::CHUNKED);
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
+                LOG_TRACE << "detected chunked content";
             }
-            if (header["content-encoding"] == "gzip") {
-                resultPtr->flags.set(pcapfs::flags::COMPRESSED_GZIP);
-                resultPtr->flags.set(pcapfs::flags::PROCESSED);
-            }
-            if (header["content-encoding"] == "deflate") {
-                resultPtr->flags.set(pcapfs::flags::COMPRESSED_DEFLATE);
-                resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            if (responseLayer.getFieldByName("content-encoding")) {
+                const std::string contentEncoding = responseLayer.getFieldByName("content-encoding")->getFieldValue();
+                if (contentEncoding == "gzip") {
+                    resultPtr->flags.set(pcapfs::flags::COMPRESSED_GZIP);
+                    resultPtr->flags.set(pcapfs::flags::PROCESSED);
+                    LOG_TRACE << "detected gzip content";
+                }
+                else if (contentEncoding == "deflate") {
+                    resultPtr->flags.set(pcapfs::flags::COMPRESSED_DEFLATE);
+                    resultPtr->flags.set(pcapfs::flags::PROCESSED);
+                    LOG_TRACE << "detected deflate content";
+                }
             }
 
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
@@ -240,7 +207,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             prevWasRequest = false;
 
             resultVector.push_back(resultPtr);
-        }  else if(prevWasRequest && config.allowHTTP09 == true) {
+
+        } else if(prevWasRequest && config.allowHTTP09) {
 
             if (size == 0) {
                 continue;
@@ -249,27 +217,16 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             //create http response body
             fragment.start = offset;
             fragment.length = size;
-
             resultPtr->fragments.push_back(fragment);
             resultPtr->setFilesizeRaw(fragment.length);
-            resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-
-            resultPtr->setOffsetType(filePtr->getFiletype());
-            resultPtr->setFiletype("http");
             resultPtr->setFilename(requestedFilename);
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
-            resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-            resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-            resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-            resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            resultPtr->fillFileProperties(filePtr, false);
             resultPtr->setProperty("domain", requestedHost);
             resultPtr->setProperty("uri", requestedUri);
-            resultPtr->setProperty("protocol", "http");
-            if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
-                resultPtr->flags.set(pcapfs::flags::MISSING_DATA);
-            }
 
-            if (header["transfer-encoding"] == "chunked") {
+            // HTTP0.9 has no compression
+            /**if (header["transfer-encoding"] == "chunked") {
                 resultPtr->flags.set(pcapfs::flags::CHUNKED);
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
             }
@@ -280,10 +237,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             if (header["content-encoding"] == "deflate") {
                 resultPtr->flags.set(pcapfs::flags::COMPRESSED_DEFLATE);
                 resultPtr->flags.set(pcapfs::flags::PROCESSED);
-            }
+            }**/
 
             resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
-
             LOG_TRACE << "calculateProcessedSize got: " << resultPtr->getFilesizeProcessed();
             if (resultPtr->getFilesizeProcessed() == 0) {
                 continue;
@@ -293,6 +249,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultVector.push_back(resultPtr);
         }
     }
+
     return resultVector;
 }
 
@@ -320,8 +277,7 @@ int pcapfs::HttpFile::readRaw(uint64_t startOffset, size_t length, const Index &
 
 
 int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData;
-    rawData.resize(filesizeRaw + 1);
+    Bytes rawData(filesizeRaw + 1);
     uint64_t size;
 
     if (flags.test(pcapfs::flags::CHUNKED)) {
@@ -346,10 +302,9 @@ int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index 
         decr_size = bio::copy(out, decompressed);
     } catch (bio::gzip_error &e) {
         LOG_WARNING << "Gzip Error: " << e.what();
-        //return read_compressed(file, pcapif, buf, size, start_offset);
     }
 
-    int readCount = (int) std::min((size_t) decr_size - startOffset, length);
+    const int readCount = (int) std::min((size_t) decr_size - startOffset, length);
     if (readCount <= 0) {
         return 0;
     }
@@ -364,11 +319,10 @@ int pcapfs::HttpFile::readGzip(uint64_t startOffset, size_t length, const Index 
 
 
 int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
-    Bytes data;
-    data.resize(filesizeRaw);
+    Bytes data(filesizeRaw);
 
     if (flags.test(pcapfs::flags::CHUNKED)) {
-        int chunkedSize = readChunked(0, filesizeRaw, idx, (char *) data.data());
+        const int chunkedSize = readChunked(0, filesizeRaw, idx, (char *) data.data());
         if (chunkedSize == 0) {
             return 0;
         }
@@ -376,10 +330,6 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
     } else {
         readRaw(0, filesizeRaw, idx, (char *) data.data());
     }
-
-    /*
-     * Flag for mac size could be inserted here
-     */
 
     if (flags.test(pcapfs::flags::COMPRESSED_GZIP)) {
         namespace bio = boost::iostreams;
@@ -452,7 +402,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
             delete[] inflated;
             return 0;
         }
-        ulong infl_size = outlen - zs.avail_out;
+        const ulong infl_size = outlen - zs.avail_out;
         delete[] inflated;
         return infl_size;
     }
@@ -461,13 +411,10 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
 
 int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData;
-    rawData.resize(filesizeRaw);
+    Bytes rawData(filesizeRaw);
     readRaw(0, filesizeRaw, idx, (char *) rawData.data());
 
-    Bytes out_buf;
-    out_buf.resize(filesizeRaw);
-
+    Bytes out_buf(filesizeRaw);
     size_t raw_pos = 0;
     size_t out_pos = 0;
 
@@ -478,7 +425,7 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
             break;
         }
 
-        unsigned long chunk_size = strtoul((char *) rawData.data() + raw_pos, &hex_end, 16);
+        const unsigned long chunk_size = strtoul((char *) rawData.data() + raw_pos, &hex_end, 16);
         //pass whitespaces \x20
         while (hex_end[0] == ' ') {
             ++hex_end;
@@ -514,7 +461,7 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
         return 0;
     }
 
-    size_t read_count = std::min((size_t) out_pos - startOffset, length);
+    const size_t read_count = std::min((size_t) out_pos - startOffset, length);
     if (read_count == 0) {
         return 0;
     }
@@ -524,8 +471,7 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
 
 
 int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData;
-    rawData.resize(filesizeRaw + 1);
+    Bytes rawData(filesizeRaw + 1);
     uint64_t size;
 
     if (flags.test(pcapfs::flags::CHUNKED)) {
@@ -588,7 +534,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
         return 0;
     }
 
-    ulong infl_size = outlen - zs.avail_out;
+    const ulong infl_size = outlen - zs.avail_out;
     if (buf == nullptr) {
         LOG_ERROR << "no buffer specified in readDeflate!";
         delete[] inflated;
@@ -596,7 +542,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     }
 
     //size_t read_count = std::min((size_t) infl_size - startOffset, length);
-    int read_count = std::min(infl_size - startOffset, length);
+    const int read_count = std::min(infl_size - startOffset, length);
     if (read_count <= 0) {
         delete[] inflated;
         return 0;
@@ -610,8 +556,8 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
 bool pcapfs::HttpFile::isHttpTraffic(const Bytes &data) {
     if (data.size() >= 7) {
-        std::string str(data.begin(), data.begin()+7);
-        for (auto &s : httpStrings) {
+        const std::string str(data.begin(), data.begin()+7);
+        for (auto &s : httpMethods) {
             if (str.compare(0, s.length(), s) == 0)
                 return true;
         }
@@ -620,34 +566,23 @@ bool pcapfs::HttpFile::isHttpTraffic(const Bytes &data) {
 }
 
 
-//functions for HTTP parsing
 bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, uint64_t length) {
     if (length == 0) {
         length = data.size();
     }
-    LOG_TRACE << "isHTTPRequest, early bird call: " << (char *) data.data() + startOffset;
-    pcpp::HttpRequestLayer::HttpMethod method = pcpp::HttpRequestFirstLine::parseMethod(
-            (char *) data.data() + startOffset, length);
-    if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
+    LOG_TRACE << "checking isHTTPRequest";
+
+    pcpp::Packet tmpPacket;
+    const pcpp::HttpRequestLayer requestLayer((uint8_t *) (data.data() + startOffset), length, nullptr, &tmpPacket);
+    const pcpp::HttpRequestFirstLine* firstLine = requestLayer.getFirstLine();
+    if(firstLine->getMethod() == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown ||
+        firstLine->getVersion() == pcpp::HttpVersion::HttpVersionUnknown)
         return false;
-    }
-    if (!usesValidHTTPVersion(data, startOffset, length)) {
-        return false;
-    }
     return true;
 }
 
 
-pcpp::HttpRequestLayer::HttpMethod
-pcapfs::HttpFile::getRequestMethod(const Bytes &data, uint64_t startOffset, size_t length) {
-    if (length == 0) {
-        length = data.size();
-    }
-    return pcpp::HttpRequestFirstLine::parseMethod((char *) data.data() + startOffset, length);
-}
-
-
-std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::HttpMethod method) {
+std::string const pcapfs::HttpFile::requestMethodToString(const pcpp::HttpRequestLayer::HttpMethod &method) {
     const std::string methodEnumToString[9] = {
             "GET",
             "HEAD",
@@ -661,83 +596,14 @@ std::string pcapfs::HttpFile::requestMethodToString(pcpp::HttpRequestLayer::Http
     };
 
     if (method == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown) {
-        LOG_ERROR << "not a valid http method!";
+        LOG_ERROR << "caught an invalid http method";
         return "UNKNOWN";
     }
     return methodEnumToString[method];
 }
 
 
-bool pcapfs::HttpFile::usesValidHTTPVersion(const pcapfs::Bytes &data, uint64_t startOffset, size_t) {
-    char *dataPtr = (char *) (data.data() + startOffset);
-    char *verPos = strstr(dataPtr, "HTTP/");
-    bool ret_val;
-    if (verPos == nullptr) {
-    	return false;
-    }
-
-    verPos += 5;
-    switch (verPos[0]) {
-        case '0':
-            if (verPos[1] == '.' && verPos[2] == '9') {
-            	ret_val = true;
-            	break;
-    		} else {
-            	ret_val = false;
-            	break;
-            }
-        case '1':
-            if (verPos[1] == '.' && verPos[2] == '0') {
-            	ret_val = true;
-            	break;
-            } else if (verPos[1] == '.' && verPos[2] == '1') {
-            	ret_val = true;
-            	break;
-            } else {
-            	ret_val = false;
-            	break;
-            }
-        default:
-            LOG_DEBUG << "Unsupported HTTP version " << (verPos - 5);
-            ret_val = false;
-            break;
-    }
-    return ret_val;
-}
-
-
-off_t pcapfs::HttpFile::getRequestUriOffset(const Bytes &data, uint64_t startOffset, size_t length) {
-    if (length == 0) {
-        length = data.size();
-    }
-    return pcapfs::HttpFile::requestMethodToString(
-            pcapfs::HttpFile::getRequestMethod(data, startOffset, length)).length() + 1;
-}
-
-
-off_t pcapfs::HttpFile::getRequestVersionOffset(const Bytes &data, uint64_t startOffset, size_t length) {
-    off_t uriOffset = getRequestUriOffset(data, startOffset, length);
-    char *dataPtr = (char *) (data.data() + startOffset + uriOffset);
-    char *verPos = strstr(dataPtr, " HTTP/");
-    if (verPos == nullptr) {
-        return 0;
-    }
-    return (verPos - dataPtr + uriOffset);
-}
-
-
-std::string pcapfs::HttpFile::getRequestUri(const Bytes &data, uint64_t startOffset, size_t length) {
-    off_t uriOffset = getRequestUriOffset(data, startOffset, length);
-    off_t versionOffset = getRequestVersionOffset(data, startOffset, length);
-    if (uriOffset >= versionOffset) {
-        return "";
-    }
-    std::string result(data.data() + startOffset + uriOffset, data.data() + startOffset + versionOffset);
-    return result;
-}
-
-
-std::string pcapfs::HttpFile::uriToFilename(const std::string &uri) {
+std::string const pcapfs::HttpFile::uriToFilename(const std::string &uri) {
     std::vector<std::string> split_questionmark;
     std::vector<std::string> split_slash;
     boost::split(split_questionmark, uri, [](char c) { return c == '?' || c == ' ' || c == ';'; });
@@ -746,123 +612,40 @@ std::string pcapfs::HttpFile::uriToFilename(const std::string &uri) {
 }
 
 
-size_t pcapfs::HttpFile::parseHeaderFields(const Bytes &data, pcapfs::headerMap &map, uint64_t startOffset,
-                                                  size_t length) {
-    char nameValueSeperator = ':';
-    map.clear();
-    size_t fieldSize = 0;
-    size_t fieldNameSize = 0;
-    size_t fieldValueSize = 0;
-    size_t offsetInHeader = 0;
-    bool isEndOfHeader = false;
-    char *fieldData = (char *) (data.data() + startOffset);
-
-    while (!isEndOfHeader and offsetInHeader < length) {
-        char *fieldEndPtr = (char *) memchr(fieldData, '\n', length - offsetInHeader);
-
-        if (fieldEndPtr == nullptr) {
-            LOG_ERROR << "could not find end of http header field!";
-            return 0;
-        } else
-            fieldSize = fieldEndPtr - fieldData + 1;
-
-        if ((*fieldData) == '\r' or *(fieldData) == '\n') {
-            offsetInHeader += 1;
-            isEndOfHeader = true;
-            if (*(fieldData + 1) == '\r' or *(fieldData + 1) == '\n') {
-                offsetInHeader += 1;
-            }
-            break;
-        } else {
-            isEndOfHeader = false;
-        }
-
-        char *fieldValuePtr = (char *) memchr(fieldData, nameValueSeperator, length - offsetInHeader);
-        // could not find the position of the separator, meaning field value position is unknown
-        if (fieldValuePtr == nullptr) {
-            LOG_ERROR << "could not find separator in HTTP header field!";
-            break;
-        } else {
-            fieldNameSize = fieldValuePtr - fieldData;
-            fieldValuePtr++;
-            while ((static_cast<size_t>(fieldValuePtr - fieldData) <= length - offsetInHeader)
-                   && *fieldValuePtr == ' ') {
-                fieldValuePtr++;
-            }
-        }
-
-        // reached the end of the packet and value start offset wasn't found
-        if ((size_t) (fieldValuePtr - fieldData) > (length - offsetInHeader)) {
-            LOG_ERROR << "could not find value in HTTP header field!";
-        } else {
-            //m_ValueOffsetInMessage = fieldValuePtr - (char*)m_TextBasedProtocolMessage->m_Data;
-            // couldn't find the end of the field, so assuming the field value length is from m_ValueOffsetInMessage until the end of the packet
-            fieldValueSize = fieldEndPtr - fieldValuePtr;
-            // if field ends with \r\n, decrease the value length by 1
-            if ((*(--fieldEndPtr)) == '\r') {
-                fieldValueSize--;
-            }
-        }
-
-        /*LOG_ERROR << "offsetin header is " << offsetInHeader << " field size was " << fieldSize << " fieldname length was "
-                                                                                                << fieldNameSize <<
-                  " field value size was " << fieldValueSize << " and still to read is " << (length - offsetInHeader);*/
-        std::string fieldName(fieldData, fieldData + fieldNameSize);
-        std::string fieldValue(fieldValuePtr, fieldValuePtr + fieldValueSize);
-
-        boost::algorithm::to_lower(fieldName);
-        map.insert({fieldName, fieldValue});
-        //LOG_ERROR << "found field " << fieldName << " with value " << fieldValue << " and length " << std::to_string(fieldValueSize);
-        offsetInHeader += fieldSize;
-        fieldData += fieldSize;
-    }
-
-    //add to for last CRLF
-    return offsetInHeader;
-}
-
-
-size_t pcapfs::HttpFile::getRequestLineLength(const Bytes &data, uint64_t startOffset, size_t length) {
-    if (length == 0) {
-        length = data.size();
-    }
-
-    //+9 for version number and +2 for CRNL
-    return pcapfs::HttpFile::getRequestVersionOffset(data, startOffset, length) + 11;
-}
-
-
 bool pcapfs::HttpFile::isHTTPResponse(const Bytes &data, uint64_t startOffset, size_t length) {
     if (length == 0) {
         length = data.size();
     }
-    if (getResponseStatusCode(data, startOffset, length) ==
-        pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown) {
-    	LOG_TRACE << "This is the content of isHTTPResponse: " << (char *) data.data() + startOffset;
+    LOG_TRACE << "checking isHTTPResponse";
+
+    pcpp::Packet tmpPacket;
+    const pcpp::HttpResponseLayer responseLayer((uint8_t *) (data.data() + startOffset), length, nullptr, &tmpPacket);
+    const pcpp::HttpResponseFirstLine* firstLine = responseLayer.getFirstLine();
+    if(firstLine->getStatusCode() == pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown ||
+        firstLine->getVersion() == pcpp::HttpVersionUnknown)
         return false;
-    }
-    if (!usesValidHTTPVersion(data, startOffset, length)) {
-        LOG_ERROR << "does not use valid HTTP in response check!";
-        return false;
-    }
     return true;
 }
 
 
-pcpp::HttpResponseLayer::HttpResponseStatusCode pcapfs::HttpFile::getResponseStatusCode(const Bytes &data,
-                                                                                               uint64_t startOffset,
-                                                                                               size_t length) {
-    return pcpp::HttpResponseFirstLine::parseStatusCode((char *) data.data() + startOffset, length);
-}
-
-
-size_t pcapfs::HttpFile::getResponseLineLength(const Bytes &data, uint64_t startOffset, size_t length) {
-    char *endOfFirstLine;
-
-    if ((endOfFirstLine = (char *) memchr((char *) data.data() + startOffset, '\n', length)) != nullptr) {
-        return (endOfFirstLine - (char *) (data.data() + startOffset) + 1);
+void pcapfs::HttpFile::fillFileProperties(const FilePtr &filePtr, bool isRequest) {
+    setOffsetType(filePtr->getFiletype());
+    setFilesizeProcessed(filesizeRaw);
+    setFiletype("http");
+    setProperty("protocol", "http");
+    if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
+        flags.set(pcapfs::flags::MISSING_DATA);
+    }
+    if (isRequest) {
+        setProperty("srcIP", filePtr->getProperty("srcIP"));
+        setProperty("dstIP", filePtr->getProperty("dstIP"));
+        setProperty("srcPort", filePtr->getProperty("srcPort"));
+        setProperty("dstPort", filePtr->getProperty("dstPort"));
     } else {
-        return 0;
+        setProperty("srcIP", filePtr->getProperty("dstIP"));
+        setProperty("dstIP", filePtr->getProperty("srcIP"));
+        setProperty("srcPort", filePtr->getProperty("dstPort"));
+        setProperty("dstPort", filePtr->getProperty("srcPort"));
     }
 }
 
