@@ -28,14 +28,12 @@ namespace pcapfs {
 
         size_t getOffsetFromLastBlock(size_t i) override;
         void parsePacketOffsets(Index &idx);
-        const std::vector<FilePtr> extractEmbeddedKeyFiles(const Bytes blockBody);
-
 
     private:
-        static bool registeredAtFactory;
+        const std::vector<FilePtr> extractEmbeddedKeyFiles(const Bytes blockBody);
 
-    protected:
         std::vector<size_t> packetOffsets;
+        static bool registeredAtFactory;
 
     };
 

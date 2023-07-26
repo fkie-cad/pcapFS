@@ -2,8 +2,8 @@
 #define PCAPFS_VIRTUAL_FILES_DNS_H
 
 #include <string>
-
 #include <pcapplusplus/DnsLayer.h>
+#include <nlohmann/json.hpp>
 
 #include "virtualfile.h"
 
@@ -15,12 +15,17 @@ namespace pcapfs {
         static FilePtr create() { return std::make_shared<DnsFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
-
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        size_t calculateProcessedSize(const Index &idx);
+    private:
+        std::string dnsClassToString(const pcpp::DnsClass dnsClass);
+        std::string dnsTypeToString(pcpp::DnsType type);
+        std::vector<nlohmann::json> parseDnsAnswersToJson(pcpp::DnsLayer &dnsLayer);
+        std::string parseDnsToJson(pcapfs::Bytes data);
 
-        static std::string getDataAsString(pcpp::DnsResource *resource);
+        std::string getDataAsString(pcpp::DnsResource *resource);
+
+        size_t calculateProcessedSize(const Index &idx);
 
     protected:
         static bool registeredAtFactory;

@@ -25,8 +25,25 @@ namespace pcapfs {
         static FilePtr create() { return std::make_shared<SslFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
-
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
+
+        void serialize(boost::archive::text_oarchive &archive) override;
+        void deserialize(boost::archive::text_iarchive &archive) override;
+
+        uint64_t getKeyIDinIndex() { return keyIDinIndex; };
+        std::string const getCipherSuite() { return cipherSuite; };
+        uint16_t getSslVersion() { return sslVersion; };
+
+        void setKeyIDinIndex(uint64_t keyIDinIndex) { this->keyIDinIndex = keyIDinIndex; };
+        void setCipherSuite(const std::string &cipherSuite) { this->cipherSuite = cipherSuite; };
+        void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
+
+        bool encryptThenMacEnabled;
+        bool truncatedHmacEnabled;
+
+    private:
+        std::string const toString();
+
         size_t readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf);
         size_t readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf);
@@ -58,27 +75,6 @@ namespace pcapfs {
         int decryptData(const CiphertextPtr &input, Bytes &output);
 
         static Bytes const searchCorrectMasterSecret(const TLSHandshakeDataPtr &handshakeData, const Index &idx);
-
-        void serialize(boost::archive::text_oarchive &archive) override;
-
-        void deserialize(boost::archive::text_iarchive &archive) override;
-
-        std::string const toString();
-
-        uint64_t getKeyIDinIndex() { return keyIDinIndex; };
-
-        std::string const getCipherSuite() { return cipherSuite; };
-
-        uint16_t getSslVersion() { return sslVersion; };
-
-        void setKeyIDinIndex(uint64_t keyIDinIndex) { this->keyIDinIndex = keyIDinIndex; };
-
-        void setCipherSuite(const std::string &cipherSuite) { this->cipherSuite = cipherSuite; };
-
-        void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
-
-        bool encryptThenMacEnabled;
-        bool truncatedHmacEnabled;
 
     protected:
         std::string cipherSuite;

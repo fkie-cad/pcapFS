@@ -32,6 +32,11 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
+        bool showFile() override;
+        void serialize(boost::archive::text_oarchive &archive) override;
+        void deserialize(boost::archive::text_iarchive &archive) override;
+
+    private:
         static bool meetsParsingRequirements(const FilePtr &filePtr);
 
         static bool isHttpPost(const std::string &filename);
@@ -58,17 +63,12 @@ namespace pcapfs {
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
         size_t getEndOfJpgFile(const Bytes &input);
 
-        bool showFile() override;
-        void serialize(boost::archive::text_oarchive &archive) override;
-        void deserialize(boost::archive::text_iarchive &archive) override;
-
     protected:
-        static bool registeredAtFactory;
-
         Bytes cobaltStrikeKey;
         bool fromClient;
         uint64_t embeddedFileIndex;
 
+        static bool registeredAtFactory;
     };
 
 
