@@ -212,6 +212,8 @@ along with the protocol they origin from:
 | dstPort  | tcp, udp | Destination port |
 | domain   | http, ssl     | The domain parsed from the HTTP Host header and SNI|
 | uri     | http     | The requested URI parsed from the HTTP request|
+| ja3     | ssl (http) | MD5 hash of JA3 fingerprint |
+| ja3s    | ssl (http) | MD5 hash of JA3S fingerprint |
 
 A protocol implemented in pcapFS can define its own properties based on values it parsed. Therefore, as more and more
 protocols are added to pcapFS, you will have very fine grained possibilities to build your directory hierarchy.

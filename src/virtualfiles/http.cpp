@@ -633,9 +633,13 @@ void pcapfs::HttpFile::fillFileProperties(const FilePtr &filePtr, bool isRequest
     setFilesizeProcessed(filesizeRaw);
     setFiletype("http");
     setProperty("protocol", "http");
-    if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {
+    if (!filePtr->getProperty("ja3").empty())
+        setProperty("ja3", filePtr->getProperty("ja3"));
+    if (!filePtr->getProperty("ja3s").empty())
+        setProperty("ja3s", filePtr->getProperty("ja3s"));
+    if (filePtr->flags.test(pcapfs::flags::MISSING_DATA))
         flags.set(pcapfs::flags::MISSING_DATA);
-    }
+
     if (isRequest) {
         setProperty("srcIP", filePtr->getProperty("srcIP"));
         setProperty("dstIP", filePtr->getProperty("dstIP"));

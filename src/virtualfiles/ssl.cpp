@@ -124,6 +124,8 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
             if (sni) {
                 handshakeData->serverName = sni->getHostName();
             }
+            handshakeData->ja3 = clientHelloMessage->generateTLSFingerprint().toMD5();
+
             if (numHandshakeMessages == 1) {
                 handshakeData->handshakeMessagesRaw.insert(handshakeData->handshakeMessagesRaw.end(),
                                                             sslLayer->getData()+5,
@@ -166,6 +168,9 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
                 handshakeData->extendedMasterSecret = true;
             } else
                 LOG_TRACE << "Extended Master Secret Extension is not enabled";
+
+            handshakeData->ja3s = serverHelloMessage->generateTLSFingerprint().toMD5();
+
             if (handshakeData->cipherSuite) {
                 if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
                     if (numHandshakeMessages == 1) {
@@ -372,6 +377,10 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
     resultPtr->setFiletype("ssl");
     if (handshakeData->cipherSuite)
         resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
+    if (!handshakeData->ja3.empty())
+        resultPtr->setProperty("ja3", handshakeData->ja3);
+    if (!handshakeData->ja3s.empty())
+        resultPtr->setProperty("ja3s", handshakeData->ja3s);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
     resultPtr->setSslVersion(handshakeData->sslVersion);

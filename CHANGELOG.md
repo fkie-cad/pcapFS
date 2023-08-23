@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Add JA3 and JA3S as properties for structuring the virtual directory hierarchy
 - Add support for PCAPNG files
 - Support TLS decryption with key material which is embedded in PCAPNG files
 

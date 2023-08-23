@@ -39,6 +39,8 @@ namespace pcapfs {
             Bytes serverCertificate;
             pcpp::SSLCipherSuite* cipherSuite = nullptr;
             std::string serverName;
+            std::string ja3;
+            std::string ja3s;
         } TLSHandshakeData;
 
     }
