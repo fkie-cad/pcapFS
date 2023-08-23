@@ -60,7 +60,7 @@ namespace pcapfs {
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
                                         const FilePtr &fileptr, const Index &idx);
 
-        static void createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage,
+        static void createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
                                                         const TLSHandshakeDataPtr &handshakeData, const Index &idx);
 
         static void initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,

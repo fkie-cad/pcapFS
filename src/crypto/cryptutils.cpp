@@ -117,18 +117,18 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
                 LABEL_SIZE = 22;
                 SEED_SIZE = LABEL_SIZE + handshakeData->sessionHash.size();
                 seed.resize(SEED_SIZE);
-                memcpy(&seed[0], "extended master secret", LABEL_SIZE);
-                memcpy(&seed[LABEL_SIZE], handshakeData->sessionHash.data(), handshakeData->sessionHash.size());
+                memcpy(&seed.at(0), "extended master secret", LABEL_SIZE);
+                memcpy(&seed.at(LABEL_SIZE), handshakeData->sessionHash.data(), handshakeData->sessionHash.size());
             } else {
-                memcpy(&seed[0], "master secret", LABEL_SIZE);
-                memcpy(&seed[LABEL_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
-                memcpy(&seed[LABEL_SIZE + CLIENT_RANDOM_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
+                memcpy(&seed.at(0), "master secret", LABEL_SIZE);
+                memcpy(&seed.at(LABEL_SIZE), handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
+                memcpy(&seed.at(LABEL_SIZE + CLIENT_RANDOM_SIZE), handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
             }
         } else {
             OUTPUT_SIZE = 192;
-            memcpy(&seed[0], "key expansion", LABEL_SIZE);
-            memcpy(&seed[LABEL_SIZE], handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
-            memcpy(&seed[LABEL_SIZE + SERVER_RANDOM_SIZE], handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
+            memcpy(&seed.at(0), "key expansion", LABEL_SIZE);
+            memcpy(&seed.at(LABEL_SIZE), handshakeData->serverRandom.data(), SERVER_RANDOM_SIZE);
+            memcpy(&seed.at(LABEL_SIZE + SERVER_RANDOM_SIZE), handshakeData->clientRandom.data(), CLIENT_RANDOM_SIZE);
         }
 
         unsigned char error = 0;
@@ -219,7 +219,7 @@ pcapfs::Bytes const pcapfs::crypto::rsaPrivateDecrypt(const Bytes &input, const 
     BIO_free(bio);
 
     result.resize(RSA_size(rsa));
-    std::vector<int> possible_padding = {RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_NO_PADDING};
+    const std::vector<int> possible_padding = {RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_NO_PADDING};
     for(size_t i = 0; i < possible_padding.size(); ++i) {
         if(RSA_private_decrypt(input.size(), input.data(),
                                 result.data(), rsa, possible_padding[i]) != -1) {

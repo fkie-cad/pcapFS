@@ -75,7 +75,7 @@ std::string pcapfs::File::to_string() {
 
         for(size_t i=0; i<this->connectionBreaks.size(); i++) {
             connectionBreaksOutputStream << "    ";
-            connectionBreaksOutputStream << this->connectionBreaks[i].first << "\n";
+            connectionBreaksOutputStream << this->connectionBreaks.at(i).first << "\n";
         }
 
     } else {

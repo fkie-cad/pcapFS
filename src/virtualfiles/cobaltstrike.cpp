@@ -390,7 +390,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             LOG_DEBUG << "the parsed command code is not known";
             return result;
         }
-        const std::string command = CSCommands::codes[command_code];
+        const std::string command = CSCommands::codes.at(command_code);
         LOG_DEBUG << "current command: " << command;
         if (currIndex == 0)
             result->command = extractServerCommand(command);
@@ -646,7 +646,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readClientContent(const Bytes &inp
             return input;
         }
         const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
-        const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
+        const std::string callback_string = callback_code < 33 ? CSCallback::codes.at(callback_code) : "CALLBACK_UNKNOWN";
 
         std::stringstream ss;
         ss << "Counter: " << counter << "\nCallback: " << callback_code << " " << callback_string << "\n\n";
@@ -759,7 +759,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &inp
             LOG_WARNING << "cobalt strike: parsed server command is invalid";
             return input;
         }
-        const std::string command = CSCommands::codes[command_code];
+        const std::string command = CSCommands::codes.at(command_code);
         const uint32_t args_len = be32toh(*((uint32_t*) (temp.data()+4)));
         if (args_len + 8 > temp.size()) {
             LOG_WARNING << "cobalt strike: parsed argument length of server command is invalid";
@@ -922,7 +922,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedClientFile(const Bytes
     for (const Bytes &decryptedChunk : decryptedChunks) {
         if (currIndex == embeddedFileIndex) {
             const uint32_t callback_code = be32toh(*((uint32_t*) (decryptedChunk.data()+8)));
-            const std::string callback_string = callback_code < 33 ? CSCallback::codes[callback_code] : "CALLBACK_UNKNOWN";
+            const std::string callback_string = callback_code < 33 ? CSCallback::codes.at(callback_code) : "CALLBACK_UNKNOWN";
 
             if (callback_string == "CALLBACK_SCREENSHOT") {
                 const size_t jpg_eof = getEndOfJpgFile(decryptedChunk);
@@ -961,7 +961,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedServerFile(const Bytes
         if (command_code > 102) { // we have probably no command content
             return decryptedData;
         }
-        const std::string command = CSCommands::codes[command_code];
+        const std::string command = CSCommands::codes.at(command_code);
         const uint32_t argsLen = be32toh(*((uint32_t*) (temp.data()+4)));
 
         temp.erase(temp.begin(), temp.begin()+8);

@@ -89,12 +89,12 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
                                             const FilePtr &filePtr, const Index &idx){
 
     size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
-    pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
+    const pcpp::SSLHandshakeLayer *handshakeLayer = dynamic_cast<pcpp::SSLHandshakeLayer *>(sslLayer);
     if (!handshakeLayer) {
         LOG_ERROR << "Failed to extract TLS Handshake Layer";
         return;
     }
-    uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
+    const uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
     if (numHandshakeMessages > 0){
         // add length of ssl record header
         offset += 5;
@@ -104,12 +104,12 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 		pcpp::SSLHandshakeMessage *handshakeMessage = handshakeLayer->getHandshakeMessageAt(j);
         if (!handshakeMessage)
             continue;
-        size_t messageLength = handshakeMessage->getMessageLength();
-		pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
+        const size_t messageLength = handshakeMessage->getMessageLength();
+		const pcpp::SSLHandshakeType handshakeType = handshakeMessage->getHandshakeType();
 
 		if (handshakeType == pcpp::SSL_CLIENT_HELLO) {
             LOG_DEBUG << "found client hello message";
-			pcpp::SSLClientHelloMessage *clientHelloMessage =
+			const pcpp::SSLClientHelloMessage *clientHelloMessage =
 					dynamic_cast<pcpp::SSLClientHelloMessage*>(handshakeMessage);
             if (!clientHelloMessage) {
                 LOG_ERROR << "Failed to extract Client Hello Message";
@@ -119,7 +119,8 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
                     clientHelloMessage->getClientHelloHeader()->random,
                     crypto::CLIENT_RANDOM_SIZE);
 
-            pcpp::SSLServerNameIndicationExtension* sni = dynamic_cast<pcpp::SSLServerNameIndicationExtension*>(clientHelloMessage->getExtensionOfType(0));
+            const pcpp::SSLServerNameIndicationExtension* sni =
+                    dynamic_cast<pcpp::SSLServerNameIndicationExtension*>(clientHelloMessage->getExtensionOfType(0));
             if (sni) {
                 handshakeData->serverName = sni->getHostName();
             }
@@ -136,7 +137,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 
 		} else if (handshakeType == pcpp::SSL_SERVER_HELLO) {
             LOG_DEBUG << "found server hello message";
-            pcpp::SSLServerHelloMessage *serverHelloMessage =
+            const pcpp::SSLServerHelloMessage *serverHelloMessage =
 					dynamic_cast<pcpp::SSLServerHelloMessage*>(handshakeMessage);
             if (!serverHelloMessage) {
                 LOG_ERROR << "Failed to extract Server Hello Message";
@@ -184,7 +185,8 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
             LOG_DEBUG << "found client key exchange message";
             if (handshakeData->cipherSuite) {
                 if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
-                    pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage = dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
+                    const pcpp::SSLClientKeyExchangeMessage *clientKeyExchangeMessage =
+                            dynamic_cast<pcpp::SSLClientKeyExchangeMessage*>(handshakeMessage);
                     if (!clientKeyExchangeMessage) {
                         LOG_ERROR << "Failed to extract Client Key Exchange Message";
                         continue;
@@ -194,7 +196,8 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 
                         handshakeData->encryptedPremasterSecret.insert(handshakeData->encryptedPremasterSecret.begin(),
                                                                     clientKeyExchangeMessage->getClientKeyExchangeParams()+2,
-                                                                    clientKeyExchangeMessage->getClientKeyExchangeParams()+clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
+                                                                    clientKeyExchangeMessage->getClientKeyExchangeParams()+
+                                                                        clientKeyExchangeMessage->getClientKeyExchangeParamsLength());
                     }
                     if (handshakeData->extendedMasterSecret) {
                         if (numHandshakeMessages == 1) {
@@ -216,7 +219,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
         } else if (handshakeType == pcpp::SSL_CERTIFICATE) {
             LOG_DEBUG << "found certiciate message";
             LOG_TRACE << "offset: " << offset;
-            pcpp::SSLCertificateMessage *certificateMessage = dynamic_cast<pcpp::SSLCertificateMessage*>(handshakeMessage);
+            const pcpp::SSLCertificateMessage *certificateMessage = dynamic_cast<pcpp::SSLCertificateMessage*>(handshakeMessage);
             if (!certificateMessage) {
                 LOG_ERROR << "Failed to extract TLS Certificate Message";
                 continue;
@@ -297,7 +300,7 @@ size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
 }
 
 
-void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, pcpp::SSLCertificateMessage* certificateMessage,
+void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
                                                                     const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
     uint64_t offsetTemp = 0;
 
@@ -306,7 +309,7 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, p
 
     for (int i = 0; i < certificateMessage->getNumOfCertificates(); ++i) {
         std::shared_ptr<SslFile> certPtr = std::make_shared<SslFile>();
-        pcpp::SSLx509Certificate* certificate = certificateMessage->getCertificate(i);
+        const pcpp::SSLx509Certificate* certificate = certificateMessage->getCertificate(i);
 
         offsetTemp += 3; // length field in front of each certificate
         LOG_TRACE << "cert " << i << ": length: " << certificate->getDataLength();
@@ -336,7 +339,8 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, p
 
         handshakeData->certificates.push_back(certPtr);
         handshakeData->serverCertificate.insert(handshakeData->serverCertificate.end(),
-                                                certificate->getData(), certificate->getData()+certificate->getDataLength());
+                                                certificate->getData(),
+                                                certificate->getData()+certificate->getDataLength());
 
         offsetTemp += certificate->getDataLength();
     }
@@ -351,7 +355,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
         // when an ssl decode config is supplied we only decrypt ssl traffic which meets the given config
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
-			Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
+			const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
             if(!keyMaterial.empty()) {
 			    //TODO: not good to add sslkey file directly into index!!!
 			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
@@ -408,7 +412,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     }
 
     size_t size = 0;
-    size_t numElements = filePtr->connectionBreaks.size();
+    const size_t numElements = filePtr->connectionBreaks.size();
     bool visitedVirtualSslFile = false;
     std::shared_ptr<SslFile> resultPtr = nullptr;
     TLSHandshakeDataPtr handshakeData = std::make_shared<crypto::TLSHandshakeData>();
@@ -434,7 +438,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         handshakeData->iteration = i;
 
         while (sslLayer != nullptr) {
-            pcpp::SSLRecordType recType = sslLayer->getRecordType();
+            const pcpp::SSLRecordType recType = sslLayer->getRecordType();
 
             //Step 5: parse the corresponding ssl message
             if (recType == pcpp::SSL_HANDSHAKE) {
@@ -454,7 +458,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
 
-                pcpp::SSLApplicationDataLayer *applicationDataLayer =
+                const pcpp::SSLApplicationDataLayer *applicationDataLayer =
                         dynamic_cast<pcpp::SSLApplicationDataLayer *>(sslLayer);
                 if (!applicationDataLayer) {
                     LOG_ERROR << "dynamic_cast to ssl app data layer failed";
@@ -462,13 +466,13 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     continue;
                 }
 
-                uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
-                uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
+                const uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
+                const uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
 
                 LOG_TRACE << "applicationDataLayer->getEncryptedDataLen(): " << applicationDataLayer->getEncryptedDataLen();
                 LOG_TRACE << "applicationDataLayer->getHeaderLen(): " << applicationDataLayer->getHeaderLen();
 
-                uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
+                const uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
                 LOG_TRACE << "bytesBeforeEncryptedData: " << bytesBeforeEncryptedData;
 
                 //create ssl application file
@@ -557,7 +561,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
              */
             if(!sslLayer && visitedVirtualSslFile && resultPtr->flags.test(flags::PROCESSED)) {
                 LOG_DEBUG << "Fixing the fileSizeProcessed, setting it to the full size of plaintext.";
-                size_t calculated_size = resultPtr->calculateProcessedSize(idx);
+                const size_t calculated_size = resultPtr->calculateProcessedSize(idx);
                 /*
                  * calculated_size contains all plain text in this context, therefore we do not need to add the current filesizeProcessed.
                  */
@@ -583,10 +587,10 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
 
     bool isRsaKeyX = (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA);
-    std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
+    const std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
 
-    for (auto &keyFile: keyFiles) {
-        std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
+    for (const auto &keyFile: keyFiles) {
+        const std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
         if (!sslKeyFile) {
             LOG_ERROR << "dynamic_pointer_cast failed for ssl key file";
             continue;
@@ -624,7 +628,7 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshak
 
 int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
 
-	pcpp::SSLCipherSuite *cipher = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+	const pcpp::SSLCipherSuite *cipher = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
     if (!cipher)
         return 1;
 
@@ -708,15 +712,15 @@ size_t pcapfs::SslFile::readRaw(uint64_t startOffset, size_t length, const Index
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = fragments[fragment].length - (position - startOffset);
+        posInFragment = fragments.at(fragment).length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
     while (position < startOffset + length && fragment < fragments.size()) {
-        size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
+        const size_t toRead = std::min(fragments.at(fragment).length - posInFragment, length - (position - startOffset));
 
-        pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
-        filePtr->read(fragments[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+        const pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+        filePtr->read(fragments.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
 
         // set run variables in case next fragment is needed
         position += toRead;
@@ -779,7 +783,7 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = result[fragment].size() - (position - startOffset);
+        posInFragment = result.at(fragment).size() - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
@@ -796,13 +800,13 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
     while(position < startOffset + length && fragment < result.size())  {
         // minimum handles 2 cases here:
         // either we have a "default" case, or we have a special case aka the beginning or end of a fragment.
-        size_t toRead = std::min(result[fragment].size() - posInFragment, length - (position - startOffset));
+        const size_t toRead = std::min(result.at(fragment).size() - posInFragment, length - (position - startOffset));
         if(first_iteration) {
-            bytes_ref = result[fragment];
+            bytes_ref = result.at(fragment);
             bytes_ref.erase(bytes_ref.begin(), bytes_ref.begin() + posInFragment);
             first_iteration = false;
         } else {
-            bytes_ref = result[fragment];
+            bytes_ref = result.at(fragment);
         }
         memcpy(buf + (position - startOffset), (const char*) bytes_ref.data(), toRead);
         fragment++;
@@ -836,17 +840,17 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
 
     while (fragment < fragments.size()) {
         counter++;
-        size_t toRead = fragments[fragment].length;
+        const size_t toRead = fragments.at(fragment).length;
 
         //TODO: is start=0 really good for missing data?
         // -> missing data should probably be handled in an exception?
 
-        if (fragments[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (fragments.at(fragment).start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             LOG_INFO << "We have some missing TCP data: pcapfs::flags::MISSING_DATA was set";
         } else {
             // Read the bytes from the packets of the file (using the file pointer)
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+            const pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
             pcapfs::Bytes toDecrypt(this->fragments.at(fragment).length);
             filePtr->read(fragments.at(fragment).start, fragments.at(fragment).length, idx, (char *) toDecrypt.data());
 
@@ -856,7 +860,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
                     idx.get({"sslkey", getKeyIDinIndex()}));
 
                 CiphertextPtr cte = std::make_shared<CipherTextElement>();
-                cte->setVirtualFileOffset(previousBytes[fragment]);
+                cte->setVirtualFileOffset(previousBytes.at(fragment));
                 cte->setCipherBlock(toDecrypt);
                 cte->setLength(toRead);
                 cte->setKeyMaterial(keyPtr->getKeyMaterial());
@@ -878,9 +882,9 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
     assert(
         ([&]() -> bool{
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
-                size_t counter_for_bytes_output_ciphertext = std::accumulate(outputCipherTextVector.begin(), outputCipherTextVector.end(), 0,
+                const size_t counter_for_bytes_output_ciphertext = std::accumulate(outputCipherTextVector.begin(), outputCipherTextVector.end(), 0,
                                                         [](size_t counter, auto elem){ return counter + elem->getLength(); });
-                size_t counter_for_fragments = std::accumulate(fragments.begin(), fragments.end(), 0,
+                const size_t counter_for_fragments = std::accumulate(fragments.begin(), fragments.end(), 0,
                                                         [](size_t counter, Fragment frag){ return counter + frag.length; });
                 if (position == counter_for_bytes_output_ciphertext && position == counter_for_fragments) {
                     return true;

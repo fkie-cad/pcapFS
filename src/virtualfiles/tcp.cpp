@@ -29,20 +29,20 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
 
     if (position > startOffset) {
         fragment--;
-        posInFragment = fragments[fragment].length - (position - startOffset);
+        posInFragment = fragments.at(fragment).length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
     while (position < startOffset + length && fragment < fragments.size()) {
-        size_t toRead = std::min(fragments[fragment].length - posInFragment, length - (position - startOffset));
+        const size_t toRead = std::min(fragments.at(fragment).length - posInFragment, length - (position - startOffset));
         //TODO: is start=0 really good for missing data?
-        if (fragments[fragment].start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (fragments.at(fragment).start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             //TODO: offsets at which number?
             pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
-            filePtr->read(fragments[fragment].start + posInFragment, toRead, idx, buf + (position - startOffset));
+            filePtr->read(fragments.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
 
         // set run variables in case next fragment is needed
@@ -233,7 +233,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
                     }
                 }
             }
-            if (pcapPtr->getFiletype() == "pcap")
+            if (!state.isPcapng)
                 pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
         }
         pcapPtr->closeReader();

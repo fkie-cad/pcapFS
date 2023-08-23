@@ -49,12 +49,8 @@ bool pcapfs::CobaltStrikeManager::isKnownConnection(const std::string &serverIp,
 
 
 bool pcapfs::CobaltStrikeManager::matchMagicBytes(const Bytes& input) {
-    const Bytes magicBytes = {0x00, 0x00, 0xbe, 0xef};
-    for (int i = 0; i < 4; ++i) {
-        if (input[i] != magicBytes [i])
-            return false;
-    }
-    return true;
+    const unsigned char magicBytes[4] = {0x00, 0x00, 0xbe, 0xef};
+    return !memcmp(input.data(), magicBytes, 4);
 }
 
 

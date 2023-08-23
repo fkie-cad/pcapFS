@@ -16,17 +16,17 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
     if (port_transmission_data.empty())
         return resultVector;
 
-    FileTransmissionData d = getTransmissionFileData(filePtr, port_transmission_data);
+    const FileTransmissionData d = getTransmissionFileData(filePtr, port_transmission_data);
     if (d.transmission_type.empty())
         return resultVector;
 
     std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
     fillGlobalProperties(resultPtr, filePtr);
 
-    std::string f_name = constructFileName(d);
+    const std::string f_name = constructFileName(d);
     resultPtr->setFilename(f_name);
 
-    size_t numElements = filePtr->connectionBreaks.size();
+    const size_t numElements = filePtr->connectionBreaks.size();
 
     for (size_t i = 0; i < numElements; ++i) {
         parseResult(resultPtr, filePtr, i);
@@ -41,8 +41,8 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 std::vector<pcapfs::FileTransmissionData>
 pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
     FTPPortBridge &bridge = FTPPortBridge::getInstance();
-    uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
-    uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
+    const uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
+    const uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
 
     std::vector<FileTransmissionData> transmission_data = bridge.getFileTransmissionData(dst_port);
     if (transmission_data.empty()) {
@@ -56,7 +56,7 @@ pcapfs::FileTransmissionData
 pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
                                          const std::vector<pcapfs::FileTransmissionData> &transmission_data) {
     FileTransmissionData d;
-    OffsetWithTime owt = filePtr->connectionBreaks.at(0);
+    const OffsetWithTime owt = filePtr->connectionBreaks.at(0);
     //for (const FileTransmissionData &td : transmission_data) {
     //    if (connectionBreaksInTimeSlot(owt.second, td.time_slot)) {
     //        d = td;
@@ -88,10 +88,10 @@ std::string pcapfs::FtpFile::constructFileName(const pcapfs::FileTransmissionDat
 
 void
 pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::FilePtr filePtr, size_t i) {
-    size_t numElements = filePtr->connectionBreaks.size();
+    const size_t numElements = filePtr->connectionBreaks.size();
     const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
-    size_t size = calculateSize(filePtr, numElements, i, offset);
-    Fragment fragment = parseOffset(filePtr, offset, size);
+    const size_t size = calculateSize(filePtr, numElements, i, offset);
+    const Fragment fragment = parseOffset(filePtr, offset, size);
 
     result->fragments.push_back(fragment);
     result->setFilesizeRaw(result->getFilesizeRaw() + size);

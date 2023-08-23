@@ -174,7 +174,12 @@ int main(int argc, const char *argv[]) {
          */
         do {
             counter++;
-            std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);
+            try {
+                std::tie(newFiles, filesToProcess) = getNextVirtualFile(filesToProcess, index);
+            } catch (const std::logic_error &err) {
+                LOG_ERROR << "Failed to parse capture file";
+                return 3;
+            }
             index.insert(newFiles);
             LOG_TRACE << "Progress ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
             		<< filesToProcess.size() << ">";
@@ -194,8 +199,8 @@ int main(int argc, const char *argv[]) {
             index.read(config.indexFilePath);
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
-            std::cerr << "Error: " << err.what() << std::endl;
-            return 3;
+            LOG_ERROR << err.what() << std::endl;
+            return 4;
         }
     }
 

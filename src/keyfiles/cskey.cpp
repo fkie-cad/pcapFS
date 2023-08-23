@@ -21,8 +21,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CSKeyFile::parseCandidates(const std::vecto
 
             if (line.rfind(RSA_KEY_BEGIN) != std::string::npos) {
                 char elem;
-                for(size_t i = 0; i < strlen(RSA_KEY_BEGIN); ++i)
-                    keyPtr->rsaPrivateKey.push_back(RSA_KEY_BEGIN[i]);
+                keyPtr->rsaPrivateKey.insert(keyPtr->rsaPrivateKey.end(), RSA_KEY_BEGIN, RSA_KEY_BEGIN+32);
                 keyPtr->rsaPrivateKey.push_back(0x0a); // add newline
 
                 while(infile.get(elem)) {

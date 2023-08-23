@@ -442,7 +442,7 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
         memcpy((char *) out_buf.data() + out_pos, (char *) rawData.data() + raw_pos, chunk_size);
         raw_pos += chunk_size;
         out_pos += chunk_size;
-        if (raw_pos >= filesizeRaw || !(rawData[raw_pos] == '\r' && rawData[raw_pos + 1] == '\n')) {
+        if (raw_pos >= filesizeRaw || !(rawData.at(raw_pos) == '\r' && rawData.at(raw_pos + 1) == '\n')) {
             LOG_TRACE << "Unexpected chunked encoding";
             incomplete_chunked = true;
             break;
@@ -607,7 +607,7 @@ std::string const pcapfs::HttpFile::uriToFilename(const std::string &uri) {
     std::vector<std::string> split_questionmark;
     std::vector<std::string> split_slash;
     boost::split(split_questionmark, uri, [](char c) { return c == '?' || c == ' ' || c == ';'; });
-    boost::split(split_slash, split_questionmark[0], [](char c) { return c == '/'; });
+    boost::split(split_slash, split_questionmark.at(0), [](char c) { return c == '/'; });
     return split_slash.back();
 }
 

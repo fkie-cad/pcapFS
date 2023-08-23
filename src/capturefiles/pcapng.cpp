@@ -20,7 +20,7 @@ pcapfs::PcapNgFile::~PcapNgFile() {
 
 
 size_t pcapfs::PcapNgFile::getOffsetFromLastBlock(size_t i) {
-    return packetOffsets[i];
+    return packetOffsets.at(i);
 }
 
 void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
@@ -49,7 +49,7 @@ void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
         throw pcapfs::PcapFsException("pcapng file " + filename + " is invalid");
 
     while (currPos < filesizeRaw) {
-        memcpy(&currBlock, &fileContent[currPos], 8);
+        memcpy(&currBlock, &fileContent.at(currPos), 8);
         currBlockLength = *((uint32_t*) currBlock.blockLength);
         if (currPos + currBlockLength > filesizeRaw)
             throw pcapfs::PcapFsException("packet block in pcapng file " + filename + " has invalid size");
@@ -65,7 +65,7 @@ void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
         else if (memcmp(currBlock.blockType, DSB_MAGIC, 4) == 0) {
             // we have a Decryption Secrets Block and extract the embedded TLS keys
             // (can be injected into pcaps by: editcap --inject-secrets tls,keys.txt in.pcap out-dsb.pcapng)
-            const Bytes blockBody(&fileContent[currPos + 8], &fileContent[currPos + currBlockLength - 4]);
+            const Bytes blockBody(&fileContent.at(currPos + 8), &fileContent.at(currPos + currBlockLength - 4));
             std::vector<FilePtr> keyFiles = extractEmbeddedKeyFiles(blockBody);
             idx.insertKeyCandidates(keyFiles);
             offsetToLastPacketBlock += currBlockLength;
@@ -85,14 +85,14 @@ const std::vector<pcapfs::FilePtr> pcapfs::PcapNgFile::extractEmbeddedKeyFiles(c
         return result;
     }
 
-    const uint32_t secretsLength = *((uint32_t*) &blockBody[4]);
+    const uint32_t secretsLength = *((uint32_t*) &blockBody.at(4));
     if (secretsLength > blockBody.size() - 8) {
         LOG_WARNING << "Decryption Secrets Block of pcapng file has invalid Secret Length";
         return result;
     }
 
     LOG_TRACE << "extract key file(s) embedded in a pcapng file";
-    std::stringstream secretsData(std::string(&blockBody[8], &blockBody[8 + secretsLength]));
+    std::stringstream secretsData(std::string(&blockBody.at(8), &blockBody.at(8 + secretsLength)));
     std::string line;
     while (std::getline(secretsData, line, '\n')){
         std::shared_ptr<SSLKeyFile> keyFile = SSLKeyFile::extractKeyContent(line);
