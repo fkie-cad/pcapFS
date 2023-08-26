@@ -8,6 +8,7 @@
 #include <openssl/x509.h>
 #include <openssl/pem.h>
 #include <openssl/bio.h>
+#include <openssl/md5.h>
 
 
 std::string const pcapfs::crypto::convertToPem(const Bytes &input) {
@@ -361,4 +362,16 @@ pcapfs::Bytes const pcapfs::crypto::calculateSha256(const Bytes &input) {
 	EVP_MD_CTX_free(mdctx);
 
     return digest;
+}
+
+
+std::string const pcapfs::crypto::calculateMD5(const std::string &input) {
+    unsigned char result[MD5_DIGEST_LENGTH];
+    MD5(reinterpret_cast<const unsigned char*>(input.c_str()), input.size(), result);
+
+    std::ostringstream sout;
+    sout << std::hex << std::setfill('0');
+    for(long long  c: result)
+        sout << std::setw(2) << (long long)c;
+    return sout.str();
 }

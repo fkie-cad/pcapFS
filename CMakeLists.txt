@@ -59,6 +59,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/udp.cpp
         src/virtualfiles/xor.cpp
         src/virtualfiles/cobaltstrike.cpp
+        src/virtualfiles/ssh.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES

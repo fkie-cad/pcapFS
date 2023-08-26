@@ -22,6 +22,8 @@ namespace pcapfs {
 
         Bytes const calculateSha256(const Bytes &input);
 
+        std::string const calculateMD5(const std::string &input);
+
     }
 }
 

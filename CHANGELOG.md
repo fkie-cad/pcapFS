@@ -1,7 +1,8 @@
 # Changelog
 
 ## [Unreleased]
-- Add JA3 and JA3S as properties for structuring the virtual directory hierarchy
+- Add JA3, JA3S, hassh and hasshServer as properties for structuring the virtual directory hierarchy
+- Add SSH as supported protocol
 - Add support for PCAPNG files
 - Support TLS decryption with key material which is embedded in PCAPNG files
 
