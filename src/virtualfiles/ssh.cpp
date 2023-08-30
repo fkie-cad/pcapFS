@@ -7,7 +7,7 @@
 
 
 std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pcapfs::Index &idx) {
-    (void)idx; 
+    (void)idx;
     std::vector<FilePtr> resultVector(0);
     if(!isSshTraffic(filePtr)){
         return resultVector;
@@ -28,7 +28,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
     // which is always sent by the client
     // Thus, we need to calculate hashh and hasshServer for both SSH_MSG_KEXINIT messages. At the end, when it is clear whether client or server
     // sent the first SSH packet, we choose the correct value.
-    // Every variable with postfix "Even" correlates to data sent by the side which sent the first SSH packet and 
+    // Every variable with postfix "Even" correlates to data sent by the side which sent the first SSH packet and
     // every variable with postfix "Odd" correlates to data sent by the responding side.
     std::string hasshServerOdd;
     std::string hasshOdd;
@@ -55,7 +55,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                     if (oddIdentMsgLen < sshLayer->getDataLen()) {
                         LOG_TRACE << " (first part of) SSH_MSG_KEXINIT message from server comes directly after identification string";
                         kexInitFragments.insert(kexInitFragments.end(), sshLayer->getData()+oddIdentMsgLen, sshLayer->getData()+sshLayer->getDataLen());
-                        kexInitMsgLen = be32toh(*(uint32_t*) (sshLayer->getData()+oddIdentMsgLen)) + 4 ; // +4 for length field                    
+                        kexInitMsgLen = be32toh(*(uint32_t*) (sshLayer->getData()+oddIdentMsgLen)) + 4 ; // +4 for length field
                     }
                 }
 
@@ -81,7 +81,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                             LOG_TRACE << "hassh: " << hasshOdd;
                             LOG_TRACE << "hasshServer: " << hasshServerOdd;
                             oddKexInitMsgCompleted = true;
-                            
+
                         } else {
                             if (sshLayer->getDataLen() >=  kexInitMsgLen - kexInitFragments.size() && kexInitMsgLen != 0) {
                                 LOG_TRACE << "detected end of fragmented SSH_MSG_KEXINIT message";
@@ -89,7 +89,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                                 // a first chunk of the following (diffie-hellman) kex message
                                 kexInitFragments.insert(kexInitFragments.end(), sshLayer->getData(),
                                                                 sshLayer->getData()+kexInitMsgLen-kexInitFragments.size());
-                                
+
                                 pcpp::SSHLayer *defragmentedSshLayer = pcpp::SSHLayer::createSSHMessage((uint8_t *) kexInitFragments.data(),
                                                                                                         kexInitFragments.size(), nullptr, nullptr);
                                 if (!defragmentedSshLayer)
@@ -110,7 +110,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                                 kexInitFragments.insert(kexInitFragments.end(), sshLayer->getData(), sshLayer->getData()+sshLayer->getDataLen());
                             }
                         }
-                    
+
                     } else if (!handshakeCompleted) {
                         // we have passed SSH_MSG_KEXINIT message from odd side but handshake is not finished yet
                         const pcpp::SSHHandshakeMessage* sshHandshakeMessage = dynamic_cast<pcpp::SSHHandshakeMessage*>(sshLayer);
@@ -130,7 +130,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                             resultPtr->fragments.push_back(fragment);
                         }
                     }
-                        
+
                 } else {
                     const pcpp::SSHHandshakeMessage* sshHandshakeMessage = dynamic_cast<pcpp::SSHHandshakeMessage*>(sshLayer);
                     if (sshHandshakeMessage && sshHandshakeMessage->getMessageType() == pcpp::SSHHandshakeMessage::SSH_MSG_KEX_INIT) {
@@ -157,7 +157,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
                     }
                 }
             }
-            
+
             sshLayer->parseNextLayer();
             offset += sshLayer->getHeaderLen();
             sshLayer = dynamic_cast<pcpp::SSHLayer*>(sshLayer->getNextLayer());

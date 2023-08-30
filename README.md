@@ -24,6 +24,7 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 - TLS 1.0-1.2
 - SSH
 - DNS
+- DHCP
 - XOR
 - Cobalt Strike C2 (default profile)
 

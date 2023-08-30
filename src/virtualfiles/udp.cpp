@@ -56,16 +56,8 @@ size_t pcapfs::UdpFile::read(uint64_t startOffset, size_t length, const Index &i
     // start copying
     while (position < startOffset + length && fragment < fragments.size()) {
         const size_t toRead = std::min(fragments.at(fragment).length - posInFragment, length - (position - startOffset));
-
-        //TODO: is start=0 really good for missing data?
-        if (fragments[fragment].start == 0) {
-            // TCP missing data
-            memset(buf + (position - startOffset), 0, toRead);
-        } else {
-            //TODO: offsets at which number?
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
-            filePtr->read(fragments.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
-        }
+        pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
+        filePtr->read(fragments.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
 
         // set run variables in case next fragment is needed
         position += toRead;
@@ -119,11 +111,10 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     state.currentOffset.start += l->getHeaderLen();
                 }
                 UdpLayer *udpLayer = parsedPacket.getLayerOfType<UdpLayer>();
-                state.currentOffset.length = udpLayer->getDataLen();
+                state.currentOffset.length = udpLayer->getLayerPayloadSize();
 
                 std::string conString = "";
                 //TODO: put that in a helper function
-
 
                 if (parsedPacket.isPacketOfType(IPv4)) {
                     IPv4Layer *iPv4Layer = parsedPacket.getLayerOfType<IPv4Layer>();
@@ -141,6 +132,10 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                 //TODO: create a new "udp stream" after a certain amount of time
                 if (state.files.count(conString) == 1) {
                     state.files[conString]->fragments.push_back(state.currentOffset);
+                    state.files[conString]->setFilesizeRaw(state.files[conString]->getFilesizeRaw() + udpLayer->getLayerPayloadSize());
+                    state.files[conString]->setFilesizeProcessed(state.files[conString]->getFilesizeRaw());
+                    state.files[conString]->connectionBreaks.emplace_back(state.files[conString]->getFilesizeRaw() - udpLayer->getLayerPayloadSize(),
+                                                                            state.currentTimestamp);
                 } else {
 
                     // create a new fileinformation
@@ -152,8 +147,8 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setFilename("UDPFILE" + std::to_string(state.nextUniqueId));
                     udpPointer->setIdInIndex(state.nextUniqueId);
                     udpPointer->setOffsetType(pcapPtr->getFiletype()); //udp files point directly into the pcap
-                    udpPointer->setFilesizeRaw(udpLayer->getDataLen());
-                    udpPointer->setFilesizeProcessed(udpLayer->getDataLen());
+                    udpPointer->setFilesizeRaw(udpLayer->getLayerPayloadSize());
+                    udpPointer->setFilesizeProcessed(udpLayer->getLayerPayloadSize());
                     udpPointer->setFiletype("udp");
 
                     if (parsedPacket.isPacketOfType(IPv4)) {
@@ -170,6 +165,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setProperty("dstPort", std::to_string(ntohs(udpLayer->getUdpHeader()->portDst)));
                     udpPointer->setProperty("protocol", "udp");
                     udpPointer->fragments.push_back(state.currentOffset);
+                    udpPointer->connectionBreaks.emplace_back(0, state.currentTimestamp);
                     ++state.nextUniqueId;
                 }
             }
@@ -178,7 +174,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
         }
         pcapPtr->closeReader();
     }
-    //TODO: add connection breaks for udp
+
     // Add all streams that are not closed (still in state.files map) to the result vector
     std::transform(state.files.begin(), state.files.end(), std::back_inserter(result),
                     [](auto &f){ return std::static_pointer_cast<pcapfs::File>(f.second); });
