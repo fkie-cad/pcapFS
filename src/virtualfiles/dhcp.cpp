@@ -16,7 +16,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
     std::vector<pcapfs::FilePtr> resultVector(0);
     if (!isDhcpTraffic(filePtr))
         return resultVector;
-    
+
     LOG_TRACE << "starting DHCP parser";
     Bytes data = filePtr->getBuffer();
     size_t size = 0;
@@ -24,7 +24,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
     LOG_TRACE << "number of connection breaks aka future DHCP files: " << numElements;
 
     for (unsigned int i = 0; i < numElements; ++i) {
-        uint64_t offset = filePtr->connectionBreaks.at(i).first;
+        const uint64_t offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
@@ -33,8 +33,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
 
         pcpp::Packet packet;
         std::shared_ptr<pcapfs::DhcpFile> resultPtr = std::make_shared<pcapfs::DhcpFile>();
-
-        pcpp::DhcpLayer dhcpLayer(data.data() + offset, size, nullptr, &packet);
+        const pcpp::DhcpLayer dhcpLayer(data.data() + offset, size, nullptr, &packet);
 
         Fragment fragment;
         fragment.id = filePtr->getIdInIndex();
@@ -62,26 +61,23 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
             resultPtr->setFilename("RES-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
         resultVector.push_back(resultPtr);
     }
-    
+
     return resultVector;
 }
 
 
 bool pcapfs::DhcpFile::isDhcpTraffic(const FilePtr &filePtr) {
-    return filePtr->getProperty("protocol") == "udp" && 
+    return filePtr->getProperty("protocol") == "udp" &&
             ((filePtr->getProperty("srcPort") == "67" || filePtr->getProperty("srcPort") == "68"));
 }
 
 
 size_t pcapfs::DhcpFile::calculateProcessedSize(const Index &idx) {
-    Bytes rawData;
-    rawData.resize(filesizeRaw);
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    std::string output_string = parseDhcpToJson(rawData);
-    return output_string.size();
+    const Fragment fragment = fragments.at(0);
+    Bytes rawData(fragment.length);
+    const FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+    return parseDhcpToJson(rawData).size();
 }
 
 
@@ -107,7 +103,7 @@ std::string const pcapfs::DhcpFile::parseDhcpToJson(Bytes data) {
 }
 
 
-nlohmann::json pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLayer) {
+nlohmann::json const pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLayer) {
     nlohmann::json result;
     uint8_t dhcpMessageType = 0;
     LOG_TRACE << "parsing Dhcp Options";
@@ -120,7 +116,7 @@ nlohmann::json pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLay
 
         if (isInSet(dhcpOptions::typesWithIpAddress, optionType)) {
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = pcpp::IPv4Address(optionValue).toString();
-        
+
         } else if (isInSet(dhcpOptions::typesWithListOfIpAddresses, optionType)) {
             std::vector<std::string> ipList;
             for (size_t i = 0; i < opt.getDataSize(); i+= 4)
@@ -129,18 +125,18 @@ nlohmann::json pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLay
 
         } else if (isInSet(dhcpOptions::typesWithIntValue, optionType)) {
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = be16toh(*(uint16_t*) opt.getValue());
-        
+
         } else if (isInSet(dhcpOptions::typesWithListOfIntValues, optionType)) {
             std::vector<uint16_t> intList;
             for (size_t i = 0; i < opt.getDataSize(); i+= 2)
                 intList.push_back(be16toh(*(uint16_t*) (&optionValue[i])));
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = intList;
-        
+
         } else if (isInSet(dhcpOptions::typesWithTimeValue, optionType)) {
             std::stringstream ss;
             ss << be32toh(*((uint32_t*) optionValue)) << " seconds";
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = ss.str();
-        
+
         } else if (isInSet(dhcpOptions::typesWithOneByteValue, optionType)) {
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = opt.getValueAs<uint8_t>();
 
@@ -153,7 +149,7 @@ nlohmann::json pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLay
             for (size_t i = 0; i < opt.getDataSize(); ++i)
                 requestList.push_back(dhcpOptions::dhcpOptionStrings.at(optionValue[i]));
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = requestList;
-        
+
         } else if (optionType == pcpp::DHCPOPT_FQDN) {
             nlohmann::json entry;
             entry["Flags"] = std::to_string(optionValue[0]);
@@ -161,7 +157,7 @@ nlohmann::json pcapfs::DhcpFile::parseDhcpOptions(const pcpp::DhcpLayer &dhcpLay
             entry["PTR-RR Result"] = std::to_string(optionValue[2]);
             entry["Client Name"] = std::string(&optionValue[3], &optionValue[opt.getDataSize()-1]);
             result[dhcpOptions::dhcpOptionStrings.at(optionType)] = entry;
-        
+
         } else if (optionType == pcpp::DHCPOPT_DHCP_CLIENT_IDENTIFIER) {
             nlohmann::json entry;
             if (optionValue[0] == 1) {
@@ -255,15 +251,13 @@ bool pcapfs::DhcpFile::isInSet(const std::set<uint8_t> &set, uint8_t val) {
 
 
 size_t pcapfs::DhcpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData;
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    const Fragment fragment = fragments.at(0);
+    Bytes rawData(fragment.length);
+    const FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    const auto output_string = parseDhcpToJson(rawData);
-    size_t read_count = std::min((size_t) output_string.length() - startOffset, length);
+    const std::string output_string = parseDhcpToJson(rawData);
     memcpy(buf, output_string.c_str() + startOffset, length);
-    return read_count;
+    return std::min((size_t) output_string.length() - startOffset, length);
 }
 
 

@@ -12,7 +12,7 @@
 
 namespace prop = pcapfs::prop;
 
-std::string pcapfs::DnsFile::dnsClassToString(const pcpp::DnsClass dnsClass) {
+std::string const pcapfs::DnsFile::dnsClassToString(const pcpp::DnsClass dnsClass) {
     static const std::string dnsClasses[]{"Unknown (0)", "IN", "IN_QU", "CH", "HS"};
     static const size_t dnsClassesAvailable = 5;
 
@@ -26,7 +26,7 @@ std::string pcapfs::DnsFile::dnsClassToString(const pcpp::DnsClass dnsClass) {
 }
 
 
-std::string pcapfs::DnsFile::dnsTypeToString(pcpp::DnsType type) {
+std::string const pcapfs::DnsFile::dnsTypeToString(pcpp::DnsType type) {
     static const std::string dnsType[]
             {"Unknown (0)", "A", "NS", "MD", "MF", "CNAME", "SOA", "MB", "MG", "MR", "NULL_R", "WKS", "PTR",
              "HINFO", "MINFO",
@@ -45,7 +45,7 @@ std::string pcapfs::DnsFile::dnsTypeToString(pcpp::DnsType type) {
 }
 
 
-std::vector<nlohmann::json> pcapfs::DnsFile::parseDnsAnswersToJson(pcpp::DnsLayer &dnsLayer) {
+std::vector<nlohmann::json> const pcapfs::DnsFile::parseDnsAnswersToJson(const pcpp::DnsLayer &dnsLayer) {
     //process answers in dns packet (for responses)
     std::vector<nlohmann::json> answers = std::vector<nlohmann::json>();
     pcpp::DnsResource *ans = dnsLayer.getFirstAnswer();
@@ -70,10 +70,9 @@ std::vector<nlohmann::json> pcapfs::DnsFile::parseDnsAnswersToJson(pcpp::DnsLaye
 }
 
 
-std::string pcapfs::DnsFile::parseDnsToJson(pcapfs::Bytes data) {
+std::string const pcapfs::DnsFile::parseDnsToJson(pcapfs::Bytes data) {
     pcpp::Packet packet;
-    pcpp::DnsLayer newDnsLayer;
-    newDnsLayer = pcpp::DnsLayer(data.data(), data.size(), nullptr, &packet);
+    const pcpp::DnsLayer newDnsLayer(data.data(), data.size(), nullptr, &packet);
     nlohmann::json output_json;
     output_json["ID"] = std::to_string(newDnsLayer.getDnsHeader()->transactionID);
     //process queries in dns packet (for requests and responses)
@@ -110,30 +109,39 @@ std::string pcapfs::DnsFile::parseDnsToJson(pcapfs::Bytes data) {
         }
     }
 
-    std::string output_string = output_json.dump(1, '\t');
-    return output_string;
+    return output_json.dump(1, '\t');
 }
 
 
 std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx) {
-    Bytes data = filePtr->getBuffer();
     std::vector<pcapfs::FilePtr> resultVector;
-    //right now, assume one udp virtual file contains one dns request/response
-    pcpp::Packet packet;
-    pcpp::DnsLayer dns;
-    Fragment fragment{};
-    std::shared_ptr<pcapfs::DnsFile> resultPtr = std::make_shared<pcapfs::DnsFile>();
 
-    if ((filePtr->getProperty(prop::dstPort) == "53" || filePtr->getProperty(prop::srcPort) == "53") &&
-        filePtr->getProperty(prop::proto) == "udp") {
-        dns = pcpp::DnsLayer(data.data(), data.size(), nullptr, &packet);
+    if (!((filePtr->getProperty(prop::dstPort) == "53" || filePtr->getProperty(prop::srcPort) == "53") &&
+        filePtr->getProperty(prop::proto) == "udp"))
+        return resultVector;
+
+    Bytes data = filePtr->getBuffer();
+    size_t size = 0;
+    const size_t numElements = filePtr->connectionBreaks.size();
+    LOG_TRACE << "number of connection breaks aka future DNS files: " << numElements;
+
+    for (unsigned int i = 0; i < numElements; ++i) {
+        const uint64_t offset = filePtr->connectionBreaks.at(i).first;
+        if (i == numElements - 1) {
+        	size = filePtr->getFilesizeProcessed() - offset;
+        } else {
+            size = filePtr->connectionBreaks.at(i + 1).first - offset;
+        }
+        pcpp::Packet packet;
+        std::shared_ptr<pcapfs::DnsFile> resultPtr = std::make_shared<pcapfs::DnsFile>();
+        const pcpp::DnsLayer dnsLayer = pcpp::DnsLayer(data.data() + offset, size, nullptr, &packet);
+
+        Fragment fragment;
         fragment.id = filePtr->getIdInIndex();
-        fragment.start = 0;
-        fragment.length = filePtr->getFilesizeRaw();
+        fragment.start = offset;
+        fragment.length = dnsLayer.getHeaderLen();
         resultPtr->fragments.push_back(fragment);
         resultPtr->setFilesizeRaw(fragment.length);
-
-        //We assume the processed file size does not change in this protocol in cmp to the raw file size
         resultPtr->setFilesizeProcessed(fragment.length);
 
         resultPtr->setOffsetType(filePtr->getFiletype());
@@ -148,12 +156,11 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
 
         resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
 
-
         if (filePtr->getProperty(prop::dstPort) == "53") {
             //TODO: add type of query to file name ?
-            resultPtr->setFilename("REQ-" + std::to_string(dns.getDnsHeader()->transactionID));
+            resultPtr->setFilename("REQ-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
         } else if (filePtr->getProperty(prop::srcPort) == "53") {
-            resultPtr->setFilename("RES-" + std::to_string(dns.getDnsHeader()->transactionID));
+            resultPtr->setFilename("RES-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
         }
         resultVector.push_back(resultPtr);
     }
@@ -162,31 +169,26 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
 
 
 size_t pcapfs::DnsFile::calculateProcessedSize(const Index &idx) {
-    Bytes rawData;
-    rawData.resize(filesizeRaw);
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
+    const Fragment fragment = fragments.at(0);
+    Bytes rawData(fragment.length);
+    const FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    std::string output_string = parseDnsToJson(rawData);
-    return output_string.size();
+    return parseDnsToJson(rawData).size();
 }
 
 
 size_t pcapfs::DnsFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData;
-    Fragment fragment = fragments.at(0);
-    rawData.resize(fragment.length);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    filePtr->read(0 + fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-    const auto output_string = parseDnsToJson(rawData);
-    size_t read_count = std::min((size_t) output_string.length() - startOffset, length);
+    const Fragment fragment = fragments.at(0);
+    Bytes rawData(fragment.length);
+    const FilePtr filePtr = idx.get({offsetType, fragment.id});
+    filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+    const std::string output_string = parseDnsToJson(rawData);
     memcpy(buf, output_string.c_str() + startOffset, length);
-    return read_count;
+    return std::min((size_t) output_string.length() - startOffset, length);
 }
 
 
-std::string pcapfs::DnsFile::getDataAsString(pcpp::DnsResource *resource) {
+std::string const pcapfs::DnsFile::getDataAsString(pcpp::DnsResource *resource) {
     if (resource->getDnsType() == pcpp::DNS_TYPE_A or resource->getDnsType() == pcpp::DNS_TYPE_AAAA) {
         return resource->getData()->toString();
     } else if (resource->getDnsType() == pcpp::DNS_TYPE_MX) {
