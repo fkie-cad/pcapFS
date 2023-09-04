@@ -230,17 +230,17 @@ std::string const pcapfs::SshFile::computeHassh(pcpp::SSHKeyExchangeInitMessage*
 
 std::string const pcapfs::SshFile::computeHasshServer(pcpp::SSHKeyExchangeInitMessage* serverKexInitMsg) {
     std::stringstream ss;
-    ss << serverKexInitMsg->getKeyExchangeAlgorithms() << ";" << serverKexInitMsg->getEncryptionAlgorithmsClientToServer()
-        << ";" << serverKexInitMsg->getMacAlgorithmsClientToServer() << ";" << serverKexInitMsg->getCompressionAlgorithmsClientToServer();
+    ss << serverKexInitMsg->getKeyExchangeAlgorithms() << ";" << serverKexInitMsg->getEncryptionAlgorithmsServerToClient()
+        << ";" << serverKexInitMsg->getMacAlgorithmsServerToClient() << ";" << serverKexInitMsg->getCompressionAlgorithmsServerToClient();
     return crypto::calculateMD5(ss.str());
 }
 
 
 size_t pcapfs::SshFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     Bytes totalContent;
-    for (Fragment fragment: fragments) {
+    for (const Fragment fragment: fragments) {
         Bytes rawData(fragment.length);
-        FilePtr filePtr = idx.get({offsetType, fragment.id});
+        const FilePtr filePtr = idx.get({offsetType, fragment.id});
         filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
         totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
     }
