@@ -1,11 +1,13 @@
 #ifndef PCAPFS_VIRTUAL_FILES_UDP_H
 #define PCAPFS_VIRTUAL_FILES_UDP_H
 
-#include <boost/filesystem.hpp>
-
 #include "../file.h"
 #include "../index.h"
 #include "virtualfile.h"
+
+#include <chrono>
+#include <boost/filesystem.hpp>
+#include <pcapplusplus/Packet.h>
 
 
 namespace pcapfs {
@@ -22,6 +24,49 @@ namespace pcapfs {
 
     private:
         static bool registeredAtFactory;
+    };
+
+
+    struct UdpEndpoint {
+        std::string ipAddress;
+        uint16_t port = 0;
+
+        bool operator==(const UdpEndpoint &endp) const {
+            return endp.ipAddress == ipAddress && endp.port == port;
+        };
+
+    };
+
+
+    class UdpConnection {
+    public:
+        UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp);
+        bool operator==(const UdpConnection &conn) const {
+            return ((conn.endpoint1 == endpoint1 && conn.endpoint2 == endpoint2) ||
+                    (conn.endpoint1 == endpoint2 && conn.endpoint2 == endpoint1)) &&
+                    // new UDP "connection" after 30 seconds
+                    std::chrono::duration_cast<std::chrono::seconds>(startTime - conn.startTime).count() > 30;
+        };
+
+        bool operator<(const UdpConnection &conn) const {
+            return startTime < conn.startTime;
+        };
+
+        bool directionChanged (const UdpConnection &conn);
+
+        UdpEndpoint endpoint1;
+        UdpEndpoint endpoint2;
+        TimePoint startTime;
+        bool streamsToEndpoint1 = false;
+    };
+
+
+    struct UdpIndexerState {
+        std::map<UdpConnection, std::shared_ptr<pcapfs::UdpFile>> files;
+        Fragment currentOffset;
+        size_t nextUniqueId = 0;
+        uint64_t currentPcapfileID;
+        pcapfs::TimePoint currentTimestamp;
     };
 
 }

@@ -10,6 +10,7 @@
 #include "../filefactory.h"
 #include "../logging.h"
 #include "dhcp_options.h"
+#include "udp.h"
 
 
 std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx) {
@@ -24,42 +25,57 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
     LOG_TRACE << "number of connection breaks aka future DHCP files: " << numElements;
 
     for (unsigned int i = 0; i < numElements; ++i) {
-        const uint64_t offset = filePtr->connectionBreaks.at(i).first;
+        uint64_t offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-        pcpp::Packet packet;
-        std::shared_ptr<pcapfs::DhcpFile> resultPtr = std::make_shared<pcapfs::DhcpFile>();
-        const pcpp::DhcpLayer dhcpLayer(data.data() + offset, size, nullptr, &packet);
+        const std::shared_ptr<UdpFile> udpFile = std::dynamic_pointer_cast<UdpFile>(filePtr);
 
-        Fragment fragment;
-        fragment.id = filePtr->getIdInIndex();
-        fragment.start = offset;
-        fragment.length = dhcpLayer.getHeaderLen();
-        resultPtr->fragments.push_back(fragment);
+        for (const Fragment &udpFrag : udpFile->fragments) {
+            std::shared_ptr<pcapfs::DhcpFile> resultPtr = std::make_shared<pcapfs::DhcpFile>();
+            pcpp::Packet packet;
+            const pcpp::DhcpLayer dhcpLayer(data.data() + offset, udpFrag.length, nullptr, &packet);
 
-        resultPtr->setFilesizeRaw(fragment.length);
-        resultPtr->setFilesizeProcessed(fragment.length);
-        resultPtr->setOffsetType(filePtr->getFiletype());
-        resultPtr->setFiletype("dhcp");
-        resultPtr->setTimestamp(filePtr->getTimestamp());
-        resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-        resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-        resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-        resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-        resultPtr->setProperty("protocol", "dhcp");
-        resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            Fragment fragment;
+            fragment.id = filePtr->getIdInIndex();
+            fragment.start = offset;
+            fragment.length = dhcpLayer.getHeaderLen();
+            resultPtr->fragments.push_back(fragment);
 
-        resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            resultPtr->setFilesizeRaw(fragment.length);
+            resultPtr->setFilesizeProcessed(fragment.length);
+            resultPtr->setOffsetType("udp");
+            resultPtr->setFiletype("dhcp");
+            resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+            if (i % 2 == 0) {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+            } else {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            }
+            resultPtr->setProperty("protocol", "dhcp");
+            resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
-        if (dhcpLayer.getDhcpHeader()->opCode == 1)
-            resultPtr->setFilename("REQ-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
-        else
-            resultPtr->setFilename("RES-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
-        resultVector.push_back(resultPtr);
+            resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+
+            if (dhcpLayer.getDhcpHeader()->opCode == 1)
+                resultPtr->setFilename("REQ-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
+            else
+                resultPtr->setFilename("RES-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
+            resultVector.push_back(resultPtr);
+
+            offset += dhcpLayer.getHeaderLen();
+            if (offset >= size)
+                break;
+        }
     }
 
     return resultVector;
