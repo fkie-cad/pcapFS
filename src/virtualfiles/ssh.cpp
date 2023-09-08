@@ -26,16 +26,14 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
 
     // With our means, we cannot determine, whether client or server sends the first SSH packet, before the SSH_MSG_KEX_DH_(GEX)_INIT message
     // which is always sent by the client
-    // Thus, we need to calculate hashh and hasshServer for both SSH_MSG_KEXINIT messages. At the end, when it is clear whether client or server
+    // Thus, we need to calculate hassh and hasshServer for both SSH_MSG_KEXINIT messages. At the end, when it is clear whether client or server
     // sent the first SSH packet, we choose the correct value.
-    // Every variable with postfix "Even" correlates to data sent by the side which sent the first SSH packet and
-    // every variable with postfix "Odd" correlates to data sent by the responding side.
+    // Every variable with postfix "Even" belongs to data sent by the side which sent the first SSH packet and
+    // every variable with postfix "Odd" belongs to data sent by the responding side.
     std::string hasshServerOdd;
     std::string hasshOdd;
     std::string hasshServerEven;
     std::string hasshEven;
-
-    std::shared_ptr<SshFile> resultPtr = std::make_shared<SshFile>();
 
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = filePtr->connectionBreaks.at(i).first;
@@ -45,6 +43,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
+        // we create one SSH file for each connection break
+        std::shared_ptr<SshFile> resultPtr = std::make_shared<SshFile>();
         pcpp::SSHLayer *sshLayer = pcpp::SSHLayer::createSSHMessage((uint8_t *) data.data() + offset, size, nullptr, nullptr);
 
         while (sshLayer) {
@@ -162,40 +162,59 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
             offset += sshLayer->getHeaderLen();
             sshLayer = dynamic_cast<pcpp::SSHLayer*>(sshLayer->getNextLayer());
         }
+
+        if (resultPtr->fragments.empty())
+            continue;
+
+        const size_t filesize = std::accumulate(resultPtr->fragments.begin(), resultPtr->fragments.end(), 0,
+                                                            [](size_t counter, Fragment frag){ return counter + frag.length; });
+        resultPtr->flags.set(pcapfs::flags::PROCESSED);
+        resultPtr->setFilesizeRaw(filesize);
+        resultPtr->setFilesizeProcessed(filesize);
+
+        resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
+        resultPtr->setFilename("SSH-" + std::to_string(i));
+        resultPtr->setOffsetType(filePtr->getFiletype());
+        resultPtr->setFiletype("ssh");
+        resultPtr->setProperty("protocol", "ssh");
+
+        if (clientBeginsConnection) {
+            if (!hasshEven.empty())
+                resultPtr->setProperty("hassh", hasshEven);
+            if (!hasshServerEven.empty())
+                resultPtr->setProperty("hasshServer", hasshServerOdd);
+            if (i % 2 == 0) {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+            } else {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            }
+        } else {
+            if (!hasshOdd.empty())
+                resultPtr->setProperty("hassh", hasshOdd);
+            if (!hasshServerOdd.empty())
+                resultPtr->setProperty("hasshServer", hasshServerEven);
+            if (i % 2 == 0) {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+            } else {
+                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
+                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
+                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+            }
+        }
+
+        resultVector.push_back(resultPtr);
     }
 
-    if (resultPtr->fragments.empty())
-        return resultVector;
-
-    const size_t filesize = std::accumulate(resultPtr->fragments.begin(), resultPtr->fragments.end(), 0,
-                                                        [](size_t counter, Fragment frag){ return counter + frag.length; });
-    resultPtr->flags.set(pcapfs::flags::PROCESSED);
-    resultPtr->setFilesizeRaw(filesize);
-    resultPtr->setFilesizeProcessed(filesize);
-
-    resultPtr->setTimestamp(filePtr->connectionBreaks.at(0).second);
-    resultPtr->setFilename("SSH");
-    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    resultPtr->setOffsetType(filePtr->getFiletype());
-    resultPtr->setFiletype("ssh");
-    resultPtr->setProperty("protocol", "ssh");
-
-    if (clientBeginsConnection) {
-        if (!hasshEven.empty())
-            resultPtr->setProperty("hassh", hasshEven);
-        if (!hasshServerEven.empty())
-            resultPtr->setProperty("hasshServer", hasshServerOdd);
-    } else {
-        if (!hasshOdd.empty())
-            resultPtr->setProperty("hassh", hasshOdd);
-        if (!hasshServerOdd.empty())
-            resultPtr->setProperty("hasshServer", hasshServerEven);
-    }
-
-    resultVector.push_back(resultPtr);
     return resultVector;
 }
 
