@@ -42,7 +42,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
             Fragment fragment;
             fragment.id = filePtr->getIdInIndex();
             fragment.start = offset;
-            fragment.length = dhcpLayer.getHeaderLen();
+            fragment.length = udpFrag.length;
             resultPtr->fragments.push_back(fragment);
 
             resultPtr->setFilesizeRaw(fragment.length);
@@ -64,7 +64,15 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
             resultPtr->setProperty("protocol", "dhcp");
             resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
-            resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            try {
+                resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            } catch (nlohmann::json_abi_v3_11_2::detail::type_error &err) {
+                LOG_ERROR << "Failed to parse DHCP content.";
+                offset += udpFrag.length;
+                if (offset >= size)
+                    break;
+                continue;
+            }
 
             if (dhcpLayer.getDhcpHeader()->opCode == 1)
                 resultPtr->setFilename("REQ-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
@@ -72,7 +80,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
                 resultPtr->setFilename("RES-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
             resultVector.push_back(resultPtr);
 
-            offset += dhcpLayer.getHeaderLen();
+            offset += udpFrag.length;
             if (offset >= size)
                 break;
         }
@@ -110,12 +118,7 @@ std::string const pcapfs::DhcpFile::parseDhcpToJson(Bytes data) {
     output_json["Server Host Name"] = rawBytesToString(dhcpLayer.getDhcpHeader()->serverName, 64);
     output_json["Boot File Name"] = rawBytesToString(dhcpLayer.getDhcpHeader()->bootFilename, 128);
     output_json["Options"] = parseDhcpOptions(dhcpLayer);
-    try {
-        return output_json.dump(1, '\t');
-    } catch (nlohmann::json_abi_v3_11_2::detail::type_error &err) {
-        LOG_ERROR << "Failed to parse DHCP content.";
-        return "";
-    }
+    return output_json.dump(1, '\t');
 }
 
 

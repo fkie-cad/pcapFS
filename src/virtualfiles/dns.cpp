@@ -141,7 +141,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             Fragment fragment;
             fragment.id = filePtr->getIdInIndex();
             fragment.start = offset;
-            fragment.length = dnsLayer.getHeaderLen();
+            fragment.length = udpFrag.length;
             resultPtr->fragments.push_back(fragment);
 
             resultPtr->setFilesizeRaw(fragment.length);
@@ -172,7 +172,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             }
             resultVector.push_back(resultPtr);
 
-            offset += dnsLayer.getHeaderLen();
+            offset += udpFrag.length;
             if (offset >= size)
                 break;
         }

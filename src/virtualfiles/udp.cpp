@@ -19,19 +19,20 @@
 
 pcapfs::UdpConnection::UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp) {
     if (packet.isPacketOfType(pcpp::IPv4)) {
-        pcpp::IPv4Layer *ipv4Layer = packet.getLayerOfType<pcpp::IPv4Layer>();
+        const pcpp::IPv4Layer *ipv4Layer = packet.getLayerOfType<pcpp::IPv4Layer>();
         endpoint1.ipAddress = ipv4Layer->getSrcIPv4Address().toString();
         endpoint2.ipAddress = ipv4Layer->getDstIPv4Address().toString();
     } else if (packet.isPacketOfType(pcpp::IPv6)) {
-        pcpp::IPv6Layer *ipv6Layer = packet.getLayerOfType<pcpp::IPv6Layer>();
+        const pcpp::IPv6Layer *ipv6Layer = packet.getLayerOfType<pcpp::IPv6Layer>();
         endpoint1.ipAddress = ipv6Layer->getSrcIPv6Address().toString();
         endpoint2.ipAddress = ipv6Layer->getDstIPv6Address().toString();
     }
 
-    pcpp::UdpLayer *udpLayer = packet.getLayerOfType<pcpp::UdpLayer>();
+    const pcpp::UdpLayer *udpLayer = packet.getLayerOfType<pcpp::UdpLayer>();
     endpoint1.port = ntohs(udpLayer->getUdpHeader()->portSrc);
     endpoint2.port = ntohs(udpLayer->getUdpHeader()->portDst);
     startTime = timestamp;
+    streamsToEndpoint1 = false;
 }
 
 
@@ -95,6 +96,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
     std::vector<pcapfs::FilePtr> result{};
     UdpIndexerState state{};
     std::shared_ptr<CaptureFile> pcapPtr;
+    LOG_TRACE << "start extracting UDP files";
 
     for (auto &pcap: pcapFiles) {
         if (pcap->getFiletype() == "pcap")
@@ -110,13 +112,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
         for (size_t i = 1; reader->getNextPacket(rawPacket); i++) {
 
-            pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket);
+            const pcpp::Packet parsedPacket = pcpp::Packet(&rawPacket);
             state.currentTimestamp = utils::convertTimeValToTimePoint(rawPacket.getPacketTimeStamp());
 
             pcapPosition += pcapPtr->getOffsetFromLastBlock(i);
 
             if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(pcpp::IP)) {
-                std::shared_ptr<pcapfs::UdpFile> udpPointer;
 
                 state.currentOffset.id = state.currentPcapfileID;
                 state.currentOffset.start = pcapPosition;
@@ -126,26 +127,28 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     l = l->getNextLayer();
                     state.currentOffset.start += l->getHeaderLen();
                 }
-                pcpp::UdpLayer *udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
+                const pcpp::UdpLayer *udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
                 state.currentOffset.length = udpLayer->getLayerPayloadSize();
 
                 const UdpConnection udpConn(parsedPacket, state.currentTimestamp);
                 const auto pos = std::find_if(state.files.begin(), state.files.end(), [udpConn](const auto &elem){ return elem.first == udpConn; });
                 if (pos != state.files.end()) {
                     // packet is part of already known UDP "connection" and UDP payload is added as fragment to existing UDP file
+                    LOG_TRACE << "add UDP packet payload to existing UDP file";
                     UdpConnection targetConn = pos->first;
                     state.files[targetConn]->fragments.push_back(state.currentOffset);
-                    state.files[targetConn]->setFilesizeRaw(state.files[udpConn]->getFilesizeRaw() + udpLayer->getLayerPayloadSize());
-                    state.files[targetConn]->setFilesizeProcessed(state.files[udpConn]->getFilesizeRaw());
+                    state.files[targetConn]->setFilesizeRaw(state.files[targetConn]->getFilesizeRaw() + udpLayer->getLayerPayloadSize());
+                    state.files[targetConn]->setFilesizeProcessed(state.files[targetConn]->getFilesizeRaw());
                     if (targetConn.directionChanged(udpConn)) {
                         // direction of UDP packet changed -> add connection break
+                        LOG_TRACE << "add new connection break";
                         state.files[targetConn]->connectionBreaks.emplace_back(state.files[targetConn]->getFilesizeRaw() - udpLayer->getLayerPayloadSize(),
                                                                             state.currentTimestamp);
                     }
                 } else {
                     // UDP packet does not match to existing UDP file -> create new one
-                    state.files.emplace(udpConn, std::make_shared<pcapfs::UdpFile>());
-                    udpPointer = state.files[udpConn];
+                    LOG_TRACE << "creating new UDP file";
+                    std::shared_ptr<pcapfs::UdpFile> udpPointer = std::make_shared<pcapfs::UdpFile>();
                     udpPointer->setFirstPacketNumber(i);
                     udpPointer->setTimestamp(state.currentTimestamp);
                     udpPointer->setFilename("UDPFILE" + std::to_string(state.nextUniqueId));
@@ -163,6 +166,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setProperty("protocol", "udp");
                     udpPointer->fragments.push_back(state.currentOffset);
                     udpPointer->connectionBreaks.emplace_back(0, state.currentTimestamp);
+                    state.files.emplace(udpConn, udpPointer);
                     ++state.nextUniqueId;
                 }
             }
@@ -175,6 +179,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
     // Add all streams in state.files map to the result vector
     std::transform(state.files.begin(), state.files.end(), std::back_inserter(result),
                     [](auto &f){ return std::static_pointer_cast<pcapfs::File>(f.second); });
+    LOG_TRACE << "finished with creating UDP files";
     return result;
 }
 
