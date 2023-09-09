@@ -16,6 +16,7 @@ PLATFORMS = {
     "ubuntu-16.04": "Ubuntu 16.04",
     "ubuntu-18.04": "Ubuntu 18.04",
     "ubuntu-20.04": "Ubuntu 20.04",
+    "ubuntu-22.04": "Ubuntu 22.04"
 }
 
 LOG_FILE_NAME_PREFIX = "platform-tests"
@@ -79,6 +80,7 @@ def run_platform_test(platform):
             results["build"] = run_build_test(platform, log)
             results["unit"] = run_unit_tests(platform, log)
             results["system"] = run_system_tests(platform, log)
+            results["crypto"] = run_crypto_tests(platform, log)
     with open(resultsfile, "w") as f:
         json.dump(results, f)
 
@@ -106,14 +108,33 @@ def run_build_test(platform, log):
 
 
 def run_system_tests(platform, log):
+    apt_or_yum = "yum" if platform == "centos-7" else "apt"
+    try:
+        subprocess.check_call(["vagrant", "ssh", platform, "-c", "sudo " + apt_or_yum + " -y install python3-pip"],
+                              stdout=log, stderr=log)
+        subprocess.check_call(["vagrant", "ssh", platform, "-c", "pip install pytest"],
+                              stdout=log, stderr=log)
+    except subprocess.CalledProcessError:
+        pass
     test_command = [
         "vagrant",
         "ssh",
         platform,
         "-c",
-        "/home/vagrant/pcapfs/tests/system/run-system-tests.sh",
+        "/home/vagrant/pcapfs/tests/system/run-system-tests.sh vagrant",
     ]
     return _run_test(platform, log, test_command, test_name="system")
+
+
+def run_crypto_tests(platform, log):
+    test_command = [
+        "vagrant",
+        "ssh",
+        platform,
+        "-c",
+        "/home/vagrant/pcapfs/tests/crypto/run-crypto-tests.sh vagrant",
+    ]
+    return _run_test(platform, log, test_command, test_name="crypto")
 
 
 def run_unit_tests(platform, log):

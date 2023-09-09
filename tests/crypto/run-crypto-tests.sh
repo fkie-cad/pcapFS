@@ -35,5 +35,11 @@ set +u
 source "${venv}/bin/activate"
 set -u
 
-py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
-py.test "${here}/pcapfs-crypto-tests-features.py" -vv
+if [[ $# -eq 0 ]]; then
+    py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+    py.test "${here}/pcapfs-crypto-tests-features.py" -vv
+elif [[ "$1" = "vagrant" ]]; then
+    cd /home/vagrant/pcapfs/tests/system/
+    py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+    py.test "${here}/pcapfs-crypto-tests-features.py" -vv
+fi
