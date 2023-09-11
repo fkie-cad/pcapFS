@@ -50,13 +50,13 @@ else
     exit 2
 fi
 
-echo '[!] Commits in "dev but not in "master":'
-git --no-pager log --left-right --graph --cherry-pick --oneline master..dev
-echo -n '[?] Do you want to merge these commit into the "master" branch? [y/N] '
+echo '[!] Commits in "dev but not in "main":'
+git --no-pager log --left-right --graph --cherry-pick --oneline main..dev
+echo -n '[?] Do you want to merge these commit into the "main" branch? [y/N] '
 yn="$(yesno)"
 if [[ "${yn}" = 'y' ]]; then
-    echo '[*] Merging "dev" into "master"'
-    git checkout master
+    echo '[*] Merging "dev" into "main"'
+    git checkout main
     git merge dev
 else
     echo '[!] Exiting.'
