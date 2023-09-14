@@ -1,7 +1,10 @@
 # Changelog
 
+## [Unreleased]
+-
+
 ## [0.5.0]
-### Added 
+### Added
 - Add support for PCAPNG files
 - Support TLS decryption with key material which is embedded in PCAPNG files
 - Add SSH and DHCP as supported protocol

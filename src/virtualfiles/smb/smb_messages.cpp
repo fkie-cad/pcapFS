@@ -21,15 +21,15 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len) {
             case SMB2_NEGOTIATE:
                 if (isResponse)
                     message = NegotiateResponse(&data[64], len - 64);
-                else 
+                else
                     message = NegotiateRequest(&data[64], len - 64);
                 break;
-            
+
             case SMB2_QUERY_INFO:
                 if (isResponse)
                     // TODO: change to QueryInfoResponse
                     message = SmbMessage(&data[64], len - 64);
-                else 
+                else
                     message = QueryInfoRequest(&data[64], len - 64);
                 break;
 
@@ -49,4 +49,3 @@ std::string const pcapfs::smb::SmbPacket::commandToString(uint16_t cmdCode) {
     result.append(isResponse ? " Response" : " Request");
     return result;
 }
-

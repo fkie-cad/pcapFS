@@ -16,7 +16,7 @@ PLATFORMS = {
     "ubuntu-16.04": "Ubuntu 16.04",
     "ubuntu-18.04": "Ubuntu 18.04",
     "ubuntu-20.04": "Ubuntu 20.04",
-    "ubuntu-22.04": "Ubuntu 22.04"
+    "ubuntu-22.04": "Ubuntu 22.04",
 }
 
 LOG_FILE_NAME_PREFIX = "platform-tests"
@@ -110,10 +110,22 @@ def run_build_test(platform, log):
 def run_system_tests(platform, log):
     apt_or_yum = "yum" if platform == "centos-7" else "apt"
     try:
-        subprocess.check_call(["vagrant", "ssh", platform, "-c", "sudo " + apt_or_yum + " -y install python3-pip"],
-                              stdout=log, stderr=log)
-        subprocess.check_call(["vagrant", "ssh", platform, "-c", "pip install pytest"],
-                              stdout=log, stderr=log)
+        subprocess.check_call(
+            [
+                "vagrant",
+                "ssh",
+                platform,
+                "-c",
+                "sudo " + apt_or_yum + " -y install python3-pip",
+            ],
+            stdout=log,
+            stderr=log,
+        )
+        subprocess.check_call(
+            ["vagrant", "ssh", platform, "-c", "pip install pytest"],
+            stdout=log,
+            stderr=log,
+        )
     except subprocess.CalledProcessError:
         pass
     test_command = [

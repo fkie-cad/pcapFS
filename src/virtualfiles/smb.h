@@ -13,7 +13,7 @@ namespace pcapfs {
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
-    
+
     private:
         void fillGlobalProperties(std::shared_ptr<SmbFile> &controlFilePtr, const FilePtr &filePtr);
         static bool isSmbTraffic(const FilePtr &filePtr, const Bytes &data);

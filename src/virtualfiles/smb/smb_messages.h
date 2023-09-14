@@ -116,7 +116,7 @@ namespace pcapfs {
             size_t size = 0;
             bool isResponse = false;
             std::string command = "";
-        
+
         private:
             std::string const commandToString(uint16_t cmdCode);
         };

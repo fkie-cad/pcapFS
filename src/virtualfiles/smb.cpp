@@ -96,7 +96,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
 
 bool pcapfs::SmbFile::isSmbTraffic(const FilePtr &filePtr, const Bytes &data) {
-    const uint8_t SMB_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42}; 
+    const uint8_t SMB_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42};
     if (filePtr->getProperty("protocol") == "tcp" &&
         (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445") &&
         data.size() > 68 && data.at(0) == 0x00 && memcmp(&data.at(4), SMB_MAGIC, 4) == 0)
