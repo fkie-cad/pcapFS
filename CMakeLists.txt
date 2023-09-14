@@ -61,6 +61,10 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/cobaltstrike.cpp
         src/virtualfiles/ssh.cpp
         src/virtualfiles/dhcp.cpp
+        src/virtualfiles/smb.cpp
+        src/virtualfiles/smb/smb_headers.h
+        src/virtualfiles/smb/smb_messages.cpp
+        src/virtualfiles/smb/smb_utils.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES
