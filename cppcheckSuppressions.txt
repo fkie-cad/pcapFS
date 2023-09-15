@@ -11,4 +11,3 @@ unusedStructMember:src/capturefiles/pcapng.h
 unreadVariable:src/virtualfiles/dhcp.cpp
 unreadVariable:src/virtualfiles/dns.cpp
 unusedStructMember:src/virtualfiles/udp.h
-unusedStructMember:src/virtualfiles/smb/smb_headers.h

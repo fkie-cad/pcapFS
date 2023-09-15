@@ -3,10 +3,11 @@
 
 #include <string>
 #include <vector>
+#include <cstring>
 
 namespace pcapfs {
     namespace smb {
-        enum SmbVersion : uint16_t {
+        enum Version : uint16_t {
             SMB_VERSION_2_0_2 = 0x0202,
             SMB_VERSION_2_1 = 0x0210,
             SMB_VERSION_3_0 = 0x0300,
@@ -14,7 +15,7 @@ namespace pcapfs {
             SMB_VERSION_3_1_1 = 0x0311
         };
 
-        enum SmbCommand : uint16_t {
+        enum Command : uint16_t {
             SMB2_NEGOTIATE = 0x0000,
             SMB2_SESSION_SETUP = 0x0001,
             SMB2_LOGOFF = 0x0002,
@@ -58,7 +59,7 @@ namespace pcapfs {
             "SMB2 OPLOCK_BREAK"
         };
 
-        enum SmbFlags : uint32_t {
+        enum PacketHeaderFlags : uint32_t {
             SMB2_FLAGS_SERVER_TO_REDIR = 0x00000001,
             SMB2_FLAGS_ASYNC_COMMAND = 0x00000002,
             SMB2_FLAGS_RELATED_OPERATIONS = 0x00000004,
@@ -181,7 +182,46 @@ namespace pcapfs {
             STATUS_DISK_FULL = 0xC000007F
         };
 
-        struct SmbHeader {
+        enum HeaderType : uint8_t {
+            SMB2_PACKET_HEADER = 0,
+            SMB2_TRANSFORM_HEADER = 1,
+            SMB2_COMPRESSION_TRANSFORM_HEADER_UNCHAINED = 2,
+            SMB2_COMPRESSION_TRANSFORM_HEADER_CHAINED = 3
+        };
+
+        enum CompressionFlags : uint8_t {
+            SMB2_COMPRESSION_FLAG_NONE = 0,
+            SMB2_COMPRESSION_FLAG_CHAINED = 1
+        };
+
+        enum CompressionAlgorithms : uint16_t {
+            NONE = 0,
+            LZNT1 = 1,
+            LZ77 = 2,
+            LZ77_HUFFMAN = 3,
+            PATTERN_V1 = 4
+        };
+
+        struct SmbHeader {};
+
+
+        struct SmbPacketHeader : SmbHeader {
+            explicit SmbPacketHeader(const uint8_t* rawData) {
+                memcpy(&protocolId, rawData, 4);
+                memcpy(&headerLength, rawData+4, 2);
+                memcpy(&creditCharge, rawData+6, 2);
+                memcpy(&status, rawData+8, 4);
+                memcpy(&command, rawData+12, 2);
+                memcpy(&requestedCredits, rawData+14, 2);
+                memcpy(&flags, rawData+16, 4);
+                memcpy(&chainOffset, rawData+20, 4);
+                memcpy(&messageId, rawData+24, 8);
+                memcpy(&processId, rawData+32, 4);
+                memcpy(&treeId, rawData+36, 4);
+                memcpy(&sessionId, rawData+40, 8);
+                memcpy(&signature, rawData+48, 16);
+            };
+
             uint32_t protocolId; // "\xFE SMB" magic bytes
             uint16_t headerLength; // always 64
             uint16_t creditCharge;
@@ -195,6 +235,69 @@ namespace pcapfs {
             uint32_t treeId;
             uint64_t sessionId;
             uint8_t signature[16];
+        };
+
+
+        struct SmbTransformHeader : SmbHeader {
+            explicit SmbTransformHeader(const uint8_t* rawData) {
+                memcpy(&protocolId, rawData, 4);
+                memcpy(&signature, rawData+4, 16);
+                memcpy(&nonce, rawData+20, 16);
+                memcpy(&messageSize, rawData+36, 4);
+                memcpy(&flags, rawData+42, 2);
+                memcpy(&sessionId, rawData+44, 8);
+            };
+
+            uint32_t protocolId; // "\xFD SMB" magic bytes
+            uint8_t signature[16];
+            uint8_t nonce[16];
+            uint32_t messageSize;
+            uint16_t flags; // encryption algorithm for SMB 3.0/3.0.2
+            uint64_t sessionId;
+
+        };
+
+
+        struct SmbCompressionTransformHeader : SmbHeader {
+            explicit SmbCompressionTransformHeader(const uint8_t* rawData) {
+                memcpy(&protocolId, rawData, 4);
+                memcpy(&uncompressedDataSize, rawData+4, 4);
+                memcpy(&compressionAlgorithm, rawData+8, 2);
+                memcpy(&flags, rawData+10, 2);
+            };
+
+            uint32_t protocolId;
+            uint32_t uncompressedDataSize;
+            uint16_t compressionAlgorithm;
+            uint16_t flags;
+
+        };
+
+
+        struct SmbCompressionTransformHeaderUnchained : SmbCompressionTransformHeader {
+            explicit SmbCompressionTransformHeaderUnchained(const uint8_t* rawData) : SmbCompressionTransformHeader(rawData) {
+                memcpy(&offset, rawData+12, 4);
+            };
+
+            uint32_t offset;
+        };
+
+
+        struct SmbCompressionTransformHeaderChained : SmbCompressionTransformHeader {
+            explicit SmbCompressionTransformHeaderChained(const uint8_t* rawData) : SmbCompressionTransformHeader(rawData) {
+                memcpy(&length, rawData+12, 4);
+                if (usesOriginalPayloadSizeField())
+                    memcpy(&originalPayloadSize, rawData+16, 4);
+            };
+
+            bool usesOriginalPayloadSizeField() const {
+                return (compressionAlgorithm == CompressionAlgorithms::LZNT1 ||
+                    compressionAlgorithm == CompressionAlgorithms::LZ77 ||
+                    compressionAlgorithm == CompressionAlgorithms::LZ77_HUFFMAN);
+            };
+
+            uint32_t length;
+            uint32_t originalPayloadSize = 0;
         };
     }
 }

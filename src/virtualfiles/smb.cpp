@@ -13,7 +13,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     if (!isSmbTraffic(filePtr, data))
         return resultVector;
 
-    LOG_TRACE << "detected SMB traffic and start parsing";
+    LOG_TRACE << "detected SMB2 traffic and start parsing";
     std::shared_ptr<SmbFile> controlFilePtr = std::make_shared<SmbFile>();
     controlFilePtr->fillGlobalProperties(controlFilePtr, filePtr);
     controlFilePtr->setFilename("SMB2.control");
@@ -42,37 +42,68 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
             size_t accumulatedSmbPacketSize = 0;
             while (accumulatedSmbPacketSize < smbDataSize) {
-                smb::SmbPacket smbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize);
-                ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
+                smb::SmbPacket smbPacket;
+                try {
+                    smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize);
+                } catch (const PcapFsException &err) {
+                    LOG_WARNING << "Failed to parse SMB2 packet: " << err.what();
+                    offset += smbDataSize;
+                    currPos += smbDataSize;
+                    break;
+                }
 
                 Fragment fragment;
                 fragment.id = filePtr->getIdInIndex();
                 fragment.start = offset;
 
-                if (smbPacket.header.chainOffset != 0) {
-                    // we have a chained smb packet directly next
-                    // without direct TCP transport packet header in between
-                    fragment.length = smbPacket.size;
-                    controlFilePtr->fragments.push_back(fragment);
-                    offset += smbPacket.header.chainOffset;
-                    currPos += smbPacket.header.chainOffset;
-                    accumulatedSmbPacketSize += smbPacket.header.chainOffset;
+                if (smbPacket.headerType == smb::HeaderType::SMB2_PACKET_HEADER) {
+                    std::shared_ptr<smb::SmbPacketHeader> packetHeader = std::static_pointer_cast<smb::SmbPacketHeader>(smbPacket.header);
+                    ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
 
-                } else if (smbPacket.header.flags & smb::SMB2_FLAGS_RELATED_OPERATIONS) {
-                    // last packet after a sequence of chained SMB packets
-                    fragment.length = smbPacket.size;
-                    controlFilePtr->fragments.push_back(fragment);
-                    offset += smbPacket.size;
-                    currPos += smbPacket.size;
-                    break;
+                    if (packetHeader->chainOffset != 0) {
+                        // we have chained SMB2 data directly next
+                        // without direct TCP transport packet header in between
+                        fragment.length = smbPacket.size;
+                        controlFilePtr->fragments.push_back(fragment);
+                        offset += packetHeader->chainOffset;
+                        currPos += packetHeader->chainOffset;
+                        accumulatedSmbPacketSize += packetHeader->chainOffset;
 
-                } else {
-                    // packet does not belong to chain in any way
+                    } else if (packetHeader->flags & smb::PacketHeaderFlags::SMB2_FLAGS_RELATED_OPERATIONS) {
+                        // last chunk of a sequence of chained SMB2 data
+                        fragment.length = smbPacket.size;
+                        controlFilePtr->fragments.push_back(fragment);
+                        offset += smbPacket.size;
+                        currPos += smbPacket.size;
+                        break;
+
+                    } else {
+                        // packet does not belong to chain in any way
+                        fragment.length = smbDataSize;
+                        controlFilePtr->fragments.push_back(fragment);
+                        offset += smbDataSize;
+                        currPos += smbDataSize;
+                        break;
+                    }
+
+                } else if (smbPacket.headerType == smb::HeaderType::SMB2_TRANSFORM_HEADER ||
+                            smbPacket.headerType == smb::HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_UNCHAINED) {
+                    ss << "[<|>] " << smbPacket.command << std::endl;
+
                     fragment.length = smbDataSize;
                     controlFilePtr->fragments.push_back(fragment);
                     offset += smbDataSize;
                     currPos += smbDataSize;
                     break;
+
+                } else if (smbPacket.headerType == smb::HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_CHAINED) {
+                    ss << "[<|>] " << smbPacket.command << std::endl;
+
+                    fragment.length = smbPacket.size;
+                    controlFilePtr->fragments.push_back(fragment);
+                    offset += smbPacket.size;
+                    currPos += smbPacket.size;
+                    accumulatedSmbPacketSize += smbPacket.size;
                 }
             }
 
@@ -80,7 +111,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
             if (offset >= data.size())
                 break;
 
-            // get size of next SMB data
+            // get size of next SMB2 data
             smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         }
     }
@@ -135,7 +166,10 @@ std::string const pcapfs::SmbFile::parseSmbTraffic(const std::vector<Bytes> &smb
     std::stringstream ss;
     for (const Bytes &chunk : smbData) {
         smb::SmbPacket smbPacket(chunk.data(), chunk.size());
-        ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
+        if (smbPacket.headerType == smb::SMB2_TRANSFORM_HEADER)
+            ss << "[<|>]" << smbPacket.command << std::endl;
+        else
+            ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
     }
     return ss.str();
 }

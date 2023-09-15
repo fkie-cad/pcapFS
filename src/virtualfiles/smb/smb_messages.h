@@ -13,20 +13,22 @@ namespace pcapfs {
         class SmbMessage {
         public:
             SmbMessage() : rawData(0) {}
-            SmbMessage(const uint8_t* data, size_t len) : rawData(data, data+len), totalSize(len), structureSize(*(uint16_t*) data) {};
+            SmbMessage(const uint8_t* data, size_t len) : rawData(data, data+len), totalSize(len) {};
             Bytes rawData;
             size_t totalSize = 0;
-            uint16_t structureSize = 0;
         };
 
         class ErrorResponse : public SmbMessage {
         public:
             ErrorResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 9)
-                    throw PcapFsException("Invalid StructureSize in SMB Error Response");
+                    throw PcapFsException("Invalid StructureSize in SMB2 Error Response");
+
                 const uint32_t byteCount = *(uint32_t*) &rawData.at(4);
                 if (byteCount > len - 6)
-                    throw PcapFsException("Invalid SMB Error Response Message");
+                    throw PcapFsException("Invalid SMB2 Error Response Message");
+
                 errorData.assign(&rawData.at(6), &rawData.at(6 + byteCount));
                 totalSize = 8 + byteCount;
             }
@@ -37,12 +39,15 @@ namespace pcapfs {
         class QueryInfoRequest : public SmbMessage {
         public:
             QueryInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 41)
-                    throw PcapFsException("Invalid StructureSize in SMB Query Info Request");
+                    throw PcapFsException("Invalid StructureSize in SMB2 Query Info Request");
+
                 const uint16_t inputBufferOffset = *(uint16_t*) &rawData.at(8);
                 const uint32_t inputBufferLength = *(uint32_t*) &rawData.at(12);
                 if (inputBufferOffset + inputBufferLength > len)
-                    throw PcapFsException("Invalid buffer values in SMB Query Info Request");
+                    throw PcapFsException("Invalid buffer values in SMB2 Query Info Request");
+
                 if (inputBufferOffset == 0 && inputBufferLength == 0)
                     totalSize = 41;
                 else
@@ -53,16 +58,20 @@ namespace pcapfs {
         class NegotiateRequest : public SmbMessage {
         public:
             NegotiateRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 36)
-                    throw PcapFsException("Invalid StructureSize in SMB Negotiate Request");
+                    throw PcapFsException("Invalid StructureSize in SMB2 Negotiate Request");
+
                 const uint16_t dialectCount = *(uint16_t*) &rawData.at(2);
                 if (dialectCount > 5 || (size_t)(2*dialectCount + 36) > len)
-                    throw PcapFsException("Invalid amount of dialects in SMB Negotiate Request");
+                    throw PcapFsException("Invalid amount of dialects in SMB2 Negotiate Request");
+
                 if (contains311Dialect(dialectCount)) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(28);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(32);
                     if (negotiateContextOffset + (8*negotiateContextCount) > len)
-                        throw PcapFsException("Invalid negotiate context values in SMB Negotiate Request");
+                        throw PcapFsException("Invalid negotiate context values in SMB2 Negotiate Request");
+
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
                 } else {
                     totalSize = 36 + (2*dialectCount);
@@ -72,7 +81,7 @@ namespace pcapfs {
         private:
             bool contains311Dialect(uint16_t dialectCount) {
                 for (int pos = 36; pos < 36 + (dialectCount*2) ; pos += 2) {
-                    if (*(uint16_t*) &rawData.at(pos) == SMB_VERSION_3_1_1)
+                    if (*(uint16_t*) &rawData.at(pos) == Version::SMB_VERSION_3_1_1)
                         return true;
                 }
                 return false;
@@ -83,20 +92,24 @@ namespace pcapfs {
         class NegotiateResponse : public SmbMessage {
         public:
             NegotiateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 65)
-                    throw PcapFsException("Invalid StructureSize in SMB Negotiate Response");
+                    throw PcapFsException("Invalid StructureSize in SMB2 Negotiate Response");
+
                 dialect = *(uint16_t*) &rawData.at(4);
-                if (dialect == SMB_VERSION_3_1_1) {
+                if (dialect == Version::SMB_VERSION_3_1_1) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(60);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(6);
                     if (negotiateContextOffset + (8*negotiateContextCount) > len)
-                        throw PcapFsException("Invalid negotiate context values in SMB Negotiate Response");
+                        throw PcapFsException("Invalid negotiate context values in SMB2 Negotiate Response");
+
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
                 } else {
                     const uint16_t securityBufferOffset = *(uint16_t*) &rawData.at(56);
                     const uint16_t securityBufferLength = *(uint16_t*) &rawData.at(58);
                     if (securityBufferOffset + securityBufferLength > len)
-                        throw PcapFsException("Invalid buffer values in SMB Negotiate Response");
+                        throw PcapFsException("Invalid buffer values in SMB2 Negotiate Response");
+
                     totalSize = securityBufferOffset + securityBufferLength;
                 }
             }
@@ -106,16 +119,15 @@ namespace pcapfs {
 
         class SmbPacket {
         public:
-            SmbPacket() {
-                memset(&header, 0, 64);
-            }
+            SmbPacket() {};
             SmbPacket(const uint8_t* data, size_t len);
 
-            SmbHeader header;
+            std::shared_ptr<SmbHeader> header = nullptr;
             SmbMessage message;
             size_t size = 0;
             bool isResponse = false;
             std::string command = "";
+            uint8_t headerType = HeaderType::SMB2_PACKET_HEADER;
 
         private:
             std::string const commandToString(uint16_t cmdCode);
