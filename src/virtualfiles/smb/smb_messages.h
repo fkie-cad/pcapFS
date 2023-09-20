@@ -23,36 +23,18 @@ namespace pcapfs {
             ErrorResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 9)
-                    throw PcapFsException("Invalid StructureSize in SMB2 Error Response");
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Error Response");
 
                 const uint32_t byteCount = *(uint32_t*) &rawData.at(4);
-                if (byteCount > len - 6)
-                    throw PcapFsException("Invalid SMB2 Error Response Message");
+                if (byteCount > len - 8)
+                    throw SmbError("Invalid SMB2 Error Response Message");
 
-                errorData.assign(&rawData.at(6), &rawData.at(6 + byteCount));
-                totalSize = 8 + byteCount;
-            }
-
-            Bytes errorData;
-        };
-
-        class QueryInfoRequest : public SmbMessage {
-        public:
-            QueryInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
-                if (structureSize != 41)
-                    throw PcapFsException("Invalid StructureSize in SMB2 Query Info Request");
-
-                const uint16_t inputBufferOffset = *(uint16_t*) &rawData.at(8);
-                const uint32_t inputBufferLength = *(uint32_t*) &rawData.at(12);
-                if (inputBufferOffset + inputBufferLength > len)
-                    throw PcapFsException("Invalid buffer values in SMB2 Query Info Request");
-
-                if (inputBufferOffset == 0 && inputBufferLength == 0)
-                    totalSize = 41;
+                if (byteCount == 0)
+                    totalSize = 9;
                 else
-                    totalSize = inputBufferOffset + inputBufferLength;
+                    totalSize = 8 + byteCount;
             }
+
         };
 
         class NegotiateRequest : public SmbMessage {
@@ -60,17 +42,17 @@ namespace pcapfs {
             NegotiateRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 36)
-                    throw PcapFsException("Invalid StructureSize in SMB2 Negotiate Request");
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Negotiate Request");
 
                 const uint16_t dialectCount = *(uint16_t*) &rawData.at(2);
                 if (dialectCount > 5 || (size_t)(2*dialectCount + 36) > len)
-                    throw PcapFsException("Invalid amount of dialects in SMB2 Negotiate Request");
+                    throw SmbError("Invalid amount of dialects in SMB2 Negotiate Request");
 
                 if (contains311Dialect(dialectCount)) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(28);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(32);
-                    if (negotiateContextOffset + (8*negotiateContextCount) > len)
-                        throw PcapFsException("Invalid negotiate context values in SMB2 Negotiate Request");
+                    if ((size_t)(negotiateContextOffset + (8*negotiateContextCount) - 64) > len)
+                        throw SmbError("Invalid negotiate context values in SMB2 Negotiate Request");
 
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
                 } else {
@@ -94,40 +76,521 @@ namespace pcapfs {
             NegotiateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 65)
-                    throw PcapFsException("Invalid StructureSize in SMB2 Negotiate Response");
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Negotiate Response");
 
                 dialect = *(uint16_t*) &rawData.at(4);
                 if (dialect == Version::SMB_VERSION_3_1_1) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(60);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(6);
-                    if (negotiateContextOffset + (8*negotiateContextCount) > len)
-                        throw PcapFsException("Invalid negotiate context values in SMB2 Negotiate Response");
+                    if ((size_t)(negotiateContextOffset + (8*negotiateContextCount)  - 64) > len)
+                        throw SmbError("Invalid negotiate context values in SMB2 Negotiate Response");
 
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
                 } else {
                     const uint16_t securityBufferOffset = *(uint16_t*) &rawData.at(56);
                     const uint16_t securityBufferLength = *(uint16_t*) &rawData.at(58);
-                    if (securityBufferOffset + securityBufferLength > len)
-                        throw PcapFsException("Invalid buffer values in SMB2 Negotiate Response");
+                    if ((size_t)(securityBufferOffset + securityBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Negotiate Response");
 
-                    totalSize = securityBufferOffset + securityBufferLength;
+                    totalSize = securityBufferLength == 0 ? 65 : (securityBufferOffset + securityBufferLength - 64);
                 }
             }
             uint16_t dialect;
+        };
+
+        class SessionSetupRequest : public SmbMessage {
+        public:
+            SessionSetupRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 25)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Session Setup Request");
+
+                const uint16_t securityBufferOffset = *(uint16_t*) &rawData.at(12);
+                const uint16_t securityBufferLength = *(uint16_t*) &rawData.at(14);
+
+                if (securityBufferLength == 0)
+                    totalSize = 25;
+                else {
+                    if ((size_t)(securityBufferOffset + securityBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Session Setup Request");
+                    totalSize = securityBufferOffset + securityBufferLength - 64;
+                }
+            }
+        };
+
+        class SessionSetupResponse : public SmbMessage {
+        public:
+            SessionSetupResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 9)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Session Setup Response");
+
+                const uint16_t securityBufferOffset = *(uint16_t*) &rawData.at(4);
+                const uint16_t securityBufferLength = *(uint16_t*) &rawData.at(6);
+
+                if (securityBufferLength == 0)
+                    totalSize = 8;
+                else {
+                    if ((size_t)(securityBufferOffset + securityBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Session Setup Response");
+                    totalSize = securityBufferOffset + securityBufferLength - 64;
+                }
+            }
+        };
+
+        class TreeConnectRequest : public SmbMessage {
+        public:
+            TreeConnectRequest(const uint8_t* data, size_t len, uint16_t dialect) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 9)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Tree Connect Request");
+
+                const uint16_t flags = *(uint16_t*) &rawData.at(2);
+                if (dialect == Version::SMB_VERSION_3_1_1 && (flags & 4)) {
+                    // SMB2_TREE_CONNECT_FLAG_EXTENSION_PRESENT
+                    const uint32_t treeConnectContextOffset = *(uint32_t*) &rawData.at(8);
+                    const uint16_t treeConnectContextCount = *(uint32_t*) &rawData.at(12);
+                    if ((size_t)(treeConnectContextOffset + (8*treeConnectContextCount)) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
+
+                    if (treeConnectContextOffset == 0 || treeConnectContextCount == 0) {
+                        const uint16_t pathOffset = *(uint16_t*) &rawData.at(4);
+                        const uint16_t pathLength = *(uint16_t*) &rawData.at(6);
+                        if ((size_t)(pathOffset + pathLength - 64) > len)
+                            throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
+
+                        totalSize = pathLength == 0 ? 9 : (pathOffset + pathLength - 64);
+
+                    } else {
+                        size_t currPos = treeConnectContextOffset;
+                        for (size_t i = 0; i < treeConnectContextCount; ++i) {
+                            uint16_t dataLength = (*(uint16_t*) &rawData.at(currPos + 2)) + 8;
+                            if (dataLength > rawData.size() - currPos)
+                                throw PcapFsException("Invalid context values in SMB2 Tree Connect Request");
+                            currPos += dataLength;
+                        }
+                        totalSize = currPos;
+                    }
+                } else {
+                    const uint16_t pathOffset = *(uint16_t*) &rawData.at(4);
+                    const uint16_t pathLength = *(uint16_t*) &rawData.at(6);
+                    if ((size_t)(pathOffset + pathLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
+
+                    totalSize = pathLength == 0 ? 9 : (pathOffset + pathLength - 64);
+                }
+            }
+        };
+
+        class TreeConnectResponse : public SmbMessage {
+        public:
+            TreeConnectResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 16)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Tree Connect Response");
+
+                totalSize = 16;
+            }
+        };
+
+        class CreateRequest : public SmbMessage {
+        public:
+            CreateRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 57)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Create Request");
+
+                const uint16_t nameOffset = *(uint16_t*) &rawData.at(44);
+                const uint16_t nameLength = *(uint16_t*) &rawData.at(46);
+                const uint32_t createContextsOffset = *(uint32_t*) &rawData.at(48);
+                const uint32_t createContextsLength = *(uint32_t*) &rawData.at(52);
+
+                if (nameOffset == 0 && nameLength == 0 && createContextsOffset == 0 && createContextsLength == 0)
+                    totalSize = 57;
+                else if (createContextsOffset == 0 && createContextsLength == 0) {
+                    if ((size_t)(nameOffset + nameLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Create Request");
+                    totalSize = nameOffset + nameLength - 64;
+                } else {
+                    if ((size_t)(createContextsOffset + createContextsLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Create Request");
+                    totalSize = createContextsOffset + createContextsLength - 64;
+                }
+            }
+        };
+
+        class CreateResponse : public SmbMessage {
+        public:
+            CreateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 89)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Create Response");
+
+                const uint32_t createContextsOffset = *(uint32_t*) &rawData.at(80);
+                const uint32_t createContextsLength = *(uint32_t*) &rawData.at(84);
+
+                if (createContextsOffset == 0 && createContextsLength == 0)
+                    totalSize = 88;
+                else {
+                    if ((size_t)(createContextsOffset + createContextsLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Create Response");
+                    totalSize = createContextsOffset + createContextsLength - 64;
+                }
+            }
+        };
+
+        class CloseRequest : public SmbMessage {
+        public:
+            CloseRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 24)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Close Request");
+
+                totalSize = 24;
+            }
+        };
+
+        class CloseResponse : public SmbMessage {
+        public:
+            CloseResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 60)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Close Response");
+
+                totalSize = 60;
+            }
+        };
+
+        class FlushRequest : public SmbMessage {
+        public:
+            FlushRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 24)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Flush Request");
+
+                totalSize = 24;
+            }
+        };
+
+        class ReadRequest : public SmbMessage {
+        public:
+            ReadRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 49)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Read Request");
+
+                const uint16_t readChannelInfoOffset = *(uint16_t*) &rawData.at(44);
+                const uint16_t readChannelInfoLength = *(uint16_t*) &rawData.at(46);
+
+                if (readChannelInfoOffset == 0 && readChannelInfoLength == 0)
+                    totalSize = 49;
+                else {
+                    if ((size_t)(readChannelInfoOffset + readChannelInfoLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Read Request");
+                    totalSize = readChannelInfoOffset + readChannelInfoLength - 64;
+                }
+            }
+        };
+
+        class ReadResponse : public SmbMessage {
+        public:
+            ReadResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 17)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Read Response");
+
+                const uint8_t dataOffset = rawData.at(2);
+                const uint32_t dataLength = *(uint32_t*) &rawData.at(4);
+
+                if (dataOffset == 0 && dataLength == 0)
+                    totalSize = 17;
+                else {
+                    if ((size_t)(dataOffset + dataLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Read Response");
+                    totalSize = dataOffset + dataLength - 64;
+                }
+            }
+        };
+
+        class WriteRequest : public SmbMessage {
+        public:
+            WriteRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 49)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Write Request");
+
+                const uint16_t dataOffset = *(uint16_t*) &rawData.at(2);
+                const uint32_t dataLength = *(uint32_t*) &rawData.at(4);
+                const uint16_t writeChannelInfoOffset = *(uint16_t*) &rawData.at(40);
+                const uint16_t writeChannelInfoLength = *(uint16_t*) &rawData.at(42);
+
+                if (dataOffset == 0 && dataLength == 0 && writeChannelInfoOffset == 0 && writeChannelInfoLength == 0)
+                    totalSize = 49;
+                else if (writeChannelInfoOffset == 0 && writeChannelInfoLength == 0) {
+                    if ((size_t)(dataOffset + dataLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Write Request");
+                    totalSize = dataOffset + dataLength - 64;
+                } else {
+                    if ((size_t)(writeChannelInfoOffset + writeChannelInfoLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Write Request");
+                    totalSize = writeChannelInfoOffset + writeChannelInfoLength - 64;
+                }
+            }
+        };
+
+        class WriteResponse : public SmbMessage {
+        public:
+            WriteResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 17)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Write Response");
+                // size of write response is always 16 although the structureSize field is set to 17
+                totalSize = 16;
+            }
+        };
+
+        class OplockBreakMessage : public SmbMessage {
+        public:
+            OplockBreakMessage(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                // includes Oplock Break Notification, Acknowledgement and Response
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 24)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Oplock Break Message");
+
+                totalSize = 24;
+            }
+        };
+
+        class LockRequest : public SmbMessage {
+        public:
+            LockRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 48)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Lock Request");
+
+                const uint16_t lockCount = *(uint16_t*) &rawData.at(2);
+
+                if (lockCount == 0)
+                    totalSize = 48;
+                else {
+                    if ((size_t)(48 + (lockCount*24)) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Lock Request");
+                    totalSize = 48 + (lockCount*24);
+                }
+            }
+        };
+
+        class IoctlRequest : public SmbMessage {
+        public:
+            IoctlRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 57)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Ioctl Request");
+
+                const uint32_t inputOffset = *(uint32_t*) &rawData.at(24);
+                const uint32_t inputCount = *(uint32_t*) &rawData.at(28);
+
+                if (inputOffset == 0 && inputCount == 0)
+                    totalSize = 57;
+                else {
+                    if ((size_t)(inputOffset + inputCount - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Ioctl Request");
+                    totalSize = inputOffset + inputCount - 64;
+                }
+            }
+        };
+
+        class IoctlResponse : public SmbMessage {
+        public:
+            IoctlResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 49)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Ioctl Response");
+
+                const uint32_t outputOffset = *(uint32_t*) &rawData.at(32);
+                const uint32_t outputCount = *(uint32_t*) &rawData.at(36);
+
+                if (outputOffset == 0 && outputCount == 0)
+                    totalSize = 49;
+                else {
+                    if ((size_t)(outputOffset + outputCount - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Ioctl Response");
+                    totalSize = outputOffset + outputCount - 64;
+                }
+            }
+        };
+
+        class QueryDirectoryRequest : public SmbMessage {
+        public:
+            QueryDirectoryRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 33)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Query Directory Request");
+
+                const uint16_t fileNameOffset = *(uint16_t*) &rawData.at(24);
+                const uint16_t fileNameLength = *(uint16_t*) &rawData.at(26);
+
+                if (fileNameOffset == 0 && fileNameLength == 0)
+                    totalSize = 33;
+                else {
+                    if ((size_t)(fileNameOffset + fileNameLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Query Directory Request");
+                    totalSize = fileNameOffset + fileNameLength - 64;
+                }
+            }
+        };
+
+        class QueryDirectoryResponse : public SmbMessage {
+        public:
+            QueryDirectoryResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 9)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Query Directory Response");
+
+                const uint16_t outputBufferOffset = *(uint16_t*) &rawData.at(2);
+                const uint32_t outputBufferLength = *(uint32_t*) &rawData.at(4);
+
+                if (outputBufferOffset == 0 && outputBufferLength == 0)
+                    totalSize = 9;
+                else {
+                    if ((size_t)(outputBufferOffset + outputBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Query Directory Response");
+                    totalSize = outputBufferOffset + outputBufferLength - 64;
+                }
+            }
+        };
+
+        class ChangeNotifyRequest: public SmbMessage {
+        public:
+            ChangeNotifyRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                // includes Oplock Break Notification, Acknowledgement and Response
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 32)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Change Notify Request");
+
+                totalSize = 32;
+            }
+        };
+
+        class ChangeNotifyResponse : public SmbMessage {
+        public:
+            ChangeNotifyResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 9)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Change Notify Response");
+
+                const uint16_t outputBufferOffset = *(uint16_t*) &rawData.at(2);
+                const uint32_t outputBufferLength = *(uint32_t*) &rawData.at(4);
+
+                if (outputBufferLength == 0)
+                    totalSize = 9;
+                else {
+                    if ((size_t)(outputBufferOffset + outputBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Change Notify Response");
+                    totalSize = outputBufferOffset + outputBufferLength - 64;
+                }
+            }
+        };
+
+        class QueryInfoRequest : public SmbMessage {
+        public:
+            QueryInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 41)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Query Info Request");
+
+                const uint16_t inputBufferOffset = *(uint16_t*) &rawData.at(8);
+                const uint32_t inputBufferLength = *(uint32_t*) &rawData.at(12);
+
+                if (inputBufferOffset == 0 && inputBufferLength == 0)
+                    totalSize = 41;
+                else {
+                    if ((size_t)(inputBufferOffset + inputBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Query Info Request");
+                    totalSize = inputBufferOffset + inputBufferLength - 64;
+                }
+            }
+        };
+
+        class QueryInfoResponse : public SmbMessage {
+        public:
+            QueryInfoResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 9)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Query Info Response");
+
+                const uint16_t outputBufferOffset = *(uint16_t*) &rawData.at(2);
+                const uint32_t outputBufferLength = *(uint32_t*) &rawData.at(4);
+
+                if (outputBufferOffset == 0 && outputBufferLength == 0)
+                    totalSize = 9;
+                else {
+                    if ((size_t)(outputBufferOffset + outputBufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Query Info Response");
+                    totalSize = outputBufferOffset + outputBufferLength - 64;
+                }
+            }
+        };
+
+        class SetInfoRequest : public SmbMessage {
+        public:
+            SetInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 33)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Set Info Request");
+
+                const uint32_t bufferLength = *(uint32_t*) &rawData.at(4);
+                const uint16_t bufferOffset = *(uint16_t*) &rawData.at(8);
+
+                if (bufferLength == 0)
+                    totalSize = 33;
+                else {
+                    if ((size_t)(bufferOffset + bufferLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Set Info Request");
+                    totalSize = bufferOffset + bufferLength - 64;
+                }
+            }
+        };
+
+        class SetInfoResponse : public SmbMessage {
+        public:
+            SetInfoResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 2)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Set Info Response");
+
+                totalSize = 2;
+            }
+        };
+
+        class FourByteMessage : public SmbMessage {
+        public:
+            FourByteMessage(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+                // includes Logoff Request/Response, Tree Disconnect Request/Response, Flush Response,
+                // Lock Response, Echo Request/Response and  Cancel Request
+                const uint16_t structureSize = *(uint16_t*) data;
+                if (structureSize != 4)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Message");
+
+                totalSize = 4;
+            }
         };
 
 
         class SmbPacket {
         public:
             SmbPacket() {};
-            SmbPacket(const uint8_t* data, size_t len);
+            SmbPacket(const uint8_t* data, size_t len, uint16_t dial);
 
             std::shared_ptr<SmbHeader> header = nullptr;
             SmbMessage message;
             size_t size = 0;
             bool isResponse = false;
+            bool isErrorResponse = false;
+            bool parsingFailed = false;
             std::string command = "";
             uint8_t headerType = HeaderType::SMB2_PACKET_HEADER;
+            uint16_t dialect = 0;
 
         private:
             std::string const commandToString(uint16_t cmdCode);

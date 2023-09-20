@@ -18,6 +18,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->fillGlobalProperties(controlFilePtr, filePtr);
     controlFilePtr->setFilename("SMB2.control");
     controlFilePtr->flags.set(pcapfs::flags::IS_METADATA);
+    uint16_t usedDialect = smb::SMB_VERSION_UNKNOWN;
 
     std::stringstream ss;
     size_t size = 0;
@@ -34,7 +35,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
         // direct TCP transport packet header indicating the size of the following SMB data
         size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         size_t currPos = 0;
-        while (smbDataSize <= (size - currPos)) {
+        while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {
 
             // skip direct TCP transport packet header
             offset += 4;
@@ -44,8 +45,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
             while (accumulatedSmbPacketSize < smbDataSize) {
                 smb::SmbPacket smbPacket;
                 try {
-                    smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize);
-                } catch (const PcapFsException &err) {
+                    smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize, usedDialect);
+                } catch (const SmbError &err) {
                     LOG_WARNING << "Failed to parse SMB2 packet: " << err.what();
                     offset += smbDataSize;
                     currPos += smbDataSize;
@@ -57,8 +58,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                 fragment.start = offset;
 
                 if (smbPacket.headerType == smb::HeaderType::SMB2_PACKET_HEADER) {
-                    std::shared_ptr<smb::SmbPacketHeader> packetHeader = std::static_pointer_cast<smb::SmbPacketHeader>(smbPacket.header);
+                    const std::shared_ptr<smb::SmbPacketHeader> packetHeader = std::static_pointer_cast<smb::SmbPacketHeader>(smbPacket.header);
+                    //ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << smbPacket.message.totalSize << std::endl;
                     ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
+
+                    if (smbPacket.isResponse && packetHeader->command == smb::Command::SMB2_NEGOTIATE)
+                        usedDialect = smbPacket.dialect;
 
                     if (packetHeader->chainOffset != 0) {
                         // we have chained SMB2 data directly next
@@ -120,6 +125,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->flags.set(pcapfs::flags::PROCESSED);
     controlFilePtr->setFilesizeRaw(filesize);
     controlFilePtr->setFilesizeProcessed(ss.str().size());
+    controlFilePtr->setSmbVersion(usedDialect);
 
     resultVector.push_back(controlFilePtr);
     return resultVector;
@@ -131,7 +137,7 @@ bool pcapfs::SmbFile::isSmbTraffic(const FilePtr &filePtr, const Bytes &data) {
     if (filePtr->getProperty("protocol") == "tcp" &&
         (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445") &&
         data.size() > 68 && data.at(0) == 0x00 && memcmp(&data.at(4), SMB_MAGIC, 4) == 0)
-        // currently only support direct SMB over TCP
+        // currently only support direct SMB2 over TCP
         return true;
     else
         return false;
@@ -165,11 +171,12 @@ void pcapfs::SmbFile::fillGlobalProperties(std::shared_ptr<SmbFile> &controlFile
 std::string const pcapfs::SmbFile::parseSmbTraffic(const std::vector<Bytes> &smbData) {
     std::stringstream ss;
     for (const Bytes &chunk : smbData) {
-        smb::SmbPacket smbPacket(chunk.data(), chunk.size());
+        smb::SmbPacket smbPacket(chunk.data(), chunk.size(), smbVersion);
         if (smbPacket.headerType == smb::SMB2_TRANSFORM_HEADER)
             ss << "[<|>]" << smbPacket.command << std::endl;
         else
             ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
+            //ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command <<  smbPacket.message.totalSize << std::endl;
     }
     return ss.str();
 }
@@ -189,5 +196,17 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
 }
 
 
+void pcapfs::SmbFile::serialize(boost::archive::text_oarchive &archive) {
+    VirtualFile::serialize(archive);
+    archive << smbVersion;
+}
+
+
+void pcapfs::SmbFile::deserialize(boost::archive::text_iarchive &archive) {
+    VirtualFile::deserialize(archive);
+    archive >> smbVersion;
+}
+
+
 bool pcapfs::SmbFile::registeredAtFactory =
-        pcapfs::FileFactory::registerAtFactory("smb", pcapfs::SmbFile::create, pcapfs::SmbFile::parse);
+        pcapfs::FileFactory::registerAtFactory("smbcontrol", pcapfs::SmbFile::create, pcapfs::SmbFile::parse);

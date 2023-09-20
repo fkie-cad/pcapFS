@@ -36,6 +36,16 @@ namespace pcapfs {
         explicit IndexError(const std::string &what) : PcapFsException(what) {}
     };
 
+    class SmbError : public PcapFsException {
+    public:
+        explicit SmbError(const std::string &what) : PcapFsException(what) {}
+    };
+
+    class SmbSizeError : public SmbError {
+    public:
+        explicit SmbSizeError(const std::string &what) : SmbError(what) {}
+    };
+
 }
 
 #endif //PCAPFS_EXCEPTIONS_H

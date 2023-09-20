@@ -12,7 +12,8 @@ namespace pcapfs {
             SMB_VERSION_2_1 = 0x0210,
             SMB_VERSION_3_0 = 0x0300,
             SMB_VERSION_3_0_2 = 0x0302,
-            SMB_VERSION_3_1_1 = 0x0311
+            SMB_VERSION_3_1_1 = 0x0311,
+            SMB_VERSION_UNKNOWN = 0x0000
         };
 
         enum Command : uint16_t {
@@ -254,7 +255,6 @@ namespace pcapfs {
             uint32_t messageSize;
             uint16_t flags; // encryption algorithm for SMB 3.0/3.0.2
             uint64_t sessionId;
-
         };
 
 
@@ -270,7 +270,6 @@ namespace pcapfs {
             uint32_t uncompressedDataSize;
             uint16_t compressionAlgorithm;
             uint16_t flags;
-
         };
 
 
