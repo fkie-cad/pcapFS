@@ -10,6 +10,14 @@
 namespace pcapfs {
     namespace smb {
 
+        struct SmbContext {
+            uint16_t dialect = 0;
+            std::unordered_map<std::string, std::string> fileHandles;
+            std::string currentRequestedFile = "";
+        };
+
+        typedef std::shared_ptr<SmbContext> SmbContextPtr;
+
         class SmbMessage {
         public:
             SmbMessage() : rawData(0) {}
@@ -34,7 +42,6 @@ namespace pcapfs {
                 else
                     totalSize = 8 + byteCount;
             }
-
         };
 
         class NegotiateRequest : public SmbMessage {
@@ -68,7 +75,6 @@ namespace pcapfs {
                 }
                 return false;
             }
-
         };
 
         class NegotiateResponse : public SmbMessage {
@@ -145,6 +151,14 @@ namespace pcapfs {
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Tree Connect Request");
 
+                const uint16_t pathOffset = *(uint16_t*) &rawData.at(4);
+                const uint16_t pathLength = *(uint16_t*) &rawData.at(6);
+                if ((size_t)(pathOffset + pathLength - 64) > len)
+                        throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
+
+                if (pathOffset != 0 && pathLength != 0)
+                    pathName = wstrToStr(Bytes(&rawData.at(pathOffset - 64), &rawData.at(pathOffset-64+pathLength-1)));
+
                 const uint16_t flags = *(uint16_t*) &rawData.at(2);
                 if (dialect == Version::SMB_VERSION_3_1_1 && (flags & 4)) {
                     // SMB2_TREE_CONNECT_FLAG_EXTENSION_PRESENT
@@ -154,13 +168,10 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
 
                     if (treeConnectContextOffset == 0 || treeConnectContextCount == 0) {
-                        const uint16_t pathOffset = *(uint16_t*) &rawData.at(4);
-                        const uint16_t pathLength = *(uint16_t*) &rawData.at(6);
-                        if ((size_t)(pathOffset + pathLength - 64) > len)
-                            throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
-
-                        totalSize = pathLength == 0 ? 9 : (pathOffset + pathLength - 64);
-
+                        if (pathOffset != 0 && pathLength != 0)
+                            totalSize = pathOffset + pathLength - 64;
+                        else
+                            totalSize = 9;
                     } else {
                         size_t currPos = treeConnectContextOffset;
                         for (size_t i = 0; i < treeConnectContextCount; ++i) {
@@ -172,14 +183,13 @@ namespace pcapfs {
                         totalSize = currPos;
                     }
                 } else {
-                    const uint16_t pathOffset = *(uint16_t*) &rawData.at(4);
-                    const uint16_t pathLength = *(uint16_t*) &rawData.at(6);
-                    if ((size_t)(pathOffset + pathLength - 64) > len)
-                        throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
-
-                    totalSize = pathLength == 0 ? 9 : (pathOffset + pathLength - 64);
+                    if (pathOffset != 0 && pathLength != 0)
+                        totalSize = pathOffset + pathLength - 64;
+                    else
+                        totalSize = 9;
                 }
             }
+            std::string pathName = "";
         };
 
         class TreeConnectResponse : public SmbMessage {
@@ -205,18 +215,35 @@ namespace pcapfs {
                 const uint32_t createContextsOffset = *(uint32_t*) &rawData.at(48);
                 const uint32_t createContextsLength = *(uint32_t*) &rawData.at(52);
 
-                if (nameOffset == 0 && nameLength == 0 && createContextsOffset == 0 && createContextsLength == 0)
-                    totalSize = 57;
-                else if (createContextsOffset == 0 && createContextsLength == 0) {
-                    if ((size_t)(nameOffset + nameLength - 64) > len)
-                        throw SmbError("Invalid buffer values in SMB2 Create Request");
-                    totalSize = nameOffset + nameLength - 64;
-                } else {
+                if (createContextsOffset == 0 && createContextsLength == 0) {
+                    if (nameOffset != 0 && nameLength != 0) {
+                        if ((size_t)(nameOffset + nameLength - 64) > len)
+                            throw SmbError("Invalid buffer values in SMB2 Create Request");
+
+                        totalSize = nameOffset + nameLength - 64;
+                        filename = wstrToStr(Bytes(&rawData.at(nameOffset - 64), &rawData.at(nameOffset - 64 + nameLength - 1)));
+                    } else {
+                        totalSize = 57;
+                    }
+                } else if (createContextsOffset != 0 && createContextsLength != 0) {
                     if ((size_t)(createContextsOffset + createContextsLength - 64) > len)
                         throw SmbError("Invalid buffer values in SMB2 Create Request");
+
                     totalSize = createContextsOffset + createContextsLength - 64;
+                    if (nameOffset != 0 && nameLength != 0) {
+                        if ((size_t)(nameOffset + nameLength - 64) > len)
+                            throw SmbError("Invalid buffer values in SMB2 Create Request");
+                        filename = wstrToStr(Bytes(&rawData.at(nameOffset - 64), &rawData.at(nameOffset - 64 + nameLength - 1)));
+                    }
+                } else {
+                    totalSize = 57;
                 }
+
+                const uint32_t extractedDisposition = *(uint32_t*) &rawData.at(36);
+                disposition = extractedDisposition <= 5 ? extractedDisposition : CreateDisposition::DISPOSITION_UNKNOWN;
             }
+            std::string filename = "";
+            uint32_t disposition = CreateDisposition::DISPOSITION_UNKNOWN;
         };
 
         class CreateResponse : public SmbMessage {
@@ -236,7 +263,13 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Create Response");
                     totalSize = createContextsOffset + createContextsLength - 64;
                 }
+
+                const uint32_t extractedAction = *(uint32_t*) &rawData.at(4);
+                createAction = extractedAction <= 3 ? extractedAction : CreateAction::ACTION_UNKNOWN;
+                fileId = bytesToHexString(Bytes(&rawData.at(64), &rawData.at(80)));
             }
+            uint32_t createAction = CreateAction::ACTION_UNKNOWN;
+            std::string fileId = "";
         };
 
         class CloseRequest : public SmbMessage {
@@ -247,7 +280,9 @@ namespace pcapfs {
                     throw SmbSizeError("Invalid StructureSize in SMB2 Close Request");
 
                 totalSize = 24;
+                fileId = bytesToHexString(Bytes(&rawData.at(8), &rawData[24]));
             }
+            std::string fileId = "";
         };
 
         class CloseResponse : public SmbMessage {
@@ -289,7 +324,13 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Read Request");
                     totalSize = readChannelInfoOffset + readChannelInfoLength - 64;
                 }
+                fileId = bytesToHexString(Bytes(&rawData.at(16), &rawData.at(32)));
+                readOffset = *(uint64_t*) &rawData.at(8);
+                readLength = *(uint32_t*) &rawData.at(4);
             }
+            std::string fileId = "";
+            uint64_t readOffset = 0;
+            uint32_t readLength = 0;
         };
 
         class ReadResponse : public SmbMessage {
@@ -335,7 +376,13 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Write Request");
                     totalSize = writeChannelInfoOffset + writeChannelInfoLength - 64;
                 }
+                fileId = bytesToHexString(Bytes(&rawData.at(16), &rawData.at(32)));
+                writeOffset = *(uint64_t*) &rawData.at(8);
+                writeLength = *(uint32_t*) &rawData.at(4);
             }
+            std::string fileId = "";
+            uint64_t writeOffset = 0;
+            uint32_t writeLength = 0;
         };
 
         class WriteResponse : public SmbMessage {
@@ -369,7 +416,6 @@ namespace pcapfs {
                     throw SmbSizeError("Invalid StructureSize in SMB2 Lock Request");
 
                 const uint16_t lockCount = *(uint16_t*) &rawData.at(2);
-
                 if (lockCount == 0)
                     totalSize = 48;
                 else {
@@ -397,7 +443,17 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Ioctl Request");
                     totalSize = inputOffset + inputCount - 64;
                 }
+
+                const uint32_t extractedCtlCode = *(uint32_t*) &rawData.at(4);
+                if (ctlCodeStrings.find(extractedCtlCode) != ctlCodeStrings.end())
+                    ctlCode = extractedCtlCode;
+                else
+                    ctlCode = CtlCode::FSCTL_UNKNOWN;
+
+                fileId = bytesToHexString(Bytes(&rawData.at(8), &rawData.at(24)));
             }
+            uint32_t ctlCode = CtlCode::FSCTL_UNKNOWN;
+            std::string fileId = "";
         };
 
         class IoctlResponse : public SmbMessage {
@@ -437,7 +493,18 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Query Directory Request");
                     totalSize = fileNameOffset + fileNameLength - 64;
                 }
+
+                const uint8_t extractedInfoClass = rawData.at(2);
+                if (fileInfoClassStrings.find(extractedInfoClass) != fileInfoClassStrings.end())
+                    fileInfoClass = extractedInfoClass;
+                else
+                    fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+                fileId = bytesToHexString(Bytes(&rawData.at(8), &rawData.at(24)));
+                searchPattern = wstrToStr(Bytes(&rawData.at(fileNameOffset - 64), &rawData.at(fileNameOffset - 64 + fileNameLength - 1)));
             }
+            uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+            std::string fileId = "";
+            std::string searchPattern = "";
         };
 
         class QueryDirectoryResponse : public SmbMessage {
@@ -509,7 +576,32 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Query Info Request");
                     totalSize = inputBufferOffset + inputBufferLength - 64;
                 }
+
+                const uint8_t extractedInfoType = rawData.at(2);
+                if (extractedInfoType < 5)
+                    infoType = extractedInfoType;
+                else
+                    infoType = QueryInfoType::SMB2_0_INFO_UNKNOWN;
+
+                const uint8_t extractedInfoClass = rawData.at(3);
+                if (infoType == QueryInfoType::SMB2_0_INFO_FILE) {
+                    if (fileInfoClassStrings.find(extractedInfoClass) != fileInfoClassStrings.end())
+                        fileInfoClass = extractedInfoClass;
+                    else
+                        fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+
+                } else if (infoType == QueryInfoType::SMB2_0_INFO_FILESYSTEM) {
+                    if (fsInfoClassStrings.find(extractedInfoClass) != fsInfoClassStrings.end())
+                        fileInfoClass = extractedInfoClass;
+                    else
+                        fileInfoClass = FsInfoClass::FILE_FS_UNKNOWN_INFORMATION;
+                }
+
+                fileId = bytesToHexString(Bytes(&rawData.at(24), &rawData[40]));
             }
+            uint8_t infoType = QueryInfoType::SMB2_0_INFO_UNKNOWN;
+            uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+            std::string fileId = "";
         };
 
         class QueryInfoResponse : public SmbMessage {
@@ -549,7 +641,32 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Set Info Request");
                     totalSize = bufferOffset + bufferLength - 64;
                 }
+
+                const uint8_t extractedInfoType = rawData.at(2);
+                if (extractedInfoType < 5)
+                    infoType = extractedInfoType;
+                else
+                    infoType = QueryInfoType::SMB2_0_INFO_UNKNOWN;
+
+                const uint8_t extractedInfoClass = rawData.at(3);
+                if (infoType == QueryInfoType::SMB2_0_INFO_FILE) {
+                    if (fileInfoClassStrings.find(extractedInfoClass) != fileInfoClassStrings.end())
+                        fileInfoClass = extractedInfoClass;
+                    else
+                        fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+
+                } else if (infoType == QueryInfoType::SMB2_0_INFO_FILESYSTEM) {
+                    if (fsInfoClassStrings.find(extractedInfoClass) != fsInfoClassStrings.end())
+                        fileInfoClass = extractedInfoClass;
+                    else
+                        fileInfoClass = FsInfoClass::FILE_FS_UNKNOWN_INFORMATION;
+                }
+
+                fileId = bytesToHexString(Bytes(&rawData.at(16), &rawData[32]));
             }
+            uint8_t infoType = QueryInfoType::SMB2_0_INFO_UNKNOWN;
+            uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+            std::string fileId = "";
         };
 
         class SetInfoResponse : public SmbMessage {
@@ -580,17 +697,17 @@ namespace pcapfs {
         class SmbPacket {
         public:
             SmbPacket() {};
-            SmbPacket(const uint8_t* data, size_t len, uint16_t dial);
+            SmbPacket(const uint8_t* data, size_t len, SmbContextPtr &smbContext);
+
+            std::string const toString(const SmbContextPtr &smbContext);
 
             std::shared_ptr<SmbHeader> header = nullptr;
-            SmbMessage message;
+            std::shared_ptr<SmbMessage> message;
             size_t size = 0;
             bool isResponse = false;
             bool isErrorResponse = false;
             bool parsingFailed = false;
-            std::string command = "";
             uint8_t headerType = HeaderType::SMB2_PACKET_HEADER;
-            uint16_t dialect = 0;
 
         private:
             std::string const commandToString(uint16_t cmdCode);

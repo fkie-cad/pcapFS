@@ -18,9 +18,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->fillGlobalProperties(controlFilePtr, filePtr);
     controlFilePtr->setFilename("SMB2.control");
     controlFilePtr->flags.set(pcapfs::flags::IS_METADATA);
-    uint16_t usedDialect = smb::SMB_VERSION_UNKNOWN;
 
     std::stringstream ss;
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
     for (unsigned int i = 0; i < numElements; ++i) {
@@ -45,7 +45,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
             while (accumulatedSmbPacketSize < smbDataSize) {
                 smb::SmbPacket smbPacket;
                 try {
-                    smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize, usedDialect);
+                    smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize, smbContext);
                 } catch (const SmbError &err) {
                     LOG_WARNING << "Failed to parse SMB2 packet: " << err.what();
                     offset += smbDataSize;
@@ -53,17 +53,14 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                     break;
                 }
 
+                ss << smbPacket.toString(smbContext);
+
                 Fragment fragment;
                 fragment.id = filePtr->getIdInIndex();
                 fragment.start = offset;
 
                 if (smbPacket.headerType == smb::HeaderType::SMB2_PACKET_HEADER) {
                     const std::shared_ptr<smb::SmbPacketHeader> packetHeader = std::static_pointer_cast<smb::SmbPacketHeader>(smbPacket.header);
-                    //ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << smbPacket.message.totalSize << std::endl;
-                    ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
-
-                    if (smbPacket.isResponse && packetHeader->command == smb::Command::SMB2_NEGOTIATE)
-                        usedDialect = smbPacket.dialect;
 
                     if (packetHeader->chainOffset != 0) {
                         // we have chained SMB2 data directly next
@@ -93,8 +90,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
                 } else if (smbPacket.headerType == smb::HeaderType::SMB2_TRANSFORM_HEADER ||
                             smbPacket.headerType == smb::HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_UNCHAINED) {
-                    ss << "[<|>] " << smbPacket.command << std::endl;
-
                     fragment.length = smbDataSize;
                     controlFilePtr->fragments.push_back(fragment);
                     offset += smbDataSize;
@@ -102,8 +97,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                     break;
 
                 } else if (smbPacket.headerType == smb::HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_CHAINED) {
-                    ss << "[<|>] " << smbPacket.command << std::endl;
-
                     fragment.length = smbPacket.size;
                     controlFilePtr->fragments.push_back(fragment);
                     offset += smbPacket.size;
@@ -125,7 +118,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->flags.set(pcapfs::flags::PROCESSED);
     controlFilePtr->setFilesizeRaw(filesize);
     controlFilePtr->setFilesizeProcessed(ss.str().size());
-    controlFilePtr->setSmbVersion(usedDialect);
 
     resultVector.push_back(controlFilePtr);
     return resultVector;
@@ -156,55 +148,21 @@ void pcapfs::SmbFile::fillGlobalProperties(std::shared_ptr<SmbFile> &controlFile
 }
 
 
-/**size_t pcapfs::SmbFile::calculateProcessedSize(const Index &idx) {
-    std::vector<Bytes> totalContent;
-    for (const Fragment fragment: fragments) {
-        Bytes rawData(fragment.length);
-        const FilePtr filePtr = idx.get({offsetType, fragment.id});
-        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-        totalContent.push_back(rawData);
-    }
-    return parseSmbTraffic(totalContent).size();
-}**/
-
-
-std::string const pcapfs::SmbFile::parseSmbTraffic(const std::vector<Bytes> &smbData) {
-    std::stringstream ss;
-    for (const Bytes &chunk : smbData) {
-        smb::SmbPacket smbPacket(chunk.data(), chunk.size(), smbVersion);
-        if (smbPacket.headerType == smb::SMB2_TRANSFORM_HEADER)
-            ss << "[<|>]" << smbPacket.command << std::endl;
-        else
-            ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command << std::endl;
-            //ss << (smbPacket.isResponse ? "[<] " : "[>] ") << smbPacket.command <<  smbPacket.message.totalSize << std::endl;
-    }
-    return ss.str();
-}
-
-
 size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    std::vector<Bytes> totalContent;
+    std::stringstream ss;
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
+
     for (const Fragment fragment: fragments) {
         Bytes rawData(fragment.length);
         const FilePtr filePtr = idx.get({offsetType, fragment.id});
         filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-        totalContent.push_back(rawData);
+        smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
+        ss << smbPacket.toString(smbContext);
     }
-    const std::string outputString = parseSmbTraffic(totalContent);
+
+    const std::string outputString = ss.str();
     memcpy(buf, outputString.c_str() + startOffset, length);
     return std::min((size_t) outputString.length() - startOffset, length);
-}
-
-
-void pcapfs::SmbFile::serialize(boost::archive::text_oarchive &archive) {
-    VirtualFile::serialize(archive);
-    archive << smbVersion;
-}
-
-
-void pcapfs::SmbFile::deserialize(boost::archive::text_iarchive &archive) {
-    VirtualFile::deserialize(archive);
-    archive >> smbVersion;
 }
 
 
