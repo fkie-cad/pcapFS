@@ -1,5 +1,4 @@
-#include "smb_messages.h"
-#include "smb_headers.h"
+#include "smb_packet.h"
 #include "../../logging.h"
 
 #include <sstream>
@@ -13,11 +12,11 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         if (len < 64)
             throw SmbError("Invalid SMB2 Packet Header");
 
-        std::shared_ptr<SmbPacketHeader> packetHeader = std::make_shared<SmbPacketHeader>(data);
-        isResponse = packetHeader->flags & PacketHeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
+        std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
+        isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
         try {
             switch (packetHeader->command) {
-                case Commands::SMB2_NEGOTIATE:
+                case Smb2Commands::SMB2_NEGOTIATE:
                     if (isResponse) {
                         std::shared_ptr<NegotiateResponse> negResponse =
                                 std::make_shared<NegotiateResponse>(&data[64], len - 64);
@@ -27,21 +26,21 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         message = std::make_shared<NegotiateRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_SESSION_SETUP:
+                case Smb2Commands::SMB2_SESSION_SETUP:
                     if (isResponse)
                         message = std::make_shared<SessionSetupResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<SessionSetupRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_TREE_CONNECT:
+                case Smb2Commands::SMB2_TREE_CONNECT:
                     if (isResponse)
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
                     break;
 
-                case Commands::SMB2_CREATE:
+                case Smb2Commands::SMB2_CREATE:
                     if (isResponse) {
                         std::shared_ptr<CreateResponse> createResponse =
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
@@ -55,53 +54,53 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     }
                     break;
 
-                case Commands::SMB2_CLOSE:
+                case Smb2Commands::SMB2_CLOSE:
                     if (isResponse)
                         message = std::make_shared<CloseResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<CloseRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_FLUSH:
+                case Smb2Commands::SMB2_FLUSH:
                     if (isResponse)
                         message = std::make_shared<FourByteMessage>(&data[64], len - 64);
                     else
                         message = std::make_shared<FlushRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_READ:
+                case Smb2Commands::SMB2_READ:
                     if (isResponse)
                         message = std::make_shared<ReadResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<ReadRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_WRITE:
+                case Smb2Commands::SMB2_WRITE:
                     if (isResponse)
                         message = std::make_shared<WriteResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<WriteRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_OPLOCK_BREAK:
+                case Smb2Commands::SMB2_OPLOCK_BREAK:
                     message = std::make_shared<OplockBreakMessage>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_LOCK:
+                case Smb2Commands::SMB2_LOCK:
                     if (isResponse)
                         message = std::make_shared<FourByteMessage>(&data[64], len - 64);
                     else
                         message = std::make_shared<LockRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_IOCTL:
+                case Smb2Commands::SMB2_IOCTL:
                     if (isResponse)
                         message = std::make_shared<IoctlResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<IoctlRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_QUERY_DIRECTORY:
+                case Smb2Commands::SMB2_QUERY_DIRECTORY:
                     if (isResponse) {
                         if (packetHeader->status != StatusCodes::STATUS_SUCCESS) {
                             // probably an error response
@@ -115,7 +114,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         message = std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_CHANGE_NOTIFY:
+                case Smb2Commands::SMB2_CHANGE_NOTIFY:
                     if (isResponse) {
                         if (packetHeader->status != StatusCodes::STATUS_SUCCESS) {
                             // probably an error response
@@ -129,7 +128,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         message = std::make_shared<ChangeNotifyRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_QUERY_INFO:
+                case Smb2Commands::SMB2_QUERY_INFO:
                     if (isResponse)
                         if (packetHeader->status != StatusCodes::STATUS_SUCCESS) {
                             // probably an error response
@@ -143,17 +142,17 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         message = std::make_shared<QueryInfoRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_SET_INFO:
+                case Smb2Commands::SMB2_SET_INFO:
                     if (isResponse)
                         message = std::make_shared<SetInfoResponse>(&data[64], len - 64);
                     else
                         message = std::make_shared<SetInfoRequest>(&data[64], len - 64);
                     break;
 
-                case Commands::SMB2_LOGOFF:
-                case Commands::SMB2_TREE_DISCONNECT:
-                case Commands::SMB2_ECHO:
-                case Commands::SMB2_CANCEL:
+                case Smb2Commands::SMB2_LOGOFF:
+                case Smb2Commands::SMB2_TREE_DISCONNECT:
+                case Smb2Commands::SMB2_ECHO:
+                case Smb2Commands::SMB2_CANCEL:
                     message = std::make_shared<FourByteMessage>(&data[64], len - 64);
                     break;
 
@@ -238,8 +237,21 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
             header = compressionTransformHeaderChained;
             headerType = HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_CHAINED;
+
         } else
             throw SmbError("Invalid SMB2 Packet Header");
+    
+    } else if (protocolId == 0x424D53FF) {
+        // SMB version 1 header
+        if (len < 32)
+            throw SmbError("Invalid SMB Packet Header");
+
+        std::shared_ptr<Smb1Header> packetHeader = std::make_shared<Smb1Header>(data);
+        isResponse = packetHeader->flags & Smb1HeaderFlags::SMB_FLAGS_REPLY;
+        header = packetHeader;
+        headerType = HeaderType::SMB1_PACKET_HEADER;
+        message = std::make_shared<SmbMessage>(&data[32], len - 32);
+        size = 32 + message->totalSize;
 
     } else {
         throw SmbError("Invalid SMB2 Packet Header");
@@ -250,12 +262,12 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbContext) {
     std::stringstream ss;
     if (headerType == HeaderType::SMB2_PACKET_HEADER) {
-        std::shared_ptr<SmbPacketHeader> packetHeader = std::static_pointer_cast<SmbPacketHeader>(header);
+        std::shared_ptr<Smb2Header> packetHeader = std::static_pointer_cast<Smb2Header>(header);
         if (isResponse) {
-            ss << "[<] " << commandToString(packetHeader->command);
+            ss << "[<] " << smb2CommandToString(packetHeader->command);
             if (!parsingFailed && !isErrorResponse) {
                 switch (packetHeader->command) {
-                    case Commands::SMB2_CREATE:
+                    case Smb2Commands::SMB2_CREATE:
                         {
                            const std::shared_ptr<CreateResponse> msg = std::static_pointer_cast<CreateResponse>(message);
                             ss << ", Action: " << createActionStrings.at(msg->createAction);
@@ -271,17 +283,17 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
             }
         } else {
             // Request
-            ss << "[>] " << commandToString(packetHeader->command);
+            ss << "[>] " << smb2CommandToString(packetHeader->command);
             if (!parsingFailed) {
                 switch (packetHeader->command) {
-                    case Commands::SMB2_TREE_CONNECT:
+                    case Smb2Commands::SMB2_TREE_CONNECT:
                         {
                             const std::shared_ptr<TreeConnectRequest> msg = std::static_pointer_cast<TreeConnectRequest>(message);
                             ss << ", Tree: " << msg->pathName;
                         }
                         break;
 
-                    case Commands::SMB2_CREATE:
+                    case Smb2Commands::SMB2_CREATE:
                         {
                             const std::shared_ptr<CreateRequest> msg = std::static_pointer_cast<CreateRequest>(message);
                             if (!msg->filename.empty())
@@ -290,7 +302,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_CLOSE:
+                    case Smb2Commands::SMB2_CLOSE:
                         {
                             const std::shared_ptr<CloseRequest> msg = std::static_pointer_cast<CloseRequest>(message);
                             if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
@@ -299,7 +311,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_READ:
+                    case Smb2Commands::SMB2_READ:
                         {
                             const std::shared_ptr<ReadRequest> msg = std::static_pointer_cast<ReadRequest>(message);
                             ss << ", Off: " << msg->readOffset << ", Len: " << msg->readLength;
@@ -309,7 +321,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_WRITE:
+                    case Smb2Commands::SMB2_WRITE:
                         {
                             const std::shared_ptr<WriteRequest> msg = std::static_pointer_cast<WriteRequest>(message);
                             ss << ", Off: " << msg->writeOffset << ", Len: " << msg->writeLength;
@@ -319,7 +331,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_QUERY_DIRECTORY:
+                    case Smb2Commands::SMB2_QUERY_DIRECTORY:
                         {
                             const std::shared_ptr<QueryDirectoryRequest> msg = std::static_pointer_cast<QueryDirectoryRequest>(message);
                             ss << ", " << fileInfoClassStrings.at(msg->fileInfoClass) << ", Search Pattern: " << msg->searchPattern;
@@ -329,7 +341,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_QUERY_INFO:
+                    case Smb2Commands::SMB2_QUERY_INFO:
                         {
                             const std::shared_ptr<QueryInfoRequest> msg = std::static_pointer_cast<QueryInfoRequest>(message);
                             ss << ", " << queryInfoTypeStrings.at(msg->infoType);
@@ -343,7 +355,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_IOCTL:
+                    case Smb2Commands::SMB2_IOCTL:
                         {
                             const std::shared_ptr<IoctlRequest> msg = std::static_pointer_cast<IoctlRequest>(message);
                             ss << ", " << ctlCodeStrings.at(msg->ctlCode);
@@ -353,7 +365,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         }
                         break;
 
-                    case Commands::SMB2_SET_INFO:
+                    case Smb2Commands::SMB2_SET_INFO:
                         {
                             const std::shared_ptr<SetInfoRequest> msg = std::static_pointer_cast<SetInfoRequest>(message);
                             ss << ", " << queryInfoTypeStrings.at(msg->infoType);
@@ -369,6 +381,11 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                 }
             }
         }
+    
+    } else if (headerType == HeaderType::SMB1_PACKET_HEADER) {
+        std::shared_ptr<Smb1Header> packetHeader = std::static_pointer_cast<Smb1Header>(header);
+        ss << (isResponse ? "[<] " : "[>] ") << smb1CommandToString(packetHeader->command);
+
     } else if (headerType == HeaderType::SMB2_TRANSFORM_HEADER) {
         ss << "[<|>] " << "Encrypted SMB3";
     } else {
@@ -379,9 +396,16 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
 }
 
 
-std::string const pcapfs::smb::SmbPacket::commandToString(uint16_t cmdCode) {
-    std::string result = cmdCode <= 0x12 ? smbCommandStrings.at(cmdCode) : "SMB2 UNKNOWN";
-    if (cmdCode == Commands::SMB2_OPLOCK_BREAK)
+std::string const pcapfs::smb::SmbPacket::smb1CommandToString(uint8_t cmdCode) {
+    std::string result = smb1CommandStrings.find(cmdCode) != smb1CommandStrings.end() ? smb1CommandStrings.at(cmdCode) : "SMB_UNKNOWN";
+    result.append(isResponse ? " Response" : " Request");
+    return result;
+}
+
+
+std::string const pcapfs::smb::SmbPacket::smb2CommandToString(uint16_t cmdCode) {
+    std::string result = cmdCode <= 0x12 ? smb2CommandStrings.at(cmdCode) : "SMB2_UNKNOWN";
+    if (cmdCode == Smb2Commands::SMB2_OPLOCK_BREAK)
         result.append(" Message");
     else
         result.append(isResponse ? " Response" : " Request");

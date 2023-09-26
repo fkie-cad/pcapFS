@@ -1,7 +1,7 @@
 #ifndef PCAPFS_SMB_MESSAGES_H
 #define PCAPFS_SMB_MESSAGES_H
 
-#include "smb_headers.h"
+#include "smb_constants.h"
 #include "smb_utils.h"
 #include "../../exceptions.h"
 #include "../../commontypes.h"
@@ -9,14 +9,6 @@
 
 namespace pcapfs {
     namespace smb {
-
-        struct SmbContext {
-            uint16_t dialect = 0;
-            std::unordered_map<std::string, std::string> fileHandles;
-            std::string currentRequestedFile = "";
-        };
-
-        typedef std::shared_ptr<SmbContext> SmbContextPtr;
 
         class SmbMessage {
         public:
@@ -691,26 +683,6 @@ namespace pcapfs {
 
                 totalSize = 4;
             }
-        };
-
-
-        class SmbPacket {
-        public:
-            SmbPacket() {};
-            SmbPacket(const uint8_t* data, size_t len, SmbContextPtr &smbContext);
-
-            std::string const toString(const SmbContextPtr &smbContext);
-
-            std::shared_ptr<SmbHeader> header = nullptr;
-            std::shared_ptr<SmbMessage> message;
-            size_t size = 0;
-            bool isResponse = false;
-            bool isErrorResponse = false;
-            bool parsingFailed = false;
-            uint8_t headerType = HeaderType::SMB2_PACKET_HEADER;
-
-        private:
-            std::string const commandToString(uint16_t cmdCode);
         };
     }
 }

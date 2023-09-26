@@ -2,7 +2,6 @@
 #define PCAPFS_VIRTUAL_FILES_SMB_H
 
 #include "virtualfile.h"
-#include "smb/smb_headers.h"
 
 
 namespace pcapfs {
@@ -14,9 +13,16 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
+        void setFileContent(const std::string &content) { fileContent = content; };
+
+        void serialize(boost::archive::text_oarchive &archive) override;
+        void deserialize(boost::archive::text_iarchive &archive) override;
+
     private:
         void fillGlobalProperties(std::shared_ptr<SmbFile> &controlFilePtr, const FilePtr &filePtr);
         static bool isSmbTraffic(const FilePtr &filePtr, const Bytes &data);
+
+        std::string fileContent = "";
 
     protected:
         static bool registeredAtFactory;

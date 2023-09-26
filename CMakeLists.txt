@@ -62,8 +62,10 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/ssh.cpp
         src/virtualfiles/dhcp.cpp
         src/virtualfiles/smb.cpp
+        src/virtualfiles/smb/smb_packet.cpp
         src/virtualfiles/smb/smb_headers.h
-        src/virtualfiles/smb/smb_messages.cpp
+        src/virtualfiles/smb/smb_messages.h
+        src/virtualfiles/smb/smb_constants.h
         src/virtualfiles/smb/smb_utils.cpp
         )
 
