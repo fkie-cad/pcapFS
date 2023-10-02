@@ -20,7 +20,8 @@ namespace pcapfs {
 
     private:
         void fillGlobalProperties(std::shared_ptr<SmbFile> &controlFilePtr, const FilePtr &filePtr);
-        static bool isSmbTraffic(const FilePtr &filePtr, const Bytes &data);
+        static bool isSmbOverTcp(const FilePtr &filePtr, const Bytes &data);
+        static size_t getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data);
 
         std::string fileContent = "";
 

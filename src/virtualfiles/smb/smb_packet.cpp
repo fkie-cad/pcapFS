@@ -240,7 +240,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
         } else
             throw SmbError("Invalid SMB2 Packet Header");
-    
+
     } else if (protocolId == 0x424D53FF) {
         // SMB version 1 header
         if (len < 32)
@@ -381,7 +381,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                 }
             }
         }
-    
+
     } else if (headerType == HeaderType::SMB1_PACKET_HEADER) {
         std::shared_ptr<Smb1Header> packetHeader = std::static_pointer_cast<Smb1Header>(header);
         ss << (isResponse ? "[<] " : "[>] ") << smb1CommandToString(packetHeader->command);

@@ -1,5 +1,6 @@
 #include "smb.h"
 #include "smb/smb_packet.h"
+#include "smb/smb_constants.h"
 #include "../filefactory.h"
 #include "../exceptions.h"
 #include "../logging.h"
@@ -11,8 +12,16 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     (void)idx;
     std::vector<pcapfs::FilePtr> resultVector;
     const Bytes data = filePtr->getBuffer();
-    if (!isSmbTraffic(filePtr, data))
-        return resultVector;
+
+    size_t offsetAfterNbssSetup = 0;
+    bool hasNbssSessionSetup = false;
+    if (!isSmbOverTcp(filePtr, data)) {
+        offsetAfterNbssSetup = getSmbOffsetAfterNbssSetup(filePtr, data);
+        if (offsetAfterNbssSetup == (size_t)-1)
+            return resultVector;
+        else
+            hasNbssSessionSetup = true;
+    }
 
     LOG_TRACE << "detected SMB traffic and start parsing";
     std::shared_ptr<SmbFile> controlFilePtr = std::make_shared<SmbFile>();
@@ -20,25 +29,33 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->setFilename("SMB.control");
     controlFilePtr->flags.set(pcapfs::flags::IS_METADATA);
 
+    bool reachedOffsetAfterNbssSetup = false;
     std::stringstream ss;
     smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = filePtr->connectionBreaks.at(i).first;
+
+        if (hasNbssSessionSetup && !reachedOffsetAfterNbssSetup) {
+            if (offset == offsetAfterNbssSetup)
+                reachedOffsetAfterNbssSetup = true;
+            else
+                continue;
+        }
+
         if (i == numElements - 1) {
         	size = filePtr->getFilesizeProcessed() - offset;
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-        // we currently only support direct SMB over TCP. There, we have a 4 byte
-        // direct TCP transport packet header indicating the size of the following SMB data
+        // We have a 4 byte NBSS header indicating the size of the following SMB data
         size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         size_t currPos = 0;
         while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {
 
-            // skip direct TCP transport packet header
+            // skip NBSS header
             offset += 4;
             currPos += 4;
 
@@ -64,8 +81,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                     const std::shared_ptr<smb::Smb2Header> packetHeader = std::static_pointer_cast<smb::Smb2Header>(smbPacket.header);
 
                     if (packetHeader->chainOffset != 0) {
-                        // we have chained SMB2 data directly next
-                        // without direct TCP transport packet header in between
+                        // we have chained SMB2 data directly next without NBSS header in between
                         fragment.length = smbPacket.size;
                         controlFilePtr->fragments.push_back(fragment);
                         offset += packetHeader->chainOffset;
@@ -106,7 +122,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                     accumulatedSmbPacketSize += smbPacket.size;
 
                 } else if (smbPacket.headerType == smb::HeaderType::SMB1_PACKET_HEADER) {
-                    // TODO: handle AndX chains
                     fragment.length = smbDataSize;
                     controlFilePtr->fragments.push_back(fragment);
                     offset += smbDataSize;
@@ -136,16 +151,26 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 }
 
 
-bool pcapfs::SmbFile::isSmbTraffic(const FilePtr &filePtr, const Bytes &data) {
-    const uint8_t SMB2_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42};
-    const uint8_t SMB1_MAGIC[4] = {0xFF, 0x53, 0x4D, 0x42};
+bool pcapfs::SmbFile::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data) {
     if (filePtr->getProperty("protocol") == "tcp" &&
         (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445") &&
-        data.size() > 68 && data.at(0) == 0x00 && (memcmp(&data.at(4), SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), SMB1_MAGIC, 4) == 0))
-        // currently only support direct SMB over TCP
+        data.size() > 68 && data.at(0) == 0x00 && (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0))
         return true;
     else
         return false;
+}
+
+
+size_t pcapfs::SmbFile::getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data) {
+    // returns offset where smb Traffic begins after Netbios Session Setup
+    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 &&
+        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139")) {
+        for (size_t pos = 0; pos < data.size() - 8; ++pos) {
+            if (data.at(pos) == 0x00 && (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
+                return pos;
+        }
+    }
+    return (size_t)-1;
 }
 
 
