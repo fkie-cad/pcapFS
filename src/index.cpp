@@ -200,7 +200,7 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         currentPtr = pcapfs::FileFactory::createFilePtr(type);
         currentPtr->deserialize(archive);
         currentPtr->filetype = type;
-        if (type == "pcap") {
+        if (type == "pcap" || type == "pcapng") {
             storedPcaps.push_back(currentPtr);
         }
         files.insert({indexFilename, currentPtr});

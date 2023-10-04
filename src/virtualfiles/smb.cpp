@@ -144,7 +144,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     controlFilePtr->setFilesizeRaw(filesize);
     std::string const processedContent = ss.str();
     controlFilePtr->setFilesizeProcessed(processedContent.size());
-    controlFilePtr->setFileContent(processedContent);
+
+    // for faster access in read
+    controlFilePtr->buffer.assign(processedContent.begin(), processedContent.end());
 
     resultVector.push_back(controlFilePtr);
     return resultVector;
@@ -187,38 +189,43 @@ void pcapfs::SmbFile::fillGlobalProperties(std::shared_ptr<SmbFile> &controlFile
 
 
 size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    /**std::stringstream ss;
-    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
 
-    for (const Fragment fragment: fragments) {
-        Bytes rawData(fragment.length);
-        const FilePtr filePtr = idx.get({offsetType, fragment.id});
-        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-        smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
-        ss << smbPacket.toString(smbContext);
+    bool buffer_needs_content = std::all_of(buffer.cbegin(), buffer.cend(),
+                                            [](const auto &elem) { return elem == 0; });
+    if(buffer_needs_content == false) {
+        LOG_TRACE << "BUFFER HIT in SMB control file";
+        assert(buffer.size() == filesizeProcessed);
+        memcpy(buf, (const char*) buffer.data() + startOffset, length);
+
+        if (startOffset + length < filesizeProcessed) {
+            //read till length is ended
+            LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
+            LOG_TRACE << "Length read: " << length;
+            return length;
+        } else {
+            // read till file end
+            LOG_TRACE << "File is done now. (filesizeProcessed: " << filesizeProcessed << ")";
+            LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
+            return filesizeProcessed - startOffset;
+        }
+
+    } else {
+        LOG_TRACE << "no buffer hit in SMB control file, starting read cascade";
+        std::stringstream ss;
+        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
+
+        for (const Fragment fragment: fragments) {
+            Bytes rawData(fragment.length);
+            const FilePtr filePtr = idx.get({offsetType, fragment.id});
+            filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+            smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
+            ss << smbPacket.toString(smbContext);
+        }
+        const std::string outputString = ss.str();
+        memcpy(buf, outputString.c_str() + startOffset, length);
+        buffer.assign(outputString.begin(), outputString.end());
+        return std::min((size_t) outputString.length() - startOffset, length);
     }
-
-    const std::string outputString = ss.str();
-    memcpy(buf, outputString.c_str() + startOffset, length);
-    return std::min((size_t) outputString.length() - startOffset, length);**/
-
-    // for long SMB connections the technically intended procedure of read above takes an inappropriate amount of time
-    // thus, we read the buffered content which is also not optimal but faster
-    (void)idx;
-    memcpy(buf, fileContent.c_str() + startOffset, length);
-    return std::min((size_t) fileContent.length() - startOffset, length);
-}
-
-
-void pcapfs::SmbFile::serialize(boost::archive::text_oarchive &archive) {
-    VirtualFile::serialize(archive);
-    archive << fileContent;
-}
-
-
-void pcapfs::SmbFile::deserialize(boost::archive::text_iarchive &archive) {
-    VirtualFile::deserialize(archive);
-    archive >> fileContent;
 }
 
 
