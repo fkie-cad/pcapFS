@@ -23,6 +23,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
     LOG_TRACE << "number of connection breaks aka future DHCP files: " << numElements;
+    const std::shared_ptr<UdpFile> udpFile = std::dynamic_pointer_cast<UdpFile>(filePtr);
 
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = filePtr->connectionBreaks.at(i).first;
@@ -31,8 +32,6 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
         } else {
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
-
-        const std::shared_ptr<UdpFile> udpFile = std::dynamic_pointer_cast<UdpFile>(filePtr);
 
         for (const Fragment &udpFrag : udpFile->fragments) {
             std::shared_ptr<pcapfs::DhcpFile> resultPtr = std::make_shared<pcapfs::DhcpFile>();

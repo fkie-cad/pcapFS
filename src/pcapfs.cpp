@@ -33,7 +33,6 @@ int pcapfs::PcapFs::getattr(const char *path, struct stat *stbuf, struct fuse_fi
         stbuf->st_atim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
         stbuf->st_ctim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
 
-        //TODO: create flag for "use processed size"
         if (f_p->flags.test(pcapfs::flags::PROCESSED)) {
             stbuf->st_size = f_p->getFilesizeProcessed();
         } else {
