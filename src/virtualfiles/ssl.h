@@ -68,7 +68,7 @@ namespace pcapfs {
 
         static bool isClientMessage(uint64_t i);
 
-    	static bool isTLSTraffic(const FilePtr &filePtr);
+    	static bool isTLSTraffic(const FilePtr &filePtr, const Bytes &data);
 
         static bool isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite);
 

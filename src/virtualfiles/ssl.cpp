@@ -1,17 +1,16 @@
 #include "ssl.h"
-
-#include <pcapplusplus/Packet.h>
-#include <pcapplusplus/SSLHandshake.h>
-
-#include <assert.h>
-#include <numeric>
-
 #include "../filefactory.h"
 #include "../logging.h"
 #include "../crypto/decryptSymmetric.h"
 #include "../crypto/ciphersuites.h"
 #include "../crypto/handshakedata.h"
 #include "../crypto/cryptutils.h"
+
+#include <pcapplusplus/Packet.h>
+#include <pcapplusplus/SSLHandshake.h>
+#include <assert.h>
+#include <numeric>
+#include <regex>
 
 
 std::string const pcapfs::SslFile::toString() {
@@ -75,13 +74,34 @@ size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
 }
 
 
-bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr) {
-	// detect ssl stream by checking for dst Port 443
-	// TODO: other detection method -> config file vs heuristic?
-	if (filePtr->getProperty("dstPort") == "443") {
-		return true;
-	}
-	return false;
+bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
+    if (filePtr->getProperty("protocol") != "tcp")
+        return false;
+    if (!config.checkNonDefaultPorts)
+        return (filePtr->getProperty("srcPort") == "443" || filePtr->getProperty("dstPort") == "443");
+	else if (data.size() > 5) {
+        LOG_TRACE << "try to detect TLS traffic with regex";
+        try {
+            // match TLS record layer header
+            if (std::regex_match(std::string(&data.at(0), &data.at(5)),
+                std::regex("^[\\x14-\\x17]\x03[\\x01-\\x03][\\x00-\\x40].$"))) {
+                    const uint16_t recordLength = be16toh(*(uint16_t*) &data.at(3));
+                    LOG_TRACE << "recordLength: " << recordLength;
+                    if ((size_t)(recordLength + 5) <= data.size()) {
+                        LOG_TRACE << "detected TLS traffic";
+                        return true;
+                    } else
+                        return false;
+            } else {
+                LOG_TRACE << "no match";
+                return false;
+            }
+        } catch (const std::regex_error &err) {
+            LOG_WARNING << "Regex Error in TLS: " << err.what();
+            return false;
+        }
+    } else
+        return false;
 }
 
 
@@ -416,7 +436,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
     std::vector<FilePtr> resultVector(0);
 
     // detect ssl stream by checking for dst Port 443
-    if(!isTLSTraffic(filePtr)) {
+    if(!isTLSTraffic(filePtr, data)) {
         return resultVector;
     }
 

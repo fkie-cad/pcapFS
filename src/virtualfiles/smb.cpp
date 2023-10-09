@@ -50,7 +50,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-        // We have a 4 byte NBSS header indicating the size of the following SMB data
+        // We have a 4 byte NBSS header indicating the NBSS message type
+        // and the size of the following SMB data
+        if (data.at(offset) != 0) {
+            // message type has to be zero
+            continue;
+        }
         size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         size_t currPos = 0;
         while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {
@@ -155,8 +160,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
 bool pcapfs::SmbFile::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data) {
     if (filePtr->getProperty("protocol") == "tcp" &&
-        (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445") &&
-        data.size() > 68 && data.at(0) == 0x00 && (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0))
+        data.size() > 68 && data.at(0) == 0x00 && be32toh(*(uint32_t*) &data.at(0)) != 0 &&
+        (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0) &&
+        (config.checkNonDefaultPorts || (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445")))
         return true;
     else
         return false;
@@ -165,10 +171,11 @@ bool pcapfs::SmbFile::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data) {
 
 size_t pcapfs::SmbFile::getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data) {
     // returns offset where smb Traffic begins after Netbios Session Setup
-    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 &&
-        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139")) {
+    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 && (config.checkNonDefaultPorts ||
+        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139"))) {
         for (size_t pos = 0; pos < data.size() - 8; ++pos) {
-            if (data.at(pos) == 0x00 && (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
+            if (data.at(pos) == 0x00 && be32toh(*(uint32_t*) &data.at(pos)) != 0 &&
+                (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
                 return pos;
         }
     }

@@ -238,19 +238,20 @@ namespace {
             po::options_description pcapfs_options("pcapFS help");
             pcapfs_options.add_options()
                     ("config,c", po::value<fs::path>(&opts.config.configFilePath), "config file to use")
+                    ("check-non-default-ports", "also try to detect protocols which do not use their default ports")
                     ("help,h", "print this help and exit")
                     ("index,i", po::value<fs::path>(&(opts.config.indexFilePath)), "index file to use")
                     ("in-memory,m", "use an in-memory index")
                     ("keys,k", po::value<std::vector<fs::path>>(), "path to a key file or a directory with key files")
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
+                    ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
                     ("no-mount,n", "only create an index file, don't mount the PCAP(s)")
                     ("rewrite,r", "overwrite a possibly existing index file")
                     ("show-all", "also show file which have been parsed already")
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
-                    ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
                     ("version,V", "show version information and exit");
 
             po::typed_value<std::string, char>* verbosity;
@@ -308,6 +309,7 @@ namespace {
             if (vm.count("show-all")) { opts.config.showAll = true; }
             if (vm.count("show-metadata")) { opts.config.showMetadata = true; }
             if (vm.count("no-cs")) { opts.config.noCS = true; }
+            if (vm.count("check-non-default-ports")) { opts.config.checkNonDefaultPorts = true; }
             if (vm.count("verbosity")) {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }
