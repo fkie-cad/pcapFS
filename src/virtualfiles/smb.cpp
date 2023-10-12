@@ -31,7 +31,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
     bool reachedOffsetAfterNbssSetup = false;
     std::stringstream ss;
-    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr);
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
     for (unsigned int i = 0; i < numElements; ++i) {
@@ -219,11 +219,11 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
     } else {
         LOG_TRACE << "no buffer hit in SMB control file, starting read cascade";
         std::stringstream ss;
-        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>();
+        const FilePtr filePtr = idx.get({offsetType, fragments.at(0).id});
+        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr);
 
         for (const Fragment fragment: fragments) {
             Bytes rawData(fragment.length);
-            const FilePtr filePtr = idx.get({offsetType, fragment.id});
             filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
             smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
             ss << smbPacket.toString(smbContext);

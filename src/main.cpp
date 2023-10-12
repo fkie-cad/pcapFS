@@ -25,6 +25,7 @@
 #include "virtualfiles/udp.h"
 #include "virtualfiles/xor.h"
 #include "capturefiles/pcap.h"
+#include "virtualfiles/smb/smb_manager.h"
 
 namespace fs = boost::filesystem;
 
@@ -187,6 +188,9 @@ int main(int argc, const char *argv[]) {
 
         LOG_TRACE << "Progress ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
         		<< filesToProcess.size() << ">";
+
+        // insert possible SMB server files
+        index.insert(pcapfs::smb::SmbManager::getInstance().getServerFiles());
 
         if (!config.indexInMemory) {
             index.write(config.indexFilePath);

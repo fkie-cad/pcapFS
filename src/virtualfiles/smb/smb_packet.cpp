@@ -1,4 +1,5 @@
 #include "smb_packet.h"
+#include "smb_manager.h"
 #include "../../logging.h"
 
 #include <sstream>
@@ -34,17 +35,35 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_TREE_CONNECT:
-                    if (isResponse)
+                    if (isResponse) {
+                        if (!smbContext->currentRequestedTree.empty())
+                            // TODO: what to do with ASYNC messages?
+                            smbContext->treeNames[packetHeader->treeId] = smbContext->currentRequestedTree;
+                        else
+                            smbContext->treeNames[packetHeader->treeId] = std::to_string(packetHeader->treeId);
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
-                    else
-                        message = std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
+                    } else {
+                        std::shared_ptr<TreeConnectRequest> treeConnectRequest =
+                            std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
+                            smbContext->currentRequestedTree = treeConnectRequest->pathName;
+                        message = treeConnectRequest;
+                    }
                     break;
 
                 case Smb2Commands::SMB2_CREATE:
                     if (isResponse) {
                         std::shared_ptr<CreateResponse> createResponse =
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
-                        smbContext->fileHandles[createResponse->fileId] = smbContext->currentRequestedFile;
+                        if (smbContext->currentRequestedFile != "")
+                            smbContext->fileHandles[createResponse->fileId] = smbContext->currentRequestedFile;
+                        else if (!createResponse->isDirectory){
+                            std::stringstream ss;
+                            ss << std::hex << std::setfill('0') << std::setw(2) << createResponse->fileId;
+                            smbContext->fileHandles[createResponse->fileId] = "GUID_" + ss.str();
+                        }
+                        if (!createResponse->isDirectory)
+                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext);
+                        smbContext->currentRequestedFile = "";
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =

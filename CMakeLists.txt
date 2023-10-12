@@ -67,6 +67,8 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/smb/smb_messages.h
         src/virtualfiles/smb/smb_constants.h
         src/virtualfiles/smb/smb_utils.cpp
+        src/virtualfiles/smb/smb_manager.cpp
+        src/virtualfiles/smb_serverfile.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES

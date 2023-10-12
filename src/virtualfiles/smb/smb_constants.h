@@ -1,10 +1,12 @@
 #ifndef PCAPFS_SMB_CONSTANTS_H
 #define PCAPFS_SMB_CONSTANTS_H
 
+#include "../../file.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <pcapplusplus/IpAddress.h>
 
 
 namespace pcapfs {
@@ -13,10 +15,27 @@ namespace pcapfs {
         const uint8_t SMB2_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42};
         const uint8_t SMB1_MAGIC[4] = {0xFF, 0x53, 0x4D, 0x42};
 
+        struct ServerEndpoint {
+            pcpp::IPAddress ipAddress;
+            uint16_t port = 0;
+
+            bool operator==(const ServerEndpoint &endp) const {
+                return endp.ipAddress == ipAddress && endp.port == port;
+            };
+
+            bool operator<(const ServerEndpoint &endp) const {
+                return ipAddress < endp.ipAddress || port < endp.port;
+            };
+        };
+
         struct SmbContext {
+            explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr) {}
             uint16_t dialect = 0;
             std::unordered_map<std::string, std::string> fileHandles;
             std::string currentRequestedFile = "";
+            FilePtr offsetFile = nullptr;
+            std::map<uint32_t, std::string> treeNames;
+            std::string currentRequestedTree = "";
         };
 
         typedef std::shared_ptr<SmbContext> SmbContextPtr;

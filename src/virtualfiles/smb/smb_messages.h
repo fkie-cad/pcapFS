@@ -259,9 +259,18 @@ namespace pcapfs {
                 const uint32_t extractedAction = *(uint32_t*) &rawData.at(4);
                 createAction = extractedAction <= 3 ? extractedAction : CreateAction::ACTION_UNKNOWN;
                 fileId = bytesToHexString(Bytes(&rawData.at(64), &rawData.at(80)));
+
+                const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(56);
+                isDirectory = extractedFileAttributes & 0x10;
+
+                lastAccessTime = *(uint64_t*) &rawData.at(16);
+                filesize = *(uint64_t*) &rawData.at(48);
             }
             uint32_t createAction = CreateAction::ACTION_UNKNOWN;
             std::string fileId = "";
+            bool isDirectory = false;
+            uint64_t lastAccessTime = 0;
+            uint64_t filesize = 0;
         };
 
         class CloseRequest : public SmbMessage {

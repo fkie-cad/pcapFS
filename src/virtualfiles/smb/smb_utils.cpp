@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <iomanip>
+#include <chrono>
 
 
 size_t pcapfs::smb::calculate311NegotiateMessageLength(const Bytes &rawData, uint32_t negotiateContextOffset,
@@ -17,11 +18,13 @@ size_t pcapfs::smb::calculate311NegotiateMessageLength(const Bytes &rawData, uin
     return currPos;
 }
 
+
 std::string const pcapfs::smb::wstrToStr(const Bytes &input) {
     Bytes temp(input.begin(), input.end());
     temp.erase(std::remove(temp.begin(), temp.end(), (unsigned char)0x00), temp.end());
     return std::string(temp.begin(), temp.end());
 }
+
 
 std::string const pcapfs::smb::bytesToHexString(const Bytes &input) {
     std::stringstream ss;
@@ -29,4 +32,19 @@ std::string const pcapfs::smb::bytesToHexString(const Bytes &input) {
     for (size_t i = 0; i < input.size(); ++i)
         ss <<  std::setw(2) << (int)input.at(i);
     return ss.str();
+}
+
+
+uint16_t pcapfs::smb::strToUint16(const std::string& str) {
+    char* end;
+    long val = strtol(str.c_str(), &end, 10);
+    if (end == str || *end != '\0' || val < 0 || val >= 0x10000)
+        return 0;
+    return (uint16_t) val;
+}
+
+
+pcapfs::TimePoint pcapfs::smb::winFiletimeToTimePoint(uint64_t winFiletime) {
+    const auto unixSeconds = std::chrono::seconds{(winFiletime / 10000000ULL) - 11644473600ULL};
+    return TimePoint(unixSeconds);
 }

@@ -79,7 +79,7 @@ bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
         return false;
     if (!config.checkNonDefaultPorts)
         return (filePtr->getProperty("srcPort") == "443" || filePtr->getProperty("dstPort") == "443");
-	else if (data.size() > 5) {
+    else if (data.size() > 5) {
         LOG_TRACE << "try to detect TLS traffic with regex";
         try {
             // match TLS record layer header
