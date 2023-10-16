@@ -22,12 +22,12 @@ namespace pcapfs {
             SmbManager(SmbManager const&) = delete;
             void operator=(SmbManager const&) = delete;
 
-            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext);
+            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint32_t treeId);
             std::vector<FilePtr> getServerFiles();
 
         private:
             SmbManager() {}
-            ServerEndpoint const getServerEndpoint(const FilePtr &filePtr);
+            ServerEndpoint const getServerEndpoint(const FilePtr &filePtr, uint32_t treeId);
             std::map<ServerEndpoint, SmbServerFiles> serverFiles;
         };
     }

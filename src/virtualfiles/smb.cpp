@@ -192,6 +192,7 @@ void pcapfs::SmbFile::fillGlobalProperties(std::shared_ptr<SmbFile> &controlFile
     controlFilePtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
     controlFilePtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
     controlFilePtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    controlFilePtr->setProperty("smbTree", "(controlfiles)");
 }
 
 

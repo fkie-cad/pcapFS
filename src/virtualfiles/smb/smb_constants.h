@@ -18,13 +18,14 @@ namespace pcapfs {
         struct ServerEndpoint {
             pcpp::IPAddress ipAddress;
             uint16_t port = 0;
+            uint32_t treeId = 0;
 
             bool operator==(const ServerEndpoint &endp) const {
-                return endp.ipAddress == ipAddress && endp.port == port;
+                return endp.ipAddress == ipAddress && endp.port == port && endp.treeId == treeId;
             };
 
             bool operator<(const ServerEndpoint &endp) const {
-                return ipAddress < endp.ipAddress || port < endp.port;
+                return ipAddress < endp.ipAddress || port < endp.port || treeId < endp.treeId;
             };
         };
 

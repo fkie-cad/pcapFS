@@ -62,7 +62,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             smbContext->fileHandles[createResponse->fileId] = "GUID_" + ss.str();
                         }
                         if (!createResponse->isDirectory)
-                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext);
+                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
                         smbContext->currentRequestedFile = "";
                         message = createResponse;
                     } else {
