@@ -45,6 +45,14 @@ uint16_t pcapfs::smb::strToUint16(const std::string& str) {
 
 
 pcapfs::TimePoint pcapfs::smb::winFiletimeToTimePoint(uint64_t winFiletime) {
-    const auto unixSeconds = std::chrono::seconds{(winFiletime / 10000000ULL) - 11644473600ULL};
+    const auto unixSeconds = winFiletime == 0 ?  std::chrono::seconds{0} :
+            std::chrono::seconds{(winFiletime / 10000000ULL) - 11644473600ULL};
     return TimePoint(unixSeconds);
+}
+
+
+std::string pcapfs::smb::constructGuidString(const std::string &input) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0') << std::setw(2) << input;
+    return "GUID_" + ss.str();
 }

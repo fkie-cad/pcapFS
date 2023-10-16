@@ -23,6 +23,7 @@ namespace pcapfs {
             void operator=(SmbManager const&) = delete;
 
             void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint32_t treeId);
+            void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint32_t treeId);
             std::vector<FilePtr> getServerFiles();
 
         private:

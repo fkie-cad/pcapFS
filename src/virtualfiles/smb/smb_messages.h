@@ -607,7 +607,7 @@ namespace pcapfs {
 
         class QueryInfoResponse : public SmbMessage {
         public:
-            QueryInfoResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            QueryInfoResponse(const uint8_t* data, size_t len, const std::shared_ptr<QueryInfoRequestData> &queryInfoRequestData) : SmbMessage(data, len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Info Response");
@@ -615,14 +615,60 @@ namespace pcapfs {
                 const uint16_t outputBufferOffset = *(uint16_t*) &rawData.at(2);
                 const uint32_t outputBufferLength = *(uint32_t*) &rawData.at(4);
 
-                if (outputBufferOffset == 0 && outputBufferLength == 0)
+                if (outputBufferOffset == 0 || outputBufferLength == 0)
                     totalSize = 9;
                 else {
                     if ((size_t)(outputBufferOffset + outputBufferLength - 64) > len)
                         throw SmbError("Invalid buffer values in SMB2 Query Info Response");
                     totalSize = outputBufferOffset + outputBufferLength - 64;
+                    if (!queryInfoRequestData)
+                        return;
+
+                    if (queryInfoRequestData->infoType == QueryInfoType::SMB2_0_INFO_FILE) {
+                        switch (queryInfoRequestData->fileInfoClass) {
+                            case FileInfoClass::FILE_ALL_INFORMATION:
+                                {
+                                    if (outputBufferLength < 100)
+                                        throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
+                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 48);
+                                    const uint32_t filenameLen = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 96);
+                                    if (100 + filenameLen > outputBufferLength)
+                                        throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
+                                    filename = std::string(rawData.at((outputBufferOffset - 64) + 100), rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1));
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(32);
+                                    isDirectory = extractedFileAttributes & 0x10;
+                                }
+                                break;
+
+                            case FileInfoClass::FILE_BASIC_INFORMATION:
+                                {
+                                    if (outputBufferLength < 36)
+                                        throw SmbError("Invalid size of FILE_BASIC_INFORMATION in SMB2 Query Info Response");
+                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(32);
+                                    isDirectory = extractedFileAttributes & 0x10;
+                                }
+                                break;
+
+                            case FileInfoClass::FILE_NETWORK_OPEN_INFORMATION:
+                                {
+                                    if (outputBufferLength < 52)
+                                        throw SmbError("Invalid size of FILE_NETWORK_OPEN_INFORMATION in SMB2 Query Info Response");
+                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 40);
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(48);
+                                    isDirectory = extractedFileAttributes & 0x10;
+                                }
+                                break;
+                        }
+                    }
                 }
             }
+            uint64_t lastAccessTime = 0;
+            uint64_t filesize = 0;
+            std::string filename = "";
+            bool isDirectory = true;
         };
 
         class SetInfoRequest : public SmbMessage {

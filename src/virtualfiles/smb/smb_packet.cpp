@@ -54,21 +54,19 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse) {
                         std::shared_ptr<CreateResponse> createResponse =
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
-                        if (smbContext->currentRequestedFile != "")
-                            smbContext->fileHandles[createResponse->fileId] = smbContext->currentRequestedFile;
+                        if (smbContext->currentCreateRequestFile != "")
+                            smbContext->fileHandles[createResponse->fileId] = smbContext->currentCreateRequestFile;
                         else if (!createResponse->isDirectory){
-                            std::stringstream ss;
-                            ss << std::hex << std::setfill('0') << std::setw(2) << createResponse->fileId;
-                            smbContext->fileHandles[createResponse->fileId] = "GUID_" + ss.str();
+                            smbContext->fileHandles[createResponse->fileId] = constructGuidString(createResponse->fileId);
                         }
                         if (!createResponse->isDirectory)
                             SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
-                        smbContext->currentRequestedFile = "";
+                        smbContext->currentCreateRequestFile = "";
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
                                 std::make_shared<CreateRequest>(&data[64], len - 64);
-                        smbContext->currentRequestedFile = createRequest->filename;
+                        smbContext->currentCreateRequestFile = createRequest->filename;
                         message = createRequest;
                     }
                     break;
@@ -148,17 +146,32 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_QUERY_INFO:
-                    if (isResponse)
+                    if (isResponse) {
                         if (packetHeader->status != StatusCodes::STATUS_SUCCESS) {
                             // probably an error response
                             // we need to handle it here because the structureSizes of
                             // QueryInfoResponse and Error Response are the same
                             message = std::make_shared<ErrorResponse>(&data[64], len - 64);
                             isErrorResponse = true;
-                        } else
-                            message = std::make_shared<QueryInfoResponse>(&data[64], len - 64);
-                    else
-                        message = std::make_shared<QueryInfoRequest>(&data[64], len - 64);
+                        } else {
+                            std::shared_ptr<QueryInfoResponse> queryInfoResponse =
+                                std::make_shared<QueryInfoResponse>(&data[64], len - 64, smbContext->currentQueryInfoRequestData);
+                            if (!queryInfoResponse->isDirectory && smbContext->currentQueryInfoRequestData) {
+                                SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext, packetHeader->treeId);
+                            }
+                            smbContext->currentQueryInfoRequestData = nullptr;
+                            message = queryInfoResponse;
+                        }
+                    } else {
+                        std::shared_ptr<QueryInfoRequest> queryInfoRequest =
+                            std::make_shared<QueryInfoRequest>(&data[64], len - 64);
+                        std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
+                        queryInfoRequestData->infoType = queryInfoRequest->infoType;
+                        queryInfoRequestData->fileInfoClass = queryInfoRequest->fileInfoClass;
+                        queryInfoRequestData->fileId = queryInfoRequest->fileId;
+                        smbContext->currentQueryInfoRequestData = queryInfoRequestData;
+                        message = queryInfoRequest;
+                    }
                     break;
 
                 case Smb2Commands::SMB2_SET_INFO:

@@ -29,11 +29,18 @@ namespace pcapfs {
             };
         };
 
+        struct QueryInfoRequestData {
+            uint8_t infoType = 0;
+            uint8_t fileInfoClass = 0;
+            std::string fileId = "";
+        };
+
         struct SmbContext {
             explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr) {}
             uint16_t dialect = 0;
             std::unordered_map<std::string, std::string> fileHandles;
-            std::string currentRequestedFile = "";
+            std::string currentCreateRequestFile = "";
+            std::shared_ptr<QueryInfoRequestData> currentQueryInfoRequestData = nullptr;
             FilePtr offsetFile = nullptr;
             std::map<uint32_t, std::string> treeNames;
             std::string currentRequestedTree = "";
