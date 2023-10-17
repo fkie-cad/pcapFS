@@ -18,6 +18,7 @@ namespace pcapfs {
             size_t totalSize = 0;
         };
 
+
         class ErrorResponse : public SmbMessage {
         public:
             ErrorResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -35,6 +36,7 @@ namespace pcapfs {
                     totalSize = 8 + byteCount;
             }
         };
+
 
         class NegotiateRequest : public SmbMessage {
         public:
@@ -69,6 +71,7 @@ namespace pcapfs {
             }
         };
 
+
         class NegotiateResponse : public SmbMessage {
         public:
             NegotiateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -96,6 +99,7 @@ namespace pcapfs {
             uint16_t dialect;
         };
 
+
         class SessionSetupRequest : public SmbMessage {
         public:
             SessionSetupRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -116,6 +120,7 @@ namespace pcapfs {
             }
         };
 
+
         class SessionSetupResponse : public SmbMessage {
         public:
             SessionSetupResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -135,6 +140,7 @@ namespace pcapfs {
                 }
             }
         };
+
 
         class TreeConnectRequest : public SmbMessage {
         public:
@@ -184,6 +190,7 @@ namespace pcapfs {
             std::string pathName = "";
         };
 
+
         class TreeConnectResponse : public SmbMessage {
         public:
             TreeConnectResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -194,6 +201,7 @@ namespace pcapfs {
                 totalSize = 16;
             }
         };
+
 
         class CreateRequest : public SmbMessage {
         public:
@@ -238,6 +246,7 @@ namespace pcapfs {
             uint32_t disposition = CreateDisposition::DISPOSITION_UNKNOWN;
         };
 
+
         class CreateResponse : public SmbMessage {
         public:
             CreateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -273,6 +282,7 @@ namespace pcapfs {
             uint64_t filesize = 0;
         };
 
+
         class CloseRequest : public SmbMessage {
         public:
             CloseRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -286,6 +296,7 @@ namespace pcapfs {
             std::string fileId = "";
         };
 
+
         class CloseResponse : public SmbMessage {
         public:
             CloseResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -297,6 +308,7 @@ namespace pcapfs {
             }
         };
 
+
         class FlushRequest : public SmbMessage {
         public:
             FlushRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -307,6 +319,7 @@ namespace pcapfs {
                 totalSize = 24;
             }
         };
+
 
         class ReadRequest : public SmbMessage {
         public:
@@ -334,6 +347,7 @@ namespace pcapfs {
             uint32_t readLength = 0;
         };
 
+
         class ReadResponse : public SmbMessage {
         public:
             ReadResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -353,6 +367,7 @@ namespace pcapfs {
                 }
             }
         };
+
 
         class WriteRequest : public SmbMessage {
         public:
@@ -386,6 +401,7 @@ namespace pcapfs {
             uint32_t writeLength = 0;
         };
 
+
         class WriteResponse : public SmbMessage {
         public:
             WriteResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -396,6 +412,7 @@ namespace pcapfs {
                 totalSize = 16;
             }
         };
+
 
         class OplockBreakMessage : public SmbMessage {
         public:
@@ -408,6 +425,7 @@ namespace pcapfs {
                 totalSize = 24;
             }
         };
+
 
         class LockRequest : public SmbMessage {
         public:
@@ -426,6 +444,7 @@ namespace pcapfs {
                 }
             }
         };
+
 
         class IoctlRequest : public SmbMessage {
         public:
@@ -457,6 +476,7 @@ namespace pcapfs {
             std::string fileId = "";
         };
 
+
         class IoctlResponse : public SmbMessage {
         public:
             IoctlResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -476,6 +496,7 @@ namespace pcapfs {
                 }
             }
         };
+
 
         class QueryDirectoryRequest : public SmbMessage {
         public:
@@ -508,6 +529,7 @@ namespace pcapfs {
             std::string searchPattern = "";
         };
 
+
         class QueryDirectoryResponse : public SmbMessage {
         public:
             QueryDirectoryResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -528,10 +550,10 @@ namespace pcapfs {
             }
         };
 
+
         class ChangeNotifyRequest: public SmbMessage {
         public:
             ChangeNotifyRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                // includes Oplock Break Notification, Acknowledgement and Response
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 32)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Change Notify Request");
@@ -539,6 +561,7 @@ namespace pcapfs {
                 totalSize = 32;
             }
         };
+
 
         class ChangeNotifyResponse : public SmbMessage {
         public:
@@ -559,6 +582,7 @@ namespace pcapfs {
                 }
             }
         };
+
 
         class QueryInfoRequest : public SmbMessage {
         public:
@@ -604,6 +628,7 @@ namespace pcapfs {
             uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
             std::string fileId = "";
         };
+
 
         class QueryInfoResponse : public SmbMessage {
         public:
@@ -671,6 +696,7 @@ namespace pcapfs {
             bool isDirectory = true;
         };
 
+
         class SetInfoRequest : public SmbMessage {
         public:
             SetInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -716,6 +742,7 @@ namespace pcapfs {
             std::string fileId = "";
         };
 
+
         class SetInfoResponse : public SmbMessage {
         public:
             SetInfoResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
@@ -726,6 +753,7 @@ namespace pcapfs {
                 totalSize = 2;
             }
         };
+
 
         class FourByteMessage : public SmbMessage {
         public:

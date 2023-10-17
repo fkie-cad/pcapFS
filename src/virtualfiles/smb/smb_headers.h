@@ -38,6 +38,7 @@ namespace pcapfs {
             uint16_t mid;
         };
 
+
         struct Smb2Header : SmbHeader {
             explicit Smb2Header(const uint8_t* rawData) {
                 memcpy(&protocolId, rawData, 4);

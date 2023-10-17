@@ -45,7 +45,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     } else {
                         std::shared_ptr<TreeConnectRequest> treeConnectRequest =
                             std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
-                            smbContext->currentRequestedTree = treeConnectRequest->pathName;
+                        smbContext->currentRequestedTree = treeConnectRequest->pathName;
                         message = treeConnectRequest;
                     }
                     break;

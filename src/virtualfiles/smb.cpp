@@ -147,7 +147,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                                                             [](size_t counter, Fragment frag){ return counter + frag.length; });
     controlFilePtr->flags.set(pcapfs::flags::PROCESSED);
     controlFilePtr->setFilesizeRaw(filesize);
-    std::string const processedContent = ss.str();
+    const std::string processedContent = ss.str();
     controlFilePtr->setFilesizeProcessed(processedContent.size());
 
     // for faster access in read

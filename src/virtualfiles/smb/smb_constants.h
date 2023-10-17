@@ -25,7 +25,13 @@ namespace pcapfs {
             };
 
             bool operator<(const ServerEndpoint &endp) const {
-                return ipAddress < endp.ipAddress || port < endp.port || treeId < endp.treeId;
+                if (ipAddress == endp.ipAddress) {
+                    if (port == endp.port)
+                        return treeId < endp.treeId;
+                    else
+                        return port < endp.port;
+                } else
+                    return ipAddress < endp.ipAddress ;
             };
         };
 
@@ -47,6 +53,7 @@ namespace pcapfs {
         };
 
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
+
 
         enum Version : uint16_t {
             SMB_VERSION_2_0_2 = 0x0202,

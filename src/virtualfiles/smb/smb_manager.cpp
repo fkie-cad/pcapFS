@@ -7,29 +7,12 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
     std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][smbContext->currentCreateRequestFile];
     if (!serverFilePtr) {
+        // server file not present in map -> create new one
         serverFilePtr = std::make_shared<SmbServerFile>();
-
-        Fragment fragment;
-        fragment.id = smbContext->offsetFile->getIdInIndex();
-        fragment.start = 0;
-        fragment.length = 0;
-        serverFilePtr->fragments.push_back(fragment);
-        serverFilePtr->setFilename(smbContext->currentCreateRequestFile);
-        serverFilePtr->setTimestamp(winFiletimeToTimePoint(createResponse->lastAccessTime));
-        serverFilePtr->setProperty("protocol", "smb");
-        serverFilePtr->setFiletype("smbserverfile");
-        serverFilePtr->setOffsetType(smbContext->offsetFile->getFiletype());
-        serverFilePtr->setProperty("srcIP", smbContext->offsetFile->getProperty("srcIP"));
-        serverFilePtr->setProperty("dstIP", smbContext->offsetFile->getProperty("dstIP"));
-        serverFilePtr->setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
-        serverFilePtr->setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
-        if (smbContext->treeNames.find(treeId) != smbContext->treeNames.end())
-            serverFilePtr->setProperty("smbTree", smbContext->treeNames.at(treeId));
-        serverFilePtr->flags.set(pcapfs::flags::PROCESSED);
-        serverFilePtr->setFilesizeRaw(createResponse->filesize);
-        serverFilePtr->setFilesizeProcessed(createResponse->filesize);
-
+        serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->lastAccessTime,
+                                        createResponse->filesize, treeId);
     } else {
+        // server file is already known; update metadata if the current timestamp is newer
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->lastAccessTime);
         if (lastAccessTime > serverFilePtr->getTimestamp()) {
             serverFilePtr->setTimestamp(lastAccessTime);
@@ -51,19 +34,20 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
         std::string filename = "";
         if (smbContext->fileHandles.find(smbContext->currentQueryInfoRequestData->fileId) != smbContext->fileHandles.end()) {
+            // filename already present in fileHandles-map of smbContext
             filename = smbContext->fileHandles.at(smbContext->currentQueryInfoRequestData->fileId);
 
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION) {
                 const std::string guidAsFilename = constructGuidString(smbContext->currentQueryInfoRequestData->fileId);
                 if (filename == guidAsFilename) {
-                    // real filename not known priorly but can be extracted from FILE_ALL_INFORMATION
+                    // filename is only  GUID-string, the real filename can now be extracted from FILE_ALL_INFORMATION
                     filename = queryInfoResponse->filename;
-                    // update smbContext so that the real GUID-filename mapping is now known
+                    // update smbContext so that the mapping between GUID and real filename is now known
                     smbContext->fileHandles[smbContext->currentQueryInfoRequestData->fileId] = queryInfoResponse->filename;
 
                     if (serverFiles[endpoint].find(guidAsFilename) != serverFiles[endpoint].end()) {
-                        // in the serverFiles-map, the name of the file whose FILE_ALL_INFORMATION is returned is already known
-                        // as its GUID-string (which is set when the real file name is unknown)
+                        // in the serverFiles-map of the SMB manager, the name of the file whose FILE_ALL_INFORMATION is returned is
+                        // already known as its GUID-string (which is set when the real file name is unknown)
                         // but, since now through FILE_ALL_INFORMATION the real file name is known, we delete the file entry,
                         // which is indexed by the GUID-string, so that we do not have two versions of the same file at the end
                         // (one with GUID-string as file name and the other one with the real file name)
@@ -73,9 +57,9 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             }
         } else {
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION) {
-                // filename not known priorly but can be extracted from FILE_ALL_INFORMATION
+                // filename is only  GUID-string, the real filename can now be extracted from FILE_ALL_INFORMATION
                 filename = queryInfoResponse->filename;
-                // update smbContext so that GUID-filename mapping is now known
+                // update smbContext so that the mapping between GUID and real filename is now known
                 smbContext->fileHandles[smbContext->currentQueryInfoRequestData->fileId] = queryInfoResponse->filename;
             } else {
                 filename = constructGuidString(smbContext->currentQueryInfoRequestData->fileId);
@@ -84,28 +68,12 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
 
         std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
         if (!serverFilePtr) {
+            // server file not present in map -> create new one
             serverFilePtr = std::make_shared<SmbServerFile>();
-
-            Fragment fragment;
-            fragment.id = smbContext->offsetFile->getIdInIndex();
-            fragment.start = 0;
-            fragment.length = 0;
-            serverFilePtr->fragments.push_back(fragment);
-            serverFilePtr->setFilename(filename);
-            serverFilePtr->setTimestamp(winFiletimeToTimePoint(queryInfoResponse->lastAccessTime));
-            serverFilePtr->setProperty("protocol", "smb");
-            serverFilePtr->setFiletype("smbserverfile");
-            serverFilePtr->setOffsetType(smbContext->offsetFile->getFiletype());
-            serverFilePtr->setProperty("srcIP", smbContext->offsetFile->getProperty("srcIP"));
-            serverFilePtr->setProperty("dstIP", smbContext->offsetFile->getProperty("dstIP"));
-            serverFilePtr->setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
-            serverFilePtr->setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
-            if (smbContext->treeNames.find(treeId) != smbContext->treeNames.end())
-                serverFilePtr->setProperty("smbTree", smbContext->treeNames.at(treeId));
-            serverFilePtr->flags.set(pcapfs::flags::PROCESSED);
-            serverFilePtr->setFilesizeRaw(queryInfoResponse->filesize);
-            serverFilePtr->setFilesizeProcessed(queryInfoResponse->filesize);
+            serverFilePtr->initializeFilePtr(smbContext, filename, queryInfoResponse->lastAccessTime,
+                                            queryInfoResponse->filesize, treeId);
         } else {
+            // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getTimestamp()) {
                 serverFilePtr->setTimestamp(lastAccessTime);
