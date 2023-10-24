@@ -81,6 +81,41 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
                 serverFilePtr->setFilesizeProcessed(queryInfoResponse->filesize);
             }
         }
+
+        serverFiles[endpoint][filename] = serverFilePtr;
+    }
+}
+
+
+void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint32_t treeId) {
+    // update server files with file infos obtained by query directory messages
+
+    bool directoryNameKnown = (smbContext->fileHandles.find(smbContext->currentQueryDirectoryRequestData->fileId) != smbContext->fileHandles.end());
+    for (const std::shared_ptr<FileInformation> &fileInfo : fileInfos) {
+        std::string filename = "";
+        if (directoryNameKnown)
+            filename = smbContext->fileHandles.at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
+        else
+            filename = fileInfo->filename;
+
+        const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
+        std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
+        if (!serverFilePtr) {
+            // server file not present in map -> create new one
+            serverFilePtr = std::make_shared<SmbServerFile>();
+            serverFilePtr->initializeFilePtr(smbContext, filename, fileInfo->lastAccessTime,
+                                            fileInfo->filesize, treeId);
+        } else {
+            // server file is already known; update metadata if the current timestamp is newer
+            const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->lastAccessTime);
+            if (lastAccessTime > serverFilePtr->getTimestamp()) {
+                serverFilePtr->setTimestamp(lastAccessTime);
+                serverFilePtr->setFilesizeRaw(fileInfo->filesize);
+                serverFilePtr->setFilesizeProcessed(fileInfo->filesize);
+            }
+        }
+
+        serverFiles[endpoint][filename] = serverFilePtr;
     }
 }
 
@@ -103,7 +138,7 @@ pcapfs::smb::ServerEndpoint const pcapfs::smb::SmbManager::getServerEndpoint(con
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::smb::SmbManager::getServerFiles() {
+std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
     std::vector<FilePtr> resultVector;
     for (const auto &entry : serverFiles) {
         for (const auto& f : entry.second) {

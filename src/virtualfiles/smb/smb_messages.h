@@ -5,6 +5,7 @@
 #include "smb_utils.h"
 #include "../../exceptions.h"
 #include "../../commontypes.h"
+#include <set>
 
 
 namespace pcapfs {
@@ -532,7 +533,7 @@ namespace pcapfs {
 
         class QueryDirectoryResponse : public SmbMessage {
         public:
-            QueryDirectoryResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            QueryDirectoryResponse(const uint8_t* data, size_t len, uint8_t fileInfoClass) : SmbMessage(data, len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Directory Response");
@@ -546,8 +547,58 @@ namespace pcapfs {
                     if ((size_t)(outputBufferOffset + outputBufferLength - 64) > len)
                         throw SmbError("Invalid buffer values in SMB2 Query Directory Response");
                     totalSize = outputBufferOffset + outputBufferLength - 64;
+
+                    fileInfos = parseFileInformation(Bytes(&rawData.at(outputBufferOffset - 64),
+                                        &rawData[outputBufferOffset + outputBufferLength - 64]), fileInfoClass);
                 }
             }
+            std::vector<std::shared_ptr<FileInformation>> fileInfos;
+
+        private:
+            std::vector<std::shared_ptr<FileInformation>> const parseFileInformation(const Bytes &rawContent, uint8_t fileInfoClass) {
+                std::vector<std::shared_ptr<FileInformation>> result(0);
+                const std::set<uint8_t> allowedFileInfos = { FileInfoClass::FILE_DIRECTORY_INFORMATION, FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION,
+                                                            FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION, FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION,
+                                                            FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION };
+                if (allowedFileInfos.find(fileInfoClass) == allowedFileInfos.end())
+                    return result;
+
+                Bytes tempFileInfoBuffer(rawContent.begin(), rawContent.end());
+                uint32_t nextEntryOffset = 0;
+                do {
+                    std::shared_ptr<FileInformation> currFileInfo = nullptr;
+                    switch (fileInfoClass) {
+                        case FileInfoClass::FILE_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
+                        case FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileFullDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
+                        case FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileIdBothDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
+                        case FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileIdExtdDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
+                        case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileIdFullDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+                    }
+                    if (!currFileInfo->isDirectory)
+                        result.push_back(currFileInfo);
+
+                    nextEntryOffset = *(uint32_t*) &tempFileInfoBuffer.at(0);
+                    if (nextEntryOffset + 64 > tempFileInfoBuffer.size())
+                        break;
+                    tempFileInfoBuffer.erase(tempFileInfoBuffer.begin(), tempFileInfoBuffer.begin() + nextEntryOffset);
+                } while (nextEntryOffset != 0);
+
+                return result;
+            };
         };
 
 

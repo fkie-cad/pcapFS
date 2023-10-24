@@ -126,9 +126,30 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             message = std::make_shared<ErrorResponse>(&data[64], len - 64);
                             isErrorResponse = true;
                         } else
-                            message = std::make_shared<QueryDirectoryResponse>(&data[64], len - 64);
-                    } else
-                        message = std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
+                            if (smbContext->currentQueryDirectoryRequestData) {
+                                std::shared_ptr<QueryDirectoryResponse> queryDirectoryResponse =
+                                    std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
+                                        smbContext->currentQueryDirectoryRequestData->fileInfoClass);
+
+                                if (!queryDirectoryResponse->fileInfos.empty())
+                                    SmbManager::getInstance().updateServerFiles(queryDirectoryResponse->fileInfos,
+                                                                    smbContext, packetHeader->treeId);
+                                smbContext->currentQueryDirectoryRequestData = nullptr;
+                                message = queryDirectoryResponse;
+                            } else {
+                                message = std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
+                                    FileInfoClass::FILE_UNKNOWN_INFORMATION);
+                            }
+                    } else {
+                        std::shared_ptr<QueryDirectoryRequest> queryDirectoryRequest =
+                            std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
+                        std::shared_ptr<QueryDirectoryRequestData> queryDirectoryRequestData =
+                            std::make_shared<QueryDirectoryRequestData>();
+                        queryDirectoryRequestData->fileInfoClass = queryDirectoryRequest->fileInfoClass;
+                        queryDirectoryRequestData->fileId = queryDirectoryRequest->fileId;
+                        smbContext->currentQueryDirectoryRequestData = queryDirectoryRequestData;
+                        message = queryDirectoryRequest;
+                    }
                     break;
 
                 case Smb2Commands::SMB2_CHANGE_NOTIFY:
