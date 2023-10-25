@@ -2,10 +2,7 @@
 #define PCAPFS_SMB_MANAGER_H
 
 #include "smb_messages.h"
-#include "smb_constants.h"
 #include "../smb_serverfile.h"
-#include "../../commontypes.h"
-#include "../../file.h"
 
 namespace pcapfs {
     namespace smb {
@@ -25,7 +22,7 @@ namespace pcapfs {
 
             void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint32_t treeId);
             void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint32_t treeId);
-            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint32_t treeId);
+            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext, uint32_t treeId);
             std::vector<FilePtr> const getServerFiles();
 
         private:

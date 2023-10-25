@@ -4,6 +4,8 @@
 
 
 void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint32_t treeId) {
+    // update server files with file infos obtained from create messages
+
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
     std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][smbContext->currentCreateRequestFile];
     if (!serverFilePtr) {
@@ -26,6 +28,8 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
 
 
 void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint32_t treeId) {
+    // update server files with file infos obtained from query info messages
+
     if (smbContext->currentQueryInfoRequestData->infoType == QueryInfoType::SMB2_0_INFO_FILE &&
         (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION ||
         smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_BASIC_INFORMATION ||
@@ -87,10 +91,11 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
 }
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint32_t treeId) {
-    // update server files with file infos obtained by query directory messages
-
+void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext, uint32_t treeId) {
+    // update server files with file infos obtained from query directory messages
     bool directoryNameKnown = (smbContext->fileHandles.find(smbContext->currentQueryDirectoryRequestData->fileId) != smbContext->fileHandles.end());
+    const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
+
     for (const std::shared_ptr<FileInformation> &fileInfo : fileInfos) {
         std::string filename = "";
         if (directoryNameKnown)
@@ -98,7 +103,6 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         else
             filename = fileInfo->filename;
 
-        const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
         std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
         if (!serverFilePtr) {
             // server file not present in map -> create new one

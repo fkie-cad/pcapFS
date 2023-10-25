@@ -2,9 +2,8 @@
 #define PCAPFS_SMB_MESSAGES_H
 
 #include "smb_constants.h"
+#include "smb_structs.h"
 #include "smb_utils.h"
-#include "../../exceptions.h"
-#include "../../commontypes.h"
 #include <set>
 
 
@@ -576,16 +575,20 @@ namespace pcapfs {
                             currFileInfo = std::make_shared<FileFullDirectoryInformation>(tempFileInfoBuffer);
                             break;
 
+                        case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileIdFullDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
+                        case FileInfoClass::FILE_BOTH_DIRECTORY_INFORMATION:
+                            currFileInfo = std::make_shared<FileBothDirectoryInformation>(tempFileInfoBuffer);
+                            break;
+
                         case FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION:
                             currFileInfo = std::make_shared<FileIdBothDirectoryInformation>(tempFileInfoBuffer);
                             break;
 
                         case FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION:
                             currFileInfo = std::make_shared<FileIdExtdDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileIdFullDirectoryInformation>(tempFileInfoBuffer);
                             break;
                     }
                     if (!currFileInfo->isDirectory)
@@ -711,29 +714,30 @@ namespace pcapfs {
                                     const uint32_t filenameLen = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 96);
                                     if (100 + filenameLen > outputBufferLength)
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
-                                    filename = std::string(rawData.at((outputBufferOffset - 64) + 100), rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1));
-                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(32);
+                                    filename = wstrToStr(Bytes(&rawData.at((outputBufferOffset - 64) + 100),
+                                                                &rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1)));
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);
                                     isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
 
                             case FileInfoClass::FILE_BASIC_INFORMATION:
                                 {
-                                    if (outputBufferLength < 36)
+                                    if (outputBufferLength < 40)
                                         throw SmbError("Invalid size of FILE_BASIC_INFORMATION in SMB2 Query Info Response");
                                     lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
-                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(32);
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);
                                     isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
 
                             case FileInfoClass::FILE_NETWORK_OPEN_INFORMATION:
                                 {
-                                    if (outputBufferLength < 52)
+                                    if (outputBufferLength < 56)
                                         throw SmbError("Invalid size of FILE_NETWORK_OPEN_INFORMATION in SMB2 Query Info Response");
                                     lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
                                     filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 40);
-                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(48);
+                                    const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 48);
                                     isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
@@ -744,7 +748,7 @@ namespace pcapfs {
             uint64_t lastAccessTime = 0;
             uint64_t filesize = 0;
             std::string filename = "";
-            bool isDirectory = true;
+            bool isDirectory = false;
         };
 
 

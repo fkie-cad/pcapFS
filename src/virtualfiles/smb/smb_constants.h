@@ -1,14 +1,9 @@
 #ifndef PCAPFS_SMB_CONSTANTS_H
 #define PCAPFS_SMB_CONSTANTS_H
 
-#include "../../file.h"
-#include "../../exceptions.h"
-#include "smb_utils.h"
 #include <string>
 #include <vector>
-#include <memory>
 #include <unordered_map>
-#include <pcapplusplus/IpAddress.h>
 
 
 namespace pcapfs {
@@ -16,113 +11,6 @@ namespace pcapfs {
 
         const uint8_t SMB2_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42};
         const uint8_t SMB1_MAGIC[4] = {0xFF, 0x53, 0x4D, 0x42};
-
-        struct ServerEndpoint {
-            pcpp::IPAddress ipAddress;
-            uint16_t port = 0;
-            uint32_t treeId = 0;
-
-            bool operator==(const ServerEndpoint &endp) const {
-                return endp.ipAddress == ipAddress && endp.port == port && endp.treeId == treeId;
-            };
-
-            bool operator<(const ServerEndpoint &endp) const {
-                if (ipAddress == endp.ipAddress) {
-                    if (port == endp.port)
-                        return treeId < endp.treeId;
-                    else
-                        return port < endp.port;
-                } else
-                    return ipAddress < endp.ipAddress ;
-            };
-        };
-
-        struct QueryInfoRequestData {
-            uint8_t infoType = 0;
-            uint8_t fileInfoClass = 0;
-            std::string fileId = "";
-        };
-
-        struct QueryDirectoryRequestData {
-            uint8_t fileInfoClass = 0;
-            std::string fileId = "";
-        };
-
-        struct SmbContext {
-            explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr) {}
-            uint16_t dialect = 0;
-            // map guid - filename
-            std::unordered_map<std::string, std::string> fileHandles;
-            std::string currentCreateRequestFile = "";
-            std::shared_ptr<QueryInfoRequestData> currentQueryInfoRequestData = nullptr;
-            std::shared_ptr<QueryDirectoryRequestData> currentQueryDirectoryRequestData = nullptr;
-            FilePtr offsetFile = nullptr;
-            std::map<uint32_t, std::string> treeNames;
-            std::string currentRequestedTree = "";
-        };
-
-        typedef std::shared_ptr<SmbContext> SmbContextPtr;
-
-        struct FileInformation {
-            explicit FileInformation(const Bytes &rawContent) {
-                if (rawContent.size() < 64)
-                    throw SmbError("Invalid size of file information struct");
-                lastAccessTime = *(uint64_t*) &rawContent.at(16);
-                filesize = *(uint64_t*) &rawContent.at(40);
-                const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
-                isDirectory = extractedFileAttributes & 0x10;
-            };
-
-            bool isDirectory = false;
-            uint64_t lastAccessTime = 0;
-            uint64_t filesize = 0;
-            std::string filename = "";
-        };
-
-        struct FileDirectoryInformation : FileInformation {
-            explicit FileDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 64 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(64), &rawContent.at(64+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileFullDirectoryInformation : FileInformation {
-            explicit FileFullDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 68 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileFullDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(68), &rawContent.at(68+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdBothDirectoryInformation : FileInformation {
-            explicit FileIdBothDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 104 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdBothDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(104), &rawContent.at(104+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdExtdDirectoryInformation : FileInformation {
-            explicit FileIdExtdDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 88 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdExtdDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(88), &rawContent.at(88+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdFullDirectoryInformation : FileInformation {
-            explicit FileIdFullDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 80 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdFullDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(80), &rawContent.at(80+extractedFileNameLength - 1)));
-            };
-        };
 
         enum Version : uint16_t {
             SMB_VERSION_2_0_2 = 0x0202,

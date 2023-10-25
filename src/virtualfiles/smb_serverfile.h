@@ -3,7 +3,7 @@
 
 #include "virtualfile.h"
 #include "../filefactory.h"
-#include "smb/smb_constants.h"
+#include "smb/smb_structs.h"
 
 
 namespace pcapfs {

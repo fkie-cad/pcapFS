@@ -1,7 +1,6 @@
 #ifndef PCAPFS_SMB_UTILS_H
 #define PCAPFS_SMB_UTILS_H
 
-#include "../../file.h"
 #include "../../commontypes.h"
 
 namespace pcapfs {

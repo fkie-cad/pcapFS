@@ -1,10 +1,8 @@
 #include "smb.h"
 #include "smb/smb_packet.h"
+#include "smb/smb_structs.h"
 #include "smb/smb_constants.h"
 #include "../filefactory.h"
-#include "../exceptions.h"
-#include "../logging.h"
-
 #include <numeric>
 
 

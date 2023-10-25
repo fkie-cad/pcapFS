@@ -2,9 +2,8 @@
 #define PCAPFS_SMB_PACKET_H
 
 #include "smb_constants.h"
-#include "smb_headers.h"
+#include "smb_structs.h"
 #include "smb_messages.h"
-#include "../../commontypes.h"
 
 
 namespace pcapfs {
