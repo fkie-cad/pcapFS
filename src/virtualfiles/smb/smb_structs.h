@@ -65,73 +65,52 @@ namespace pcapfs {
 
         // for extracting relevant file information out of query directory responses
         struct FileInformation {
-            explicit FileInformation(const Bytes &rawContent) {
+            explicit FileInformation(const Bytes &rawContent, uint8_t fileInfoClass) {
                 if (rawContent.size() < 64)
                     throw SmbError("Invalid size of file information struct");
                 lastAccessTime = *(uint64_t*) &rawContent.at(16);
                 filesize = *(uint64_t*) &rawContent.at(40);
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
                 isDirectory = extractedFileAttributes & 0x10;
+                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
+                switch (fileInfoClass) {
+                    case FileInfoClass::FILE_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 64 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(64), &rawContent.at(64 + extractedFileNameLength - 1)));
+                        break;
+                    case FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 68 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileFullDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(68), &rawContent.at(68 + extractedFileNameLength - 1)));
+                        break;
+                    case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 80 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileIdFullDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(80), &rawContent.at(80 + extractedFileNameLength - 1)));
+                        break;
+                    case FileInfoClass::FILE_BOTH_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 94 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileBothDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(94), &rawContent.at(94 + extractedFileNameLength - 1)));
+                        break;
+                    case FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 104 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileIdBothDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(104), &rawContent.at(104 + extractedFileNameLength - 1)));
+                        break;
+                    case FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION:
+                        if (extractedFileNameLength + 88 > rawContent.size())
+                            throw SmbError("Invalid file name length in FileIdExtdDirectoryInformation");
+                        filename = wstrToStr(Bytes(&rawContent.at(88), &rawContent.at(88 + extractedFileNameLength - 1)));
+                        break;
+                }
             };
 
             bool isDirectory = false;
             uint64_t lastAccessTime = 0;
             uint64_t filesize = 0;
             std::string filename = "";
-        };
-
-        struct FileDirectoryInformation : FileInformation {
-            explicit FileDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 64 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(64), &rawContent.at(64+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileFullDirectoryInformation : FileInformation {
-            explicit FileFullDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 68 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileFullDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(68), &rawContent.at(68+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdFullDirectoryInformation : FileInformation {
-            explicit FileIdFullDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 80 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdFullDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(80), &rawContent.at(80+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileBothDirectoryInformation : FileInformation {
-            explicit FileBothDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 94 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdBothDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(94), &rawContent.at(94+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdBothDirectoryInformation : FileInformation {
-            explicit FileIdBothDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 104 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdBothDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(104), &rawContent.at(104+extractedFileNameLength - 1)));
-            };
-        };
-
-        struct FileIdExtdDirectoryInformation : FileInformation {
-            explicit FileIdExtdDirectoryInformation(const Bytes &rawContent) : FileInformation(rawContent) {
-                const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
-                if (extractedFileNameLength + 88 > rawContent.size())
-                    throw SmbError("Invalid file name length in FileIdExtdDirectoryInformation");
-                filename = wstrToStr(Bytes(&rawContent.at(88), &rawContent.at(88+extractedFileNameLength - 1)));
-            };
         };
 
 

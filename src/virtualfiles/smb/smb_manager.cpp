@@ -108,8 +108,10 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         std::string filename = "";
         if (directoryNameKnown)
             filename = smbContext->fileHandles.at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
-        else
+        else if (smbContext->currentCreateRequestFile != "")
             filename = smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
+        else
+            filename = fileInfo->filename;
 
         std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
         if (!serverFilePtr) {

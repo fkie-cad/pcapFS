@@ -559,8 +559,8 @@ namespace pcapfs {
             std::vector<std::shared_ptr<FileInformation>> const parseFileInformation(const Bytes &rawContent, uint8_t fileInfoClass) {
                 std::vector<std::shared_ptr<FileInformation>> result(0);
                 const std::set<uint8_t> allowedFileInfos = { FileInfoClass::FILE_DIRECTORY_INFORMATION, FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION,
-                                                            FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION, FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION,
-                                                            FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION };
+                                                            FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION, FileInfoClass::FILE_BOTH_DIRECTORY_INFORMATION,
+                                                             FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION, FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION };
                 if (allowedFileInfos.find(fileInfoClass) == allowedFileInfos.end())
                     return result;
 
@@ -568,32 +568,7 @@ namespace pcapfs {
                 Bytes tempFileInfoBuffer(rawContent.begin(), rawContent.end());
                 uint32_t nextEntryOffset = 0;
                 do {
-                    std::shared_ptr<FileInformation> currFileInfo = nullptr;
-                    switch (fileInfoClass) {
-                        case FileInfoClass::FILE_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileFullDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileIdFullDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_BOTH_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileBothDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileIdBothDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-
-                        case FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION:
-                            currFileInfo = std::make_shared<FileIdExtdDirectoryInformation>(tempFileInfoBuffer);
-                            break;
-                    }
+                    std::shared_ptr<FileInformation> currFileInfo = std::make_shared<FileInformation>(tempFileInfoBuffer, fileInfoClass);
                     if (!currFileInfo->isDirectory)
                         result.push_back(currFileInfo);
 
