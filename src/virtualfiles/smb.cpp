@@ -85,6 +85,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
                     if (packetHeader->chainOffset != 0) {
                         // we have chained SMB2 data directly next without NBSS header in between
+                        LOG_TRACE << "SMB2 packet is chained";
                         fragment.length = smbPacket.size;
                         controlFilePtr->fragments.push_back(fragment);
                         offset += packetHeader->chainOffset;
@@ -92,6 +93,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                         accumulatedSmbPacketSize += packetHeader->chainOffset;
 
                     } else if (packetHeader->flags & smb::Smb2HeaderFlags::SMB2_FLAGS_RELATED_OPERATIONS) {
+                        LOG_TRACE << "SMB2 packet is last part of a chain";
                         // last chunk of a sequence of chained SMB2 data
                         const size_t packetLength = smbDataSize - accumulatedSmbPacketSize;
                         fragment.length = packetLength;
@@ -118,6 +120,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
                     break;
 
                 } else if (smbPacket.headerType == smb::HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_CHAINED) {
+                    LOG_TRACE << "SMB2 packet chained with compression transform header";
                     fragment.length = smbPacket.size;
                     controlFilePtr->fragments.push_back(fragment);
                     offset += smbPacket.size;
@@ -143,6 +146,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
     }
     const size_t filesize = std::accumulate(controlFilePtr->fragments.begin(), controlFilePtr->fragments.end(), 0,
                                                             [](size_t counter, Fragment frag){ return counter + frag.length; });
+    LOG_TRACE << "filesize of SMB control file: " << filesize;
     controlFilePtr->flags.set(pcapfs::flags::PROCESSED);
     controlFilePtr->setFilesizeRaw(filesize);
     const std::string processedContent = ss.str();
@@ -199,7 +203,7 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
     bool buffer_needs_content = std::all_of(buffer.cbegin(), buffer.cend(),
                                             [](const auto &elem) { return elem == 0; });
     if(buffer_needs_content == false) {
-        LOG_TRACE << "BUFFER HIT in SMB control file";
+        LOG_TRACE << "BUFFER HIT for read in SMB control file";
         assert(buffer.size() == filesizeProcessed);
         memcpy(buf, (const char*) buffer.data() + startOffset, length);
 
@@ -216,7 +220,7 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
         }
 
     } else {
-        LOG_TRACE << "no buffer hit in SMB control file, starting read cascade";
+        LOG_TRACE << "no buffer hit for read in SMB control file, starting read cascade";
         std::stringstream ss;
         const FilePtr filePtr = idx.get({offsetType, fragments.at(0).id});
         smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr);

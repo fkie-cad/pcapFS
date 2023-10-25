@@ -5,11 +5,13 @@
 
 void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint32_t treeId) {
     // update server files with file infos obtained from create messages
+    LOG_TRACE << "updating SMB server files with create response infos";
 
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
     std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][smbContext->currentCreateRequestFile];
     if (!serverFilePtr) {
         // server file not present in map -> create new one
+        LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is new and added to the server files";
         serverFilePtr = std::make_shared<SmbServerFile>();
         serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->lastAccessTime,
                                         createResponse->filesize, treeId);
@@ -17,6 +19,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
         // server file is already known; update metadata if the current timestamp is newer
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->lastAccessTime);
         if (lastAccessTime > serverFilePtr->getTimestamp()) {
+            LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is already known and updated";
             serverFilePtr->setTimestamp(lastAccessTime);
             serverFilePtr->setFilesizeRaw(createResponse->filesize);
             serverFilePtr->setFilesizeProcessed(createResponse->filesize);
@@ -29,6 +32,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
 
 void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint32_t treeId) {
     // update server files with file infos obtained from query info messages
+    LOG_TRACE << "updating SMB server files with query info response infos";
 
     if (smbContext->currentQueryInfoRequestData->infoType == QueryInfoType::SMB2_0_INFO_FILE &&
         (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION ||
@@ -73,6 +77,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
         if (!serverFilePtr) {
             // server file not present in map -> create new one
+            LOG_TRACE << "file " << filename << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
             serverFilePtr->initializeFilePtr(smbContext, filename, queryInfoResponse->lastAccessTime,
                                             queryInfoResponse->filesize, treeId);
@@ -80,6 +85,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getTimestamp()) {
+                LOG_TRACE << "file " << filename << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
                 serverFilePtr->setFilesizeRaw(queryInfoResponse->filesize);
                 serverFilePtr->setFilesizeProcessed(queryInfoResponse->filesize);
@@ -93,6 +99,8 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
 
 void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext, uint32_t treeId) {
     // update server files with file infos obtained from query directory messages
+    LOG_TRACE << "updating SMB server files with query directory response infos";
+
     bool directoryNameKnown = (smbContext->fileHandles.find(smbContext->currentQueryDirectoryRequestData->fileId) != smbContext->fileHandles.end());
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
 
@@ -106,6 +114,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
         if (!serverFilePtr) {
             // server file not present in map -> create new one
+            LOG_TRACE << "file " << filename << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
             serverFilePtr->initializeFilePtr(smbContext, filename, fileInfo->lastAccessTime,
                                             fileInfo->filesize, treeId);
@@ -113,6 +122,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getTimestamp()) {
+                LOG_TRACE << "file " << filename << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
                 serverFilePtr->setFilesizeRaw(fileInfo->filesize);
                 serverFilePtr->setFilesizeProcessed(fileInfo->filesize);
@@ -143,6 +153,7 @@ pcapfs::smb::ServerEndpoint const pcapfs::smb::SmbManager::getServerEndpoint(con
 
 
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
+    LOG_TRACE << "getting all SMB server files...";
     std::vector<FilePtr> resultVector;
     for (const auto &entry : serverFiles) {
         for (const auto& f : entry.second) {

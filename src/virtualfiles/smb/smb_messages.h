@@ -34,6 +34,8 @@ namespace pcapfs {
                     totalSize = 9;
                 else
                     totalSize = 8 + byteCount;
+
+                LOG_TRACE << "parsed error response";
             }
         };
 
@@ -562,6 +564,7 @@ namespace pcapfs {
                 if (allowedFileInfos.find(fileInfoClass) == allowedFileInfos.end())
                     return result;
 
+                LOG_TRACE << "parsing file infos from query directory response";
                 Bytes tempFileInfoBuffer(rawContent.begin(), rawContent.end());
                 uint32_t nextEntryOffset = 0;
                 do {
@@ -704,6 +707,7 @@ namespace pcapfs {
                         return;
 
                     if (queryInfoRequestData->infoType == QueryInfoType::SMB2_0_INFO_FILE) {
+                        LOG_TRACE << "parsing file infos from query info response";
                         switch (queryInfoRequestData->fileInfoClass) {
                             case FileInfoClass::FILE_ALL_INFORMATION:
                                 {

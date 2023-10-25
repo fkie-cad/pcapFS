@@ -1,7 +1,6 @@
 #include "smb_packet.h"
 #include "smb_manager.h"
 #include "../../logging.h"
-
 #include <sstream>
 #include <iomanip>
 
@@ -15,6 +14,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
         std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
         isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
+        LOG_TRACE << "found SMB2 packet with message type " << packetHeader->command << (isResponse ? " (Response)" : " (Request)");
         try {
             switch (packetHeader->command) {
                 case Smb2Commands::SMB2_NEGOTIATE:
@@ -66,6 +66,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
                                 std::make_shared<CreateRequest>(&data[64], len - 64);
+                        LOG_TRACE << "create request file: " << createRequest->filename;
                         smbContext->currentCreateRequestFile = createRequest->filename;
                         message = createRequest;
                     }
@@ -145,6 +146,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
                         std::shared_ptr<QueryDirectoryRequestData> queryDirectoryRequestData =
                             std::make_shared<QueryDirectoryRequestData>();
+                        LOG_TRACE << "requested information: " << fileInfoClassStrings.at(queryDirectoryRequest->fileInfoClass);
                         queryDirectoryRequestData->fileInfoClass = queryDirectoryRequest->fileInfoClass;
                         queryDirectoryRequestData->fileId = queryDirectoryRequest->fileId;
                         smbContext->currentQueryDirectoryRequestData = queryDirectoryRequestData;
@@ -187,6 +189,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         std::shared_ptr<QueryInfoRequest> queryInfoRequest =
                             std::make_shared<QueryInfoRequest>(&data[64], len - 64);
                         std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
+                        LOG_TRACE << "requested information: " << queryInfoTypeStrings.at(queryInfoRequest->infoType);
                         queryInfoRequestData->infoType = queryInfoRequest->infoType;
                         queryInfoRequestData->fileInfoClass = queryInfoRequest->fileInfoClass;
                         queryInfoRequestData->fileId = queryInfoRequest->fileId;
