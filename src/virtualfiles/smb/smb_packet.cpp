@@ -61,7 +61,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         }
                         if (!createResponse->isDirectory)
                             SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
-                        smbContext->currentCreateRequestFile = "";
+                        //smbContext->currentCreateRequestFile = "";
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
