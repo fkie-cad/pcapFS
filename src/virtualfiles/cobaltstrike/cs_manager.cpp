@@ -8,7 +8,7 @@
 void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort,
                                                 const std::string &srcIp, const pcapfs::Index &idx) {
 
-    if (isKnownConnection(dstIp, dstPort, srcIp) || cookie.length() <= 34)
+    if (isKnownConnection(dstIp, dstPort, srcIp, cookie) || cookie.length() <= 34)
         // when the cookie is shorter than 34 characters, the raw key can't be encoded in it
         return;
 
@@ -34,10 +34,20 @@ void pcapfs::CobaltStrikeManager::handleHttpGet(const std::string &cookie, const
                 LOG_INFO << "found cobalt strike communication";
                 // extract symmetric key material
                 Bytes rawKey(result.begin()+8, result.begin()+8+16);
-                addConnectionData(rawKey, dstIp, dstPort, srcIp);
+                addConnectionData(rawKey, dstIp, dstPort, srcIp, cookie);
+                return;
             }
         }
     }
+}
+
+
+bool pcapfs::CobaltStrikeManager::isKnownConnection(const std::string &serverIp, const std::string &serverPort,
+                                                    const std::string &clientIp, const std::string &httpCookie) {
+    return std::any_of(connections.begin(), connections.end(),
+                        [serverIp,serverPort,clientIp,httpCookie](const CobaltStrikeConnectionPtr &conn){
+                            return (conn->serverIp == serverIp && conn->serverPort == serverPort && conn->clientIp == clientIp &&
+                                    std::find(conn->httpCookies.begin(), conn->httpCookies.end(), httpCookie) != conn->httpCookies.end()); });
 }
 
 
@@ -54,21 +64,34 @@ bool pcapfs::CobaltStrikeManager::matchMagicBytes(const Bytes& input) {
 }
 
 
-void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp) {
+void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort,
+                                                    const std::string &srcIp, const std::string &httpCookie) {
     const Bytes digest = crypto::calculateSha256(rawKey);
     if (digest.empty())
         return;
 
+    for (CobaltStrikeConnectionPtr &conn : connections)  {
+        if ((conn->serverIp == dstIp && conn->serverPort == dstPort && conn->clientIp == srcIp)) {
+            // connection is already known, extend keys and cookies vector
+            conn->aesKeys.push_back(Bytes(digest.begin(), digest.begin()+16));
+            conn->httpCookies.push_back(httpCookie);
+            return;
+        }
+    }
+
+    // connection not known priorly
     CobaltStrikeConnectionPtr newConnection = std::make_shared<CobaltStrikeConnection>();
-    newConnection->aesKey = Bytes(digest.begin(), digest.begin()+16);
+    newConnection->aesKeys.push_back(Bytes(digest.begin(), digest.begin()+16));
     newConnection->serverIp = dstIp;
     newConnection->serverPort = dstPort;
     newConnection->clientIp = srcIp;
+    newConnection->httpCookies.push_back(httpCookie);
     connections.push_back(newConnection);
 }
 
 
-pcapfs::CobaltStrikeConnectionPtr const pcapfs::CobaltStrikeManager::getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp) {
+pcapfs::CobaltStrikeConnectionPtr const pcapfs::CobaltStrikeManager::getConnectionData(const std::string &serverIp, const std::string &serverPort,
+                                                                                        const std::string &clientIp) {
     CobaltStrikeConnectionPtr result;
     const auto it = std::find_if(connections.cbegin(), connections.cend(),
                          [serverIp,serverPort,clientIp](const CobaltStrikeConnectionPtr &conn){

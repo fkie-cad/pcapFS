@@ -50,7 +50,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
     if (isHttpPost(filePtr->getFilename())) {
         const CobaltStrikeConnectionPtr connData = CobaltStrikeManager::getInstance().getConnectionData(
                                                     filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP"));
-        resultPtr->cobaltStrikeKey = connData->aesKey;
+        resultPtr->cobaltStrikeKeys = connData->aesKeys;
         resultPtr->setFilename(timestamp + "-response");
         resultPtr->fromClient = true;
         const CsContentInfoPtr contentInfo = resultPtr->extractClientContent(data);
@@ -75,7 +75,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             }
             embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_" + filename);
 
-            embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
+            embeddedFilePtr->cobaltStrikeKeys = connData->aesKeys;
             embeddedFilePtr->fromClient = true;
 
             resultVector.push_back(embeddedFilePtr);
@@ -88,7 +88,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
     } else if (isHttpResponse(filePtr->getFilename())) {
         const CobaltStrikeConnectionPtr connData = CobaltStrikeManager::getInstance().getConnectionData(
                                                     filePtr->getProperty("srcIP"), filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"));
-        resultPtr->cobaltStrikeKey = connData->aesKey;
+        resultPtr->cobaltStrikeKeys = connData->aesKeys;
         resultPtr->fromClient = false;
 
         CsContentInfoPtr contentInfo;
@@ -135,7 +135,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
             else
                 embeddedFilePtr->setFilename(resultPtr->getFilename()  + "_embedded_file" + std::to_string(embeddedFileInfo->id));
 
-            embeddedFilePtr->cobaltStrikeKey = connData->aesKey;
+            embeddedFilePtr->cobaltStrikeKeys = connData->aesKeys;
             embeddedFilePtr->fromClient = false;
 
             const std::string embeddedFileCommand = embeddedFileInfo->command;
@@ -567,7 +567,7 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
 
 std::vector<pcapfs::Bytes>  const pcapfs::CobaltStrikeFile::decryptClientPayload(const Bytes &input) {
     LOG_DEBUG << "decrypt cobalt strike client payload";
-    if (input.size() < 32 || cobaltStrikeKey.empty()) {
+    if (input.size() < 32 || cobaltStrikeKeys.empty()) {
         LOG_DEBUG << "decryption requirements are not met";
         return std::vector<Bytes>(0);
     }
@@ -583,10 +583,27 @@ std::vector<pcapfs::Bytes>  const pcapfs::CobaltStrikeFile::decryptClientPayload
         temp.erase(temp.begin(), temp.begin()+4);
         const Bytes encryptedChunk(temp.begin(), temp.begin()+chunkLen - 16); // exclude hmac
         Bytes decryptedChunk(chunkLen - 16);
-        if (opensslDecryptCS(encryptedChunk, decryptedChunk)) {
-            LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
-            return std::vector<Bytes>(0);
+
+        for (const Bytes &keyCandidate : cobaltStrikeKeys) {
+            if (opensslDecryptCS(encryptedChunk, decryptedChunk, keyCandidate)) {
+                LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+                return std::vector<Bytes>(0);
+            }
+            const uint32_t data_size = be32toh(*((uint32_t*) (decryptedChunk.data()+4)));
+            if (data_size > decryptedChunk.size()) {
+                // decryption probably with wrong key, try next key if possible;
+                if (keyCandidate == cobaltStrikeKeys.back()) {
+                    // no key worked
+                    return std::vector<Bytes>(0);
+                } else {
+                    decryptedChunk.clear();
+                    decryptedChunk.resize(chunkLen - 16);
+                    continue;
+                }
+            } else
+                break;
         }
+
         decryptedChunks.push_back(decryptedChunk);
         currLen += chunkLen + 4; // plus field of chunkLen
         temp.erase(temp.begin(), temp.begin()+chunkLen);
@@ -598,17 +615,32 @@ std::vector<pcapfs::Bytes>  const pcapfs::CobaltStrikeFile::decryptClientPayload
 
 pcapfs::Bytes const pcapfs::CobaltStrikeFile::decryptServerPayload(const Bytes &input) {
     LOG_DEBUG << "decrypt cobalt strike server payload";
-    if (input.size() < 32 || cobaltStrikeKey.empty()) {
+    if (input.size() < 32 || cobaltStrikeKeys.empty()) {
         LOG_DEBUG << "decryption requirements are not met";
         return Bytes();
     }
-    Bytes decryptedData(input.size() - 16);
     const Bytes dataToDecrypt(input.begin(), input.end() - 16); // exclude hmac
-    if (opensslDecryptCS(dataToDecrypt, decryptedData)) {
-        LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
-        return Bytes();
+    Bytes decryptedData(input.size() - 16);
+    for (const Bytes &keyCandidate : cobaltStrikeKeys) {
+        if (opensslDecryptCS(dataToDecrypt, decryptedData, keyCandidate)) {
+            LOG_ERROR << "Failed to decrypt a chunk. Look above why" << std::endl;
+            return Bytes();
+        }
+        const uint32_t data_size = be32toh(*((uint32_t*) (decryptedData.data()+4)));
+        if (data_size > decryptedData.size()) {
+            // decryption probably with wrong key, try next key if possible;
+            if (keyCandidate == cobaltStrikeKeys.back()) {
+                // no key worked
+                return Bytes();
+            } else {
+                decryptedData.clear();
+                decryptedData.resize(input.size() - 16);
+                continue;
+            }
+        } else
+            return decryptedData;
     }
-    return decryptedData;
+    return Bytes();
 }
 
 
@@ -994,7 +1026,7 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readEmbeddedServerFile(const Bytes
 }
 
 
-int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData) {
+int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData, const Bytes &aesKey) {
 
     // we can't use the crypto::opensslDecrypt function because
     // cobalt strike pads in a way that EVP_DecryptFinal doesn't like
@@ -1005,11 +1037,11 @@ int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes
         LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
         error = 1;
     }
-    if (EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), nullptr, cobaltStrikeKey.data(), (const unsigned char*) "abcdefghijklmnop", 0) != 1) {
+    if (EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop", 0) != 1) {
         LOG_ERROR << "EVP_CipherInit_ex() failed" << std::endl;
         error = 1;
     }
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, cobaltStrikeKey.data(), (const unsigned char*) "abcdefghijklmnop") != 1) {
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop") != 1) {
         LOG_ERROR << "EVP_DecryptInit_ex() failed" << std::endl;
         error = 1;
     }
@@ -1069,7 +1101,7 @@ bool pcapfs::CobaltStrikeFile::showFile() {
 
 void pcapfs::CobaltStrikeFile::serialize(boost::archive::text_oarchive &archive) {
     VirtualFile::serialize(archive);
-    archive << cobaltStrikeKey;
+    archive << cobaltStrikeKeys;
     archive << (fromClient ? 1 : 0);
     archive << embeddedFileIndex;
 
@@ -1079,7 +1111,7 @@ void pcapfs::CobaltStrikeFile::serialize(boost::archive::text_oarchive &archive)
 void pcapfs::CobaltStrikeFile::deserialize(boost::archive::text_iarchive &archive) {
     VirtualFile::deserialize(archive);
     int i;
-    archive >> cobaltStrikeKey;
+    archive >> cobaltStrikeKeys;
     archive >> i;
     fromClient = i ? true : false;
     archive >> embeddedFileIndex;

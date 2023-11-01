@@ -12,8 +12,8 @@ namespace pcapfs {
         std::string serverIp;
         std::string serverPort;
         std::string clientIp;
-        Bytes aesKey;
-
+        std::vector<Bytes> aesKeys;
+        std::vector<std::string> httpCookies;
     };
 
     typedef std::shared_ptr<CobaltStrikeConnection> CobaltStrikeConnectionPtr;
@@ -38,6 +38,7 @@ namespace pcapfs {
 
         void handleHttpGet(const std::string &cookie, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp, const Index &idx);
         CobaltStrikeConnectionPtr const getConnectionData(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
+        bool isKnownConnection(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp, const std::string &httpCookie);
         bool isKnownConnection(const std::string &serverIp, const std::string &serverPort, const std::string &clientIp);
 
         // functions managing fragmented file uploads
@@ -49,7 +50,7 @@ namespace pcapfs {
         CobaltStrikeManager() {}
 
         bool matchMagicBytes(const Bytes& input);
-        void addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp);
+        void addConnectionData(const Bytes &rawKey, const std::string &dstIp, const std::string &dstPort, const std::string &srcIp, const std::string &httpCookie);
 
         std::vector<CobaltStrikeConnectionPtr> connections;
 

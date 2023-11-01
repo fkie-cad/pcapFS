@@ -58,13 +58,13 @@ namespace pcapfs {
         Bytes const readEmbeddedServerFile(const Bytes &input);
         Bytes const readEmbeddedClientFile(const Bytes &input);
 
-        int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData);
+        int opensslDecryptCS(const Bytes &dataToDecrypt, Bytes &decryptedData, const Bytes &aesKey);
         std::string const extractServerCommand(const std::string &input);
         size_t getLengthWithoutPadding(const Bytes &input, uint32_t inputLength);
         size_t getEndOfJpgFile(const Bytes &input);
 
     protected:
-        Bytes cobaltStrikeKey;
+        std::vector<Bytes> cobaltStrikeKeys;
         bool fromClient;
         uint64_t embeddedFileIndex;
 
