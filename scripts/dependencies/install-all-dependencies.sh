@@ -13,6 +13,10 @@ function determine_distro() {
         echo 'CentOS'
         return
     fi
+    if [[ -f '/etc/fedora-release' ]]; then
+        echo 'Fedora'
+        return
+    fi
 }
 
 function determine_release() {
@@ -39,6 +43,9 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
 elif [[ "${distro}" = 'CentOS' ]]; then
     sudo yum install -y redhat-lsb-core
     install_dependencies='install-centos-dependencies.sh'
+elif [[ "${distro}" = 'Fedora' ]]; then
+    sudo dnf install -y lsb_release
+    install_dependencies='install-fedora-dependencies.sh'
 else
     echo 'Your distribution is not yet supported by this script.' >&2
     exit 1
