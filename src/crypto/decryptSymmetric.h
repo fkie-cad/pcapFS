@@ -5,6 +5,9 @@
 #include <pcapplusplus/SSLLayer.h>
 #include "cipherTextElement.h"
 
+#include <memory>
+
+
 namespace pcapfs {
     namespace crypto {
 

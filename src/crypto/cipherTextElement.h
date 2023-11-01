@@ -4,6 +4,8 @@
 
 #include "../commontypes.h"
 
+#include <memory>
+
 namespace pcapfs {
 
 	class CipherTextElement {

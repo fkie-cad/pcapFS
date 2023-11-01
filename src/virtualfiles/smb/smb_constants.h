@@ -1,6 +1,7 @@
 #ifndef PCAPFS_SMB_CONSTANTS_H
 #define PCAPFS_SMB_CONSTANTS_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
