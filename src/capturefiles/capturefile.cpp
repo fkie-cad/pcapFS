@@ -69,7 +69,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths 
 }
 
 
-std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::CaptureFile::getReader() {
+/**std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::CaptureFile::getReader() {
     if (reader == nullptr) {
         reader = std::make_shared<pcpp::PcapFileReaderDevice>(filename.c_str());
     }
@@ -79,7 +79,7 @@ std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::CaptureFile::getReader() {
         throw pcapfs::PcapFsException("Error opening the PCAP file '" + filename + "'");
     }
     return reader;
-}
+}**/
 
 
 void pcapfs::CaptureFile::closeReader() {

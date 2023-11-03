@@ -23,6 +23,20 @@ size_t pcapfs::PcapNgFile::getOffsetFromLastBlock(size_t i) {
     return packetOffsets.at(i);
 }
 
+
+std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::PcapNgFile::getReader() {
+    if (reader == nullptr) {
+        reader = std::make_shared<pcpp::PcapNgFileReaderDevice>(filename.c_str());
+    }
+
+    if (!reader->open()) {
+        LOG_ERROR << "Error opening the PCAPNG file '" << filename << "'";
+        throw pcapfs::PcapFsException("Error opening the PCAPNG file '" + filename + "'");
+    }
+    return reader;
+}
+
+
 void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
     if (!fileHandle.is_open()) {
         Path path(filename);

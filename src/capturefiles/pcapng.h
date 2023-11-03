@@ -27,6 +27,7 @@ namespace pcapfs {
         static FilePtr create() { return std::make_shared<PcapNgFile>(); };
 
         size_t getOffsetFromLastBlock(size_t i) override;
+        std::shared_ptr<pcpp::IFileReaderDevice> getReader() override;
         void parsePacketOffsets(Index &idx);
 
     private:

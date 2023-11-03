@@ -17,6 +17,8 @@ namespace pcapfs {
 
         size_t getOffsetFromLastBlock(size_t i) override;
 
+        std::shared_ptr<pcpp::IFileReaderDevice> getReader() override;
+
     private:
         static bool registeredAtFactory;
 

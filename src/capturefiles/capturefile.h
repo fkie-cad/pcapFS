@@ -24,7 +24,7 @@ namespace pcapfs {
 
         static std::vector<FilePtr> createFromPaths(pcapfs::Paths pcapPaths, Index &idx);
 
-        std::shared_ptr<pcpp::IFileReaderDevice> getReader();
+        virtual std::shared_ptr<pcpp::IFileReaderDevice> getReader() = 0;
 
         void closeReader();
 

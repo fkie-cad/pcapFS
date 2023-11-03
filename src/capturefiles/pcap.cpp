@@ -15,8 +15,22 @@ pcapfs::PcapFile::~PcapFile() {
     closeReader();
 }
 
+
 size_t pcapfs::PcapFile::getOffsetFromLastBlock(size_t i) {
     return i == 0 ? 24 : 16;
+}
+
+
+std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::PcapFile::getReader() {
+    if (reader == nullptr) {
+        reader = std::make_shared<pcpp::PcapFileReaderDevice>(filename.c_str());
+    }
+
+    if (!reader->open()) {
+        LOG_ERROR << "Error opening the PCAP file '" << filename << "'";
+        throw pcapfs::PcapFsException("Error opening the PCAP file '" + filename + "'");
+    }
+    return reader;
 }
 
 
