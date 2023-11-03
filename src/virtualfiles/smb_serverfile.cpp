@@ -19,14 +19,20 @@ size_t pcapfs::SmbServerFile::read(uint64_t startOffset, size_t length, const In
 
 
 void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &inFilename,
-                                                uint64_t lastAccessTime, uint64_t inFilesize, uint32_t treeId) {
+                                                const smb::FileMetaDataPtr &metaData, uint32_t treeId) {
     Fragment fragment;
     fragment.id = smbContext->offsetFile->getIdInIndex();
     fragment.start = 0;
     fragment.length = 0;
     fragments.push_back(fragment);
+
+    accessTime = smb::winFiletimeToTimePoint(metaData->lastAccessTime);
+    modifyTime = smb::winFiletimeToTimePoint(metaData->lastWriteTime);
+    changeTime = smb::winFiletimeToTimePoint(metaData->changeTime);
+    birthTime = smb::winFiletimeToTimePoint(metaData->creationTime);
+    isDirectory = metaData->isDirectory;
     setFilename(inFilename);
-    setTimestamp(smb::winFiletimeToTimePoint(lastAccessTime));
+    setTimestamp(accessTime);
     setProperty("protocol", "smb");
     setFiletype("smbserverfile");
     setOffsetType(smbContext->offsetFile->getFiletype());
@@ -37,8 +43,8 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     if (smbContext->treeNames.find(treeId) != smbContext->treeNames.end())
         setProperty("smbTree", smbContext->treeNames.at(treeId));
     flags.set(pcapfs::flags::PROCESSED);
-    setFilesizeRaw(inFilesize);
-    setFilesizeProcessed(inFilesize);
+    setFilesizeRaw(metaData->filesize);
+    setFilesizeProcessed(metaData->filesize);
 }
 
 

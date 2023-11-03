@@ -56,10 +56,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
                         if (smbContext->currentCreateRequestFile != "")
                             smbContext->fileHandles[createResponse->fileId] = smbContext->currentCreateRequestFile;
-                        else if (!createResponse->isDirectory){
+                        else if (!createResponse->metaData->isDirectory){
                             smbContext->fileHandles[createResponse->fileId] = constructGuidString(createResponse->fileId);
                         }
-                        if (!createResponse->isDirectory)
+                        if (!createResponse->metaData->isDirectory)
                             SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
                         //smbContext->currentCreateRequestFile = "";
                         message = createResponse;
@@ -179,7 +179,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         } else {
                             std::shared_ptr<QueryInfoResponse> queryInfoResponse =
                                 std::make_shared<QueryInfoResponse>(&data[64], len - 64, smbContext->currentQueryInfoRequestData);
-                            if (!queryInfoResponse->isDirectory && smbContext->currentQueryInfoRequestData) {
+                            if (!queryInfoResponse->metaData->isDirectory && smbContext->currentQueryInfoRequestData) {
                                 SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext, packetHeader->treeId);
                             }
                             smbContext->currentQueryInfoRequestData = nullptr;

@@ -102,7 +102,7 @@ void pcapfs::File::serialize(boost::archive::text_oarchive &archive) {
     //std::string
     archive << filename;
     //time_point
-    archive << boost::serialization::make_binary_object(&timestamp, sizeof(timestamp));;
+    archive << boost::serialization::make_binary_object(&timestamp, sizeof(timestamp));
     //uint64_t
     archive << filesizeRaw;
     //uint64_t
@@ -124,7 +124,7 @@ void pcapfs::File::deserialize(boost::archive::text_iarchive &archive) {
 //    std::chrono::system_clock::duration d;
 //    archive >> d;
 //    timestamp = std::chrono::system_clock::time_point(d);
-    archive >> boost::serialization::make_binary_object(&timestamp, sizeof(timestamp));;
+    archive >> boost::serialization::make_binary_object(&timestamp, sizeof(timestamp));
     //uint64_t
     archive >> filesizeRaw;
     //uint64_t

@@ -272,16 +272,16 @@ namespace pcapfs {
                 fileId = bytesToHexString(Bytes(&rawData.at(64), &rawData.at(80)));
 
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at(56);
-                isDirectory = extractedFileAttributes & 0x10;
-
-                lastAccessTime = *(uint64_t*) &rawData.at(16);
-                filesize = *(uint64_t*) &rawData.at(48);
+                metaData->isDirectory = extractedFileAttributes & 0x10;
+                metaData->creationTime = *(uint64_t*) &rawData.at(8);
+                metaData->lastAccessTime = *(uint64_t*) &rawData.at(16);
+                metaData->lastWriteTime = *(uint64_t*) &rawData.at(24);
+                metaData->changeTime = *(uint64_t*) &rawData.at(32);
+                metaData->filesize = *(uint64_t*) &rawData.at(48);
             }
             uint32_t createAction = CreateAction::ACTION_UNKNOWN;
             std::string fileId = "";
-            bool isDirectory = false;
-            uint64_t lastAccessTime = 0;
-            uint64_t filesize = 0;
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
         };
 
 
@@ -569,7 +569,7 @@ namespace pcapfs {
                 uint32_t nextEntryOffset = 0;
                 do {
                     std::shared_ptr<FileInformation> currFileInfo = std::make_shared<FileInformation>(tempFileInfoBuffer, fileInfoClass);
-                    if (!currFileInfo->isDirectory)
+                    if (!currFileInfo->metaData->isDirectory)
                         result.push_back(currFileInfo);
 
                     nextEntryOffset = *(uint32_t*) &tempFileInfoBuffer.at(0);
@@ -688,15 +688,18 @@ namespace pcapfs {
                                 {
                                     if (outputBufferLength < 100)
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
-                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
-                                    filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 48);
+                                    metaData->creationTime = *(uint64_t*) &rawData.at(outputBufferOffset - 64);
+                                    metaData->lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    metaData->lastWriteTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 16);
+                                    metaData->changeTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 24);
+                                    metaData->filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 48);
                                     const uint32_t filenameLen = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 96);
                                     if (100 + filenameLen > outputBufferLength)
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
                                     filename = wstrToStr(Bytes(&rawData.at((outputBufferOffset - 64) + 100),
                                                                 &rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1)));
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);
-                                    isDirectory = extractedFileAttributes & 0x10;
+                                    metaData->isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
 
@@ -704,9 +707,12 @@ namespace pcapfs {
                                 {
                                     if (outputBufferLength < 40)
                                         throw SmbError("Invalid size of FILE_BASIC_INFORMATION in SMB2 Query Info Response");
-                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    metaData->creationTime = *(uint64_t*) &rawData.at(outputBufferOffset - 64);
+                                    metaData->lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    metaData->lastWriteTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 16);
+                                    metaData->changeTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 24);
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);
-                                    isDirectory = extractedFileAttributes & 0x10;
+                                    metaData->isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
 
@@ -714,20 +720,21 @@ namespace pcapfs {
                                 {
                                     if (outputBufferLength < 56)
                                         throw SmbError("Invalid size of FILE_NETWORK_OPEN_INFORMATION in SMB2 Query Info Response");
-                                    lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
-                                    filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 40);
+                                    metaData->creationTime = *(uint64_t*) &rawData.at(outputBufferOffset - 64);
+                                    metaData->lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
+                                    metaData->lastWriteTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 16);
+                                    metaData->changeTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 24);
+                                    metaData->filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 40);
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 48);
-                                    isDirectory = extractedFileAttributes & 0x10;
+                                    metaData->isDirectory = extractedFileAttributes & 0x10;
                                 }
                                 break;
                         }
                     }
                 }
             }
-            uint64_t lastAccessTime = 0;
-            uint64_t filesize = 0;
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
             std::string filename = "";
-            bool isDirectory = false;
         };
 
 

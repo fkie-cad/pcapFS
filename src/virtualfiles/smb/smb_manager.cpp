@@ -13,16 +13,15 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
         // server file not present in map -> create new one
         LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is new and added to the server files";
         serverFilePtr = std::make_shared<SmbServerFile>();
-        serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->lastAccessTime,
-                                        createResponse->filesize, treeId);
+        serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->metaData, treeId);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
-        const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->lastAccessTime);
-        if (lastAccessTime > serverFilePtr->getTimestamp()) {
+        const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
+        if (lastAccessTime > serverFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is already known and updated";
             serverFilePtr->setTimestamp(lastAccessTime);
-            serverFilePtr->setFilesizeRaw(createResponse->filesize);
-            serverFilePtr->setFilesizeProcessed(createResponse->filesize);
+            serverFilePtr->setFilesizeRaw(createResponse->metaData->filesize);
+            serverFilePtr->setFilesizeProcessed(createResponse->metaData->filesize);
         }
     }
 
@@ -79,16 +78,15 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filename << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filename, queryInfoResponse->lastAccessTime,
-                                            queryInfoResponse->filesize, treeId);
+            serverFilePtr->initializeFilePtr(smbContext, filename, queryInfoResponse->metaData, treeId);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->lastAccessTime);
-            if (lastAccessTime > serverFilePtr->getTimestamp()) {
+            const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
+            if (lastAccessTime > serverFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filename << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
-                serverFilePtr->setFilesizeRaw(queryInfoResponse->filesize);
-                serverFilePtr->setFilesizeProcessed(queryInfoResponse->filesize);
+                serverFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
+                serverFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
             }
         }
 
@@ -118,16 +116,15 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filename << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filename, fileInfo->lastAccessTime,
-                                            fileInfo->filesize, treeId);
+            serverFilePtr->initializeFilePtr(smbContext, filename, fileInfo->metaData, treeId);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->lastAccessTime);
-            if (lastAccessTime > serverFilePtr->getTimestamp()) {
+            const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
+            if (lastAccessTime > serverFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filename << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
-                serverFilePtr->setFilesizeRaw(fileInfo->filesize);
-                serverFilePtr->setFilesizeProcessed(fileInfo->filesize);
+                serverFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
+                serverFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
             }
         }
 

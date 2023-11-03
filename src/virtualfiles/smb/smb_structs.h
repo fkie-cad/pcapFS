@@ -60,18 +60,31 @@ namespace pcapfs {
             std::map<uint32_t, std::string> treeNames;
             std::string currentRequestedTree = "";
         };
-
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
+
+        struct FileMetaData{
+            bool isDirectory = false;
+            uint64_t creationTime = 0;
+            uint64_t lastAccessTime = 0;
+            uint64_t lastWriteTime = 0;
+            uint64_t changeTime = 0;
+            uint64_t filesize = 0;
+        };
+        typedef std::shared_ptr<FileMetaData> FileMetaDataPtr;
+
 
         // for extracting relevant file information out of query directory responses
         struct FileInformation {
             explicit FileInformation(const Bytes &rawContent, uint8_t fileInfoClass) {
                 if (rawContent.size() < 64)
                     throw SmbError("Invalid size of file information struct");
-                lastAccessTime = *(uint64_t*) &rawContent.at(16);
-                filesize = *(uint64_t*) &rawContent.at(40);
+                metaData->creationTime = *(uint64_t*) &rawContent.at(8);
+                metaData->lastAccessTime = *(uint64_t*) &rawContent.at(16);
+                metaData->lastWriteTime = *(uint64_t*) &rawContent.at(24);
+                metaData->changeTime = *(uint64_t*) &rawContent.at(32);
+                metaData->filesize = *(uint64_t*) &rawContent.at(40);
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
-                isDirectory = extractedFileAttributes & 0x10;
+                metaData->isDirectory = extractedFileAttributes & 0x10;
                 const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
                 switch (fileInfoClass) {
                     case FileInfoClass::FILE_DIRECTORY_INFORMATION:
@@ -107,9 +120,7 @@ namespace pcapfs {
                 }
             };
 
-            bool isDirectory = false;
-            uint64_t lastAccessTime = 0;
-            uint64_t filesize = 0;
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
             std::string filename = "";
         };
 
