@@ -12,7 +12,6 @@ namespace pcapfs {
         unsigned char blockLength[4];
     };
 
-    const unsigned char SHB_MAGIC[4] = {0x0A, 0x0D, 0x0D, 0x0A};
     const unsigned char EPB_MAGIC[4] = {0x06, 0x00, 0x00, 0x00};
     const unsigned char SPB_MAGIC[4] = {0x03, 0x00, 0x00, 0x00};
     const unsigned char DSB_MAGIC[4] = {0x0A, 0x00, 0x00, 0x00};

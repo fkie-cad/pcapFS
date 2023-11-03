@@ -50,36 +50,62 @@ size_t pcapfs::CaptureFile::read(uint64_t startOffset, size_t length, const Inde
 std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths pcapPaths, Index &idx) {
     std::vector<pcapfs::FilePtr> result;
     for (const auto &pcapName: pcapPaths) {
-        if (boost::filesystem::extension(pcapName) == ".pcap") {
-            std::shared_ptr<PcapFile> pcapFile = std::make_shared<pcapfs::PcapFile>();
-            pcapFile->setFilename(pcapName.string());
-            pcapFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
-            pcapFile->setFiletype("pcap");
-            result.emplace_back(pcapFile);
-        } else if (boost::filesystem::extension(pcapName) == ".pcapng") {
-            std::shared_ptr<PcapNgFile> pcapngFile = std::make_shared<pcapfs::PcapNgFile>();
-            pcapngFile->setFilename(pcapName.string());
-            pcapngFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
-            pcapngFile->setFiletype("pcapng");
-            pcapngFile->parsePacketOffsets(idx);
-            result.emplace_back(pcapngFile);
+        uint8_t captureFileType = determineCaptureFileType(pcapName, idx);
+        switch (captureFileType) {
+            case CaptureFileType::PCAP_FILE:
+                {
+                    std::shared_ptr<PcapFile> pcapFile = std::make_shared<pcapfs::PcapFile>();
+                    pcapFile->setFilename(pcapName.string());
+                    pcapFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
+                    pcapFile->setFiletype("pcap");
+                    result.emplace_back(pcapFile);
+                }
+                break;
+
+            case CaptureFileType::PCAPNG_FILE:
+                {
+                    std::shared_ptr<PcapNgFile> pcapngFile = std::make_shared<pcapfs::PcapNgFile>();
+                    pcapngFile->setFilename(pcapName.string());
+                    pcapngFile->setFilesizeRaw(boost::filesystem::file_size(pcapName));
+                    pcapngFile->setFiletype("pcapng");
+                    pcapngFile->parsePacketOffsets(idx);
+                    result.emplace_back(pcapngFile);
+                }
+                break;
+
+            case CaptureFileType::UNSUPPORTED_FILE:
+                LOG_WARNING << "file " << pcapName << " has an unsupported file type";
+                break;
         }
     }
     return result;
 }
 
 
-/**std::shared_ptr<pcpp::IFileReaderDevice> pcapfs::CaptureFile::getReader() {
-    if (reader == nullptr) {
-        reader = std::make_shared<pcpp::PcapFileReaderDevice>(filename.c_str());
-    }
+uint8_t pcapfs::CaptureFile::determineCaptureFileType(const pcapfs::Path &pcapName, const Index &idx) {
+    char magicBuf[4];
+    memset(magicBuf, 0, 4);
+    std::ifstream ifs;
+    LOG_TRACE << "determine file type of " << pcapName;
 
-    if (!reader->open()) {
-        LOG_ERROR << "Error opening the PCAP file '" << filename << "'";
-        throw pcapfs::PcapFsException("Error opening the PCAP file '" + filename + "'");
-    }
-    return reader;
-}**/
+    if (pcapName.is_absolute())
+        ifs.open(pcapName.string(), std::ios_base::in | std::ios_base::binary);
+    else
+        ifs.open(idx.getCurrentWorkingDirectory() + "/" + pcapName.string(), std::ios_base::in | std::ios_base::binary);
+
+    if (ifs.fail())
+        throw PcapFsException("File " + pcapName.string() + " could not be opened");
+
+    ifs.seekg(0);
+    ifs.read(magicBuf, 4);
+    ifs.close();
+    if (memcmp(magicBuf, PCAP_MAGIC_1, 4) == 0 || memcmp(magicBuf, PCAP_MAGIC_2, 4) == 0)
+        return CaptureFileType::PCAP_FILE;
+    else if (memcmp(magicBuf, SHB_MAGIC, 4) == 0)
+        return CaptureFileType::PCAPNG_FILE;
+    else
+        return CaptureFileType::UNSUPPORTED_FILE;
+}
 
 
 void pcapfs::CaptureFile::closeReader() {

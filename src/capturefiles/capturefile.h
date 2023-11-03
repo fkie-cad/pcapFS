@@ -11,6 +11,16 @@
 
 namespace pcapfs {
 
+    enum CaptureFileType : uint8_t {
+        PCAP_FILE = 0,
+        PCAPNG_FILE = 1,
+        UNSUPPORTED_FILE = 3
+    };
+
+    const unsigned char SHB_MAGIC[4] = {0x0A, 0x0D, 0x0D, 0x0A};
+    const unsigned char PCAP_MAGIC_1[4] = {0xD4, 0xC3, 0xB2, 0xA1};
+    const unsigned char PCAP_MAGIC_2[4] = {0x4D, 0x3C, 0xB2, 0xA1};
+
     class CaptureFile : public File {
 
     public:
@@ -33,6 +43,9 @@ namespace pcapfs {
     protected:
         std::ifstream fileHandle;
         std::shared_ptr<pcpp::IFileReaderDevice> reader;
+
+    private:
+        static uint8_t determineCaptureFileType(const pcapfs::Path &pcapName, const Index &idx);
 
     };
 }
