@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 
+
 pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr &smbContext) {
 
     const uint32_t protocolId = *(uint32_t*) data;
@@ -54,14 +55,12 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse) {
                         std::shared_ptr<CreateResponse> createResponse =
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
-                        if (smbContext->currentCreateRequestFile != "")
+                        if (smbContext->currentCreateRequestFile != "") {
                             smbContext->fileHandles[createResponse->fileId] = smbContext->currentCreateRequestFile;
-                        else if (!createResponse->metaData->isDirectory){
-                            smbContext->fileHandles[createResponse->fileId] = constructGuidString(createResponse->fileId);
-                        }
-                        if (!createResponse->metaData->isDirectory)
                             SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
-                        //smbContext->currentCreateRequestFile = "";
+                        }
+                        //} else
+                        //    smbContext->fileHandles[createResponse->fileId] = constructGuidString(createResponse->fileId);
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
@@ -179,7 +178,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         } else {
                             std::shared_ptr<QueryInfoResponse> queryInfoResponse =
                                 std::make_shared<QueryInfoResponse>(&data[64], len - 64, smbContext->currentQueryInfoRequestData);
-                            if (!queryInfoResponse->metaData->isDirectory && smbContext->currentQueryInfoRequestData) {
+                            if (smbContext->currentQueryInfoRequestData) {
                                 SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext, packetHeader->treeId);
                             }
                             smbContext->currentQueryInfoRequestData = nullptr;

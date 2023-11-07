@@ -8,7 +8,7 @@ namespace pcapfs {
     namespace smb {
 
         // map filename - FilePtr
-        typedef std::map<std::string, std::shared_ptr<SmbServerFile>> SmbServerFiles;
+        typedef std::map<std::string, SmbServerFilePtr> SmbServerFiles;
 
         class SmbManager {
         public:
@@ -24,6 +24,11 @@ namespace pcapfs {
             void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint32_t treeId);
             void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext, uint32_t treeId);
             std::vector<FilePtr> const getServerFiles();
+            SmbServerFiles const getServerFiles(const ServerEndpoint &endpoint) { return serverFiles[endpoint]; };
+            SmbServerFilePtr const getServerFile(const ServerEndpoint &endpoint, const std::string &inFilename) { return serverFiles[endpoint][inFilename]; };
+
+            void createParentDirFile(const std::shared_ptr<SmbContext> &smbContext, const std::string &filePath, const ServerEndpoint &endpoint,
+                                        uint32_t treeId);
 
         private:
             SmbManager() {}

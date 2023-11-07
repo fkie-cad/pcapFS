@@ -569,7 +569,7 @@ namespace pcapfs {
                 uint32_t nextEntryOffset = 0;
                 do {
                     std::shared_ptr<FileInformation> currFileInfo = std::make_shared<FileInformation>(tempFileInfoBuffer, fileInfoClass);
-                    if (!currFileInfo->metaData->isDirectory)
+                    if (currFileInfo->filename != "." && currFileInfo->filename != "..")
                         result.push_back(currFileInfo);
 
                     nextEntryOffset = *(uint32_t*) &tempFileInfoBuffer.at(0);

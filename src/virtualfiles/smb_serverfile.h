@@ -15,12 +15,14 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        void initializeFilePtr(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &inFilename,
-                                const smb::FileMetaDataPtr &metaData, uint32_t treeId);
+        void initializeFilePtr(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &filePath,
+                                const smb::FileMetaDataPtr &metaData, const smb::ServerEndpoint &endpoint, uint32_t treeId);
 
     protected:
         static bool registeredAtFactory;
     };
+
+    typedef std::shared_ptr<SmbServerFile> SmbServerFilePtr;
 }
 
 #endif //PCAPFS_VIRTUAL_FILES_SMB_SERVERFILE_H

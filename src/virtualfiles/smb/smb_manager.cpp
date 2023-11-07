@@ -8,14 +8,16 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     LOG_TRACE << "updating SMB server files with create response infos";
 
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
-    std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][smbContext->currentCreateRequestFile];
+    SmbServerFilePtr serverFilePtr = serverFiles[endpoint][smbContext->currentCreateRequestFile];
     if (!serverFilePtr) {
         // server file not present in map -> create new one
         LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is new and added to the server files";
         serverFilePtr = std::make_shared<SmbServerFile>();
-        serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->metaData, treeId);
+        serverFilePtr->initializeFilePtr(smbContext, smbContext->currentCreateRequestFile, createResponse->metaData, endpoint, treeId);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
+
+        // TODO: consider all timestamps
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
         if (lastAccessTime > serverFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << smbContext->currentCreateRequestFile << " is already known and updated";
@@ -39,16 +41,21 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         smbContext-> currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_NETWORK_OPEN_INFORMATION)) {
 
         const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
-        std::string filename = "";
+        std::string filePath = "";
         if (smbContext->fileHandles.find(smbContext->currentQueryInfoRequestData->fileId) != smbContext->fileHandles.end()) {
-            // filename already present in fileHandles-map of smbContext
-            filename = smbContext->fileHandles.at(smbContext->currentQueryInfoRequestData->fileId);
+            // filePath already present in fileHandles-map of smbContext
+            filePath = smbContext->fileHandles.at(smbContext->currentQueryInfoRequestData->fileId);
 
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION) {
+
+                // TODO: maybe in further development, I won't use GUID-string filenames anymore, then this might become obsolete
                 const std::string guidAsFilename = constructGuidString(smbContext->currentQueryInfoRequestData->fileId);
-                if (filename == guidAsFilename) {
+                if (filePath == guidAsFilename) {
                     // filename is only  GUID-string, the real filename can now be extracted from FILE_ALL_INFORMATION
-                    filename = queryInfoResponse->filename;
+                    if (smbContext->currentCreateRequestFile != "")
+                        filePath = smbContext->currentCreateRequestFile + "\\" + queryInfoResponse->filename;
+                    else
+                        filePath = queryInfoResponse->filename;
                     // update smbContext so that the mapping between GUID and real filename is now known
                     smbContext->fileHandles[smbContext->currentQueryInfoRequestData->fileId] = queryInfoResponse->filename;
 
@@ -65,32 +72,39 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         } else {
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION) {
                 // filename is only  GUID-string, the real filename can now be extracted from FILE_ALL_INFORMATION
-                filename = queryInfoResponse->filename;
+                if (smbContext->currentCreateRequestFile != "")
+                    filePath = smbContext->currentCreateRequestFile + "\\" + queryInfoResponse->filename;
+                else
+                    filePath = queryInfoResponse->filename;
                 // update smbContext so that the mapping between GUID and real filename is now known
                 smbContext->fileHandles[smbContext->currentQueryInfoRequestData->fileId] = queryInfoResponse->filename;
             } else {
-                filename = constructGuidString(smbContext->currentQueryInfoRequestData->fileId);
+                // TODO: maybe in further development, I won't use GUID-string filenames anymore, then this might become obsolete
+                // and we would return here
+                filePath = constructGuidString(smbContext->currentQueryInfoRequestData->fileId);
             }
         }
 
-        std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
+        SmbServerFilePtr serverFilePtr = serverFiles[endpoint][filePath];
         if (!serverFilePtr) {
             // server file not present in map -> create new one
-            LOG_TRACE << "file " << filename << " is new and added to the server files";
+            LOG_TRACE << "file " << filePath << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filename, queryInfoResponse->metaData, treeId);
+            serverFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData, endpoint, treeId);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
+
+            // TODO: consider all timestamps
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getAccessTime()) {
-                LOG_TRACE << "file " << filename << " is already known and updated";
+                LOG_TRACE << "file " << filePath << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
                 serverFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
                 serverFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
             }
         }
 
-        serverFiles[endpoint][filename] = serverFilePtr;
+        serverFiles[endpoint][filePath] = serverFilePtr;
     }
 }
 
@@ -103,32 +117,34 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
     const ServerEndpoint endpoint = getServerEndpoint(smbContext->offsetFile, treeId);
 
     for (const std::shared_ptr<FileInformation> &fileInfo : fileInfos) {
-        std::string filename = "";
+        std::string filePath = "";
         if (directoryNameKnown)
-            filename = smbContext->fileHandles.at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
+            filePath = smbContext->fileHandles.at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
         else if (smbContext->currentCreateRequestFile != "")
-            filename = smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
+            filePath = smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
         else
-            filename = fileInfo->filename;
+            filePath = fileInfo->filename;
 
-        std::shared_ptr<SmbServerFile> serverFilePtr = serverFiles[endpoint][filename];
+        SmbServerFilePtr serverFilePtr = serverFiles[endpoint][filePath];
         if (!serverFilePtr) {
             // server file not present in map -> create new one
-            LOG_TRACE << "file " << filename << " is new and added to the server files";
+            LOG_TRACE << "file " << filePath << " is new and added to the server files";
             serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filename, fileInfo->metaData, treeId);
+            serverFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData, endpoint, treeId);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
+
+            // TODO: consider all timestamps
             const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getAccessTime()) {
-                LOG_TRACE << "file " << filename << " is already known and updated";
+                LOG_TRACE << "file " << filePath << " is already known and updated";
                 serverFilePtr->setTimestamp(lastAccessTime);
                 serverFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
                 serverFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
             }
         }
 
-        serverFiles[endpoint][filename] = serverFilePtr;
+        serverFiles[endpoint][filePath] = serverFilePtr;
     }
 }
 
@@ -151,11 +167,31 @@ pcapfs::smb::ServerEndpoint const pcapfs::smb::SmbManager::getServerEndpoint(con
 }
 
 
+void pcapfs::smb::SmbManager::createParentDirFile(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &filePath,
+                                                    const smb::ServerEndpoint &endpoint, uint32_t treeId) {
+    FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
+    // initially, all timestamps are set to 0
+    metaData->isDirectory = true;
+    SmbServerFilePtr serverFilePtr = std::make_shared<SmbServerFile>();
+    serverFilePtr->initializeFilePtr(smbContext, filePath, metaData, endpoint, treeId);
+    serverFiles[endpoint][filePath] = serverFilePtr;
+}
+
+
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
     LOG_TRACE << "getting all SMB server files...";
     std::vector<FilePtr> resultVector;
-    for (const auto &entry : serverFiles) {
-        for (const auto& f : entry.second) {
+    for (const std::pair<ServerEndpoint,SmbServerFiles> &entry : serverFiles) {
+        for (const std::pair<std::string,SmbServerFilePtr> &f : entry.second) {
+            ServerFilePtr serverFile = f.second;
+            LOG_ERROR << "parent dir cascade of " << serverFile->getFilename();
+            LOG_ERROR << "(saved with key " << f.first << "):";
+            while (serverFile->getParentDir()) {
+                LOG_ERROR << serverFile->getParentDir()->getFilename();
+                serverFile = serverFile->getParentDir();
+            }
+            LOG_ERROR << "\n\n";
+
             resultVector.push_back(f.second);
         }
     }
