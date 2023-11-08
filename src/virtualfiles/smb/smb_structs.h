@@ -12,24 +12,52 @@
 namespace pcapfs {
     namespace smb {
 
-        // Identifier for an SMB server tree, used as key for managing the extracted file information in the SMBManager
+        // Identifier for an SMB server, used as part of ServerEndpointTree and as key for treeId-treename mapping in SmbManager
         struct ServerEndpoint {
+            explicit ServerEndpoint(const FilePtr &filePtr) {
+                const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
+                if (srcPort == 445 || srcPort == 139) {
+                    ipAddress = pcpp::IPAddress(filePtr->getProperty("srcIP"));
+                    port = srcPort;
+                } else {
+                    // take dstIP and dstPort as server endpoint
+                    // this might be client IP and client port if checkNonDefaultPorts config is set
+                    // and the server does not use the default port 445 or 139
+                    ipAddress = pcpp::IPAddress(filePtr->getProperty("dstIP"));
+                    port = strToUint16(filePtr->getProperty("dstPort"));
+                }
+            }
             pcpp::IPAddress ipAddress;
             uint16_t port = 0;
-            uint32_t treeId = 0;
 
             bool operator==(const ServerEndpoint &endp) const {
-                return endp.ipAddress == ipAddress && endp.port == port && endp.treeId == treeId;
+                return endp.ipAddress == ipAddress && endp.port == port;
             };
 
             bool operator<(const ServerEndpoint &endp) const {
-                if (ipAddress == endp.ipAddress) {
-                    if (port == endp.port)
-                        return treeId < endp.treeId;
-                    else
-                        return port < endp.port;
-                } else
-                    return ipAddress < endp.ipAddress ;
+                if (ipAddress == endp.ipAddress)
+                    return port < endp.port;
+                else
+                    return ipAddress < endp.ipAddress;
+            };
+
+        };
+
+        // Identifier for an SMB server tree, used as key for managing the extracted file information in SmbManager
+        struct ServerEndpointTree {
+            ServerEndpointTree(const ServerEndpoint &endp, uint32_t inTreeId) : serverEndpoint(endp), treeId(inTreeId) {}
+            ServerEndpoint serverEndpoint;
+            uint32_t treeId = 0;
+
+            bool operator==(const ServerEndpointTree &endpt) const {
+                return endpt.serverEndpoint == serverEndpoint && endpt.treeId == treeId;
+            };
+
+            bool operator<(const ServerEndpointTree &endpt) const {
+                if (serverEndpoint == endpt.serverEndpoint)
+                    return treeId < endpt.treeId;
+                else
+                    return serverEndpoint < endpt.serverEndpoint;
             };
         };
 
@@ -48,16 +76,14 @@ namespace pcapfs {
 
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
-            explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr) {}
+            explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr), serverEndpoint(filePtr) {}
+            FilePtr offsetFile = nullptr;
+            ServerEndpoint serverEndpoint;
             uint16_t dialect = 0;
-            // map guid - filename
-            std::unordered_map<std::string, std::string> fileHandles;
             std::string currentCreateRequestFile = "";
             std::shared_ptr<QueryInfoRequestData> currentQueryInfoRequestData = nullptr;
             std::shared_ptr<QueryDirectoryRequestData> currentQueryDirectoryRequestData = nullptr;
-            FilePtr offsetFile = nullptr;
-            // map treeId - tree name
-            std::map<uint32_t, std::string> treeNames;
+            uint32_t currentTreeId = 0;
             std::string currentRequestedTree = "";
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;

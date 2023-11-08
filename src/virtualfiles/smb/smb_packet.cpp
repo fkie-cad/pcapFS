@@ -14,6 +14,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
             throw SmbError("Invalid SMB2 Packet Header");
 
         std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
+        smbContext->currentTreeId = packetHeader->treeId;
         isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
         LOG_TRACE << "found SMB2 packet with message type " << packetHeader->command << (isResponse ? " (Response)" : " (Request)");
         try {
@@ -37,11 +38,14 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
                 case Smb2Commands::SMB2_TREE_CONNECT:
                     if (isResponse) {
-                        if (!smbContext->currentRequestedTree.empty())
+                        if (!smbContext->currentRequestedTree.empty()) {
                             // TODO: what to do with ASYNC messages?
-                            smbContext->treeNames[packetHeader->treeId] = smbContext->currentRequestedTree;
-                        else
-                            smbContext->treeNames[packetHeader->treeId] = std::to_string(packetHeader->treeId);
+                            SmbManager::getInstance().addTreeNameMapping(smbContext->serverEndpoint, packetHeader->treeId,
+                                                                            smbContext->currentRequestedTree);
+                        } else {
+                            SmbManager::getInstance().addTreeNameMapping(smbContext->serverEndpoint, packetHeader->treeId,
+                                                                            "treeId_" + std::to_string(packetHeader->treeId));
+                        }
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
                     } else {
                         std::shared_ptr<TreeConnectRequest> treeConnectRequest =
@@ -55,12 +59,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse) {
                         std::shared_ptr<CreateResponse> createResponse =
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
-                        if (smbContext->currentCreateRequestFile != "") {
-                            smbContext->fileHandles[createResponse->fileId] = smbContext->currentCreateRequestFile;
-                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->treeId);
-                        }
-                        //} else
-                        //    smbContext->fileHandles[createResponse->fileId] = constructGuidString(createResponse->fileId);
+                        if (smbContext->currentCreateRequestFile != "")
+                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext);
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
@@ -72,9 +72,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_CLOSE:
-                    if (isResponse)
+                    if (isResponse) {
                         message = std::make_shared<CloseResponse>(&data[64], len - 64);
-                    else
+                        smbContext->currentCreateRequestFile = "";
+                    } else
                         message = std::make_shared<CloseRequest>(&data[64], len - 64);
                     break;
 
@@ -132,8 +133,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                         smbContext->currentQueryDirectoryRequestData->fileInfoClass);
 
                                 if (!queryDirectoryResponse->fileInfos.empty())
-                                    SmbManager::getInstance().updateServerFiles(queryDirectoryResponse->fileInfos,
-                                                                    smbContext, packetHeader->treeId);
+                                    SmbManager::getInstance().updateServerFiles(queryDirectoryResponse->fileInfos, smbContext);
                                 smbContext->currentQueryDirectoryRequestData = nullptr;
                                 message = queryDirectoryResponse;
                             } else {
@@ -178,9 +178,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         } else {
                             std::shared_ptr<QueryInfoResponse> queryInfoResponse =
                                 std::make_shared<QueryInfoResponse>(&data[64], len - 64, smbContext->currentQueryInfoRequestData);
-                            if (smbContext->currentQueryInfoRequestData) {
-                                SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext, packetHeader->treeId);
-                            }
+                            if (smbContext->currentQueryInfoRequestData)
+                                SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext);
                             smbContext->currentQueryInfoRequestData = nullptr;
                             message = queryInfoResponse;
                         }
@@ -340,6 +339,7 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
             // Request
             ss << "[>] " << smb2CommandToString(packetHeader->command);
             if (!parsingFailed) {
+                const SmbFileHandles fileHandles = SmbManager::getInstance().getFileHandles(smbContext);
                 switch (packetHeader->command) {
                     case Smb2Commands::SMB2_TREE_CONNECT:
                         {
@@ -360,9 +360,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                     case Smb2Commands::SMB2_CLOSE:
                         {
                             const std::shared_ptr<CloseRequest> msg = std::static_pointer_cast<CloseRequest>(message);
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -370,9 +369,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         {
                             const std::shared_ptr<ReadRequest> msg = std::static_pointer_cast<ReadRequest>(message);
                             ss << ", Off: " << msg->readOffset << ", Len: " << msg->readLength;
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -380,9 +378,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         {
                             const std::shared_ptr<WriteRequest> msg = std::static_pointer_cast<WriteRequest>(message);
                             ss << ", Off: " << msg->writeOffset << ", Len: " << msg->writeLength;
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -390,9 +387,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         {
                             const std::shared_ptr<QueryDirectoryRequest> msg = std::static_pointer_cast<QueryDirectoryRequest>(message);
                             ss << ", " << fileInfoClassStrings.at(msg->fileInfoClass) << ", Search Pattern: " << msg->searchPattern;
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -404,9 +400,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                                 ss << "/" << fileInfoClassStrings.at(msg->fileInfoClass);
                             else if (msg->infoType == QueryInfoType::SMB2_0_INFO_FILESYSTEM)
                                 ss << "/" << fsInfoClassStrings.at(msg->fileInfoClass);
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -414,9 +409,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                         {
                             const std::shared_ptr<IoctlRequest> msg = std::static_pointer_cast<IoctlRequest>(message);
                             ss << ", " << ctlCodeStrings.at(msg->ctlCode);
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
 
@@ -428,9 +422,8 @@ std::string const pcapfs::smb::SmbPacket::toString(const SmbContextPtr &smbConte
                                 ss << "/" << fileInfoClassStrings.at(msg->fileInfoClass);
                             else if (msg->infoType == QueryInfoType::SMB2_0_INFO_FILESYSTEM)
                                 ss << "/" << fsInfoClassStrings.at(msg->fileInfoClass);
-                            if (smbContext->fileHandles.find(msg->fileId) != smbContext->fileHandles.end() &&
-                                !smbContext->fileHandles.at(msg->fileId).empty())
-                                ss << ", File: " << smbContext->fileHandles.at(msg->fileId);
+                            if (fileHandles.find(msg->fileId) != fileHandles.end() && !fileHandles.at(msg->fileId).empty())
+                                ss << ", File: " << fileHandles.at(msg->fileId);
                         }
                         break;
                 }

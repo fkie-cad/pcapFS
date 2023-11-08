@@ -16,7 +16,7 @@ namespace pcapfs {
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
         void initializeFilePtr(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &filePath,
-                                const smb::FileMetaDataPtr &metaData, const smb::ServerEndpoint &endpoint, uint32_t treeId);
+                                const smb::FileMetaDataPtr &metaData);
 
     protected:
         static bool registeredAtFactory;

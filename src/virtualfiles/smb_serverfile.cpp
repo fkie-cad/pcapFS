@@ -20,7 +20,7 @@ size_t pcapfs::SmbServerFile::read(uint64_t startOffset, size_t length, const In
 
 
 void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbContext> &smbContext, const std::string &filePath,
-                                const smb::FileMetaDataPtr &metaData, const smb::ServerEndpoint &endpoint, uint32_t treeId) {
+                                                const smb::FileMetaDataPtr &metaData) {
     Fragment fragment;
     fragment.id = smbContext->offsetFile->getIdInIndex();
     fragment.start = 0;
@@ -38,26 +38,21 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
         setFilename(std::string(filePath.begin()+backslashPos+1, filePath.end()));
         LOG_TRACE << "filename set: " << std::string(filePath.begin()+backslashPos+1, filePath.end());
         const std::string remainder(filePath.begin(), filePath.begin()+backslashPos);
+
+        // TODO: outsource this part fully into getAsParentDirFile (i.e., when remainder is empty, take tree name into account
+        // and set this as parent dir)
         if(!remainder.empty()) {
             LOG_TRACE << "detected subdir(s)";
             LOG_TRACE << "remainder: " << remainder;
-
-            const smb::SmbServerFiles serverFiles = smb::SmbManager::getInstance().getServerFiles(endpoint);
-            if (serverFiles.find(remainder) != serverFiles.end()) {
-                // parent directory is already known as an SmbFile
-                LOG_TRACE << "parent directory is already known as an SmbFile";
-                parentDir = serverFiles.at(remainder);
-            } else {
-                // create SmbServerFile for parent directory
-                LOG_TRACE << "parent directory not known as SmbServerFile yet, create parent dir file on the fly";
-                smb::SmbManager::getInstance().createParentDirFile(smbContext, remainder, endpoint, treeId);
-                parentDir = smb::SmbManager::getInstance().getServerFile(endpoint, remainder);
-            }
+            parentDir = smb::SmbManager::getInstance().getAsParentDirFile(remainder, smbContext);
         } else {
             // root directory has nullptr as parentDir
             parentDir = nullptr;
         }
     } else {
+        // TODO: set tree name as parent dir
+        // consider the case that we already handle a part of the tree name path (which might start with \ or not)
+        // => at some point, parentDir must be set to nullptr
         setFilename(filePath);
         parentDir = nullptr;
     }
@@ -70,8 +65,7 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     setProperty("dstIP", smbContext->offsetFile->getProperty("dstIP"));
     setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
     setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
-    if (smbContext->treeNames.find(treeId) != smbContext->treeNames.end())
-        setProperty("smbTree", smbContext->treeNames.at(treeId));
+    setProperty("smbTree", smb::SmbManager::getInstance().constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId));
     flags.set(pcapfs::flags::PROCESSED);
     setFilesizeRaw(metaData->filesize);
     setFilesizeProcessed(metaData->filesize);
