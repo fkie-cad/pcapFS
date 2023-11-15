@@ -11,7 +11,7 @@ namespace pcapfs {
         std::string const bytesToHexString(const Bytes &input);
         uint16_t strToUint16(const std::string& str);
         TimePoint winFiletimeToTimePoint(uint64_t winFiletime);
-        std::string constructGuidString(const std::string &input);
+        std::string const sanitizeFilename(const std::string &inFilename);
     }
 }
 

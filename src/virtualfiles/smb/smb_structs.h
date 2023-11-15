@@ -144,6 +144,7 @@ namespace pcapfs {
                         filename = wstrToStr(Bytes(&rawContent.at(88), &rawContent.at(88 + extractedFileNameLength - 1)));
                         break;
                 }
+                filename = sanitizeFilename(filename);
             };
 
             FileMetaDataPtr metaData = std::make_shared<FileMetaData>();

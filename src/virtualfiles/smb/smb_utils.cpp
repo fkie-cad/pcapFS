@@ -51,8 +51,13 @@ pcapfs::TimePoint pcapfs::smb::winFiletimeToTimePoint(uint64_t winFiletime) {
 }
 
 
-std::string pcapfs::smb::constructGuidString(const std::string &input) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0') << std::setw(2) << input;
-    return "GUID_" + ss.str();
+std::string const pcapfs::smb::sanitizeFilename(const std::string &inFilename) {
+    if (std::all_of(inFilename.begin(), inFilename.end(), [](const unsigned char c ){ return c == 0x5C; }))
+        return "";
+    else if (inFilename.back() == 0x5C) {
+        // chop off ending backslash(es)
+        const auto it = std::find_if(inFilename.rbegin(), inFilename.rend(), [](const unsigned char c){ return c != 0x5C; });
+        return std::string(inFilename.begin(), it.base());
+    }
+    return inFilename;
 }

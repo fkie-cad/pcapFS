@@ -29,18 +29,21 @@ namespace pcapfs {
             void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext);
             std::vector<FilePtr> const getServerFiles();
             SmbServerFilePtr const getAsParentDirFile(const std::string &filePath, const std::shared_ptr<smb::SmbContext> &smbContext);
-            std::string const constructTreeString(const ServerEndpoint &endp, uint32_t treeId);
 
-            void addTreeNameMapping(const ServerEndpoint &endp, uint32_t treeId, const std::string &treeName) { treeNames[endp][treeId] = treeName; };
+            void addTreeNameMapping(const ServerEndpoint &endp, uint32_t treeId, const std::string &treeName);
 
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext) {
                                                 return fileHandles[ServerEndpointTree(smbContext->serverEndpoint, smbContext->currentTreeId)]; };
 
+            uint64_t getNewId();
+
         private:
             SmbManager() {}
+            std::string const constructTreeString(const ServerEndpoint &endp, uint32_t treeId);
             std::map<ServerEndpointTree, SmbServerFiles> serverFiles;
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
             std::map<ServerEndpoint, SmbTreeNames> treeNames;
+            uint64_t idCounter = 0;
         };
     }
 }

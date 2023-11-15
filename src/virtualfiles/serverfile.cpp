@@ -7,12 +7,12 @@ void pcapfs::ServerFile::serialize(boost::archive::text_oarchive &archive) {
     archive << boost::serialization::make_binary_object(&changeTime, sizeof(changeTime));
     archive << boost::serialization::make_binary_object(&birthTime, sizeof(birthTime));
     archive << (isDirectory ? 1 : 0);
-    // TODO: serialize parentDir FilePtr (maybe its fragment id and filetype), the idx.get later when needed)
+    archive << parentDirId;
 }
 
 
 void pcapfs::ServerFile::deserialize(boost::archive::text_iarchive &archive) {
-    int i;
+    int i = 0;
     VirtualFile::deserialize(archive);
     archive >> boost::serialization::make_binary_object(&accessTime, sizeof(accessTime));
     archive >> boost::serialization::make_binary_object(&modifyTime, sizeof(modifyTime));
@@ -20,5 +20,5 @@ void pcapfs::ServerFile::deserialize(boost::archive::text_iarchive &archive) {
     archive >> boost::serialization::make_binary_object(&birthTime, sizeof(birthTime));
     archive >> i;
     isDirectory = i ? true : false;
-    // TODO: deserialize parentDir FilePtr
+    archive >> parentDirId;
 }

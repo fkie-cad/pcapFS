@@ -18,6 +18,7 @@
 #include "logging.h"
 #include "capturefiles/capturefile.h"
 #include "versions.h"
+#include "virtualfiles/serverfile.h"
 
 
 namespace {
@@ -204,6 +205,20 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
             storedPcaps.push_back(currentPtr);
         }
         files.insert({indexFilename, currentPtr});
+    }
+
+    // set parent dirs for serverfiles
+    for (const auto &entry : files) {
+        if (entry.second->getFiletype() == "smbserverfile") {
+            ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
+            const uint64_t parentDirId = serverFilePtr->getParentDirId();
+            if (parentDirId != (uint64_t)-1) {
+                serverFilePtr->setParentDir(get({"smbserverfile", parentDirId}));
+                LOG_ERROR << "set parent dir of " << serverFilePtr->getFilename() << ": " << serverFilePtr->getParentDir()->getFilename();
+            } else {
+                serverFilePtr->setParentDir(nullptr);
+            }
+        }
     }
 }
 

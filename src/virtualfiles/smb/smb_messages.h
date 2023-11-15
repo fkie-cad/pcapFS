@@ -236,6 +236,7 @@ namespace pcapfs {
                         if ((size_t)(nameOffset + nameLength - 64) > len)
                             throw SmbError("Invalid buffer values in SMB2 Create Request");
                         filename = wstrToStr(Bytes(&rawData.at(nameOffset - 64), &rawData.at(nameOffset - 64 + nameLength - 1)));
+                        filename = sanitizeFilename(filename);
                     }
                 } else {
                     totalSize = 57;
@@ -698,6 +699,8 @@ namespace pcapfs {
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
                                     filename = wstrToStr(Bytes(&rawData.at((outputBufferOffset - 64) + 100),
                                                                 &rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1)));
+                                    filename = sanitizeFilename(filename);
+
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);
                                     metaData->isDirectory = extractedFileAttributes & 0x10;
                                 }

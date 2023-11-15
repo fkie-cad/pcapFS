@@ -14,7 +14,13 @@ namespace pcapfs {
         TimePoint const getModifyTime() { return modifyTime; };
         TimePoint const getChangeTime() { return changeTime; };
         TimePoint const getBirthTime() { return birthTime; };
-        std::shared_ptr<ServerFile> const getParentDir() { return parentDir; };
+        uint64_t getParentDirId() { return parentDirId; };
+        FilePtr const getParentDir() { return parentDir; };
+
+        void setAccessTime(const TimePoint &inTime) { accessTime = inTime; };
+        void setModifyTime(const TimePoint &inTime) { modifyTime = inTime; };
+        void setChangeTime(const TimePoint &inTime) { changeTime = inTime; };
+        void setParentDir(const FilePtr &serverFile) { parentDir = serverFile; };
 
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
@@ -26,7 +32,8 @@ namespace pcapfs {
         TimePoint modifyTime;
         TimePoint changeTime;
         TimePoint birthTime;
-        std::shared_ptr<ServerFile> parentDir = nullptr;
+        uint64_t parentDirId = 0;
+        FilePtr parentDir = nullptr;
     };
 
     typedef std::shared_ptr<ServerFile> ServerFilePtr;

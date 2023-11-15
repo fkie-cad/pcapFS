@@ -1,6 +1,7 @@
 #include "smb_serverfile.h"
 #include "smb/smb_utils.h"
 #include "smb/smb_manager.h"
+#include "../index.h"
 
 
 std::vector<pcapfs::FilePtr> pcapfs::SmbServerFile::parse(FilePtr filePtr, Index &idx) {
@@ -33,14 +34,14 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     birthTime = smb::winFiletimeToTimePoint(metaData->creationTime);
     isDirectory = metaData->isDirectory;
 
+    LOG_ERROR << "FILEPATH: " << filePath;
+
     const size_t backslashPos = filePath.rfind("\\");
     if (filePath != "\\" && backslashPos != std::string::npos) {
         setFilename(std::string(filePath.begin()+backslashPos+1, filePath.end()));
         LOG_TRACE << "filename set: " << std::string(filePath.begin()+backslashPos+1, filePath.end());
         const std::string remainder(filePath.begin(), filePath.begin()+backslashPos);
 
-        // TODO: outsource this part fully into getAsParentDirFile (i.e., when remainder is empty, take tree name into account
-        // and set this as parent dir)
         if(!remainder.empty()) {
             LOG_TRACE << "detected subdir(s)";
             LOG_TRACE << "remainder: " << remainder;
@@ -50,9 +51,6 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
             parentDir = nullptr;
         }
     } else {
-        // TODO: set tree name as parent dir
-        // consider the case that we already handle a part of the tree name path (which might start with \ or not)
-        // => at some point, parentDir must be set to nullptr
         setFilename(filePath);
         parentDir = nullptr;
     }
@@ -65,10 +63,12 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     setProperty("dstIP", smbContext->offsetFile->getProperty("dstIP"));
     setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
     setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
-    setProperty("smbTree", smb::SmbManager::getInstance().constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId));
     flags.set(pcapfs::flags::PROCESSED);
     setFilesizeRaw(metaData->filesize);
     setFilesizeProcessed(metaData->filesize);
+    setIdInIndex(smb::SmbManager::getInstance().getNewId());
+    parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
+    LOG_ERROR << "parent dir id set for " << getFilename() << ": " << parentDirId;
 }
 
 
