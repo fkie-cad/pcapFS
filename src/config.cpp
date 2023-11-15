@@ -237,12 +237,12 @@ namespace {
                 : options(), visible_options("Usage: pcapfs [options] <pcapfile|pcapdir> <mountpoint>"), opts() {
             po::options_description pcapfs_options("pcapFS help");
             pcapfs_options.add_options()
-                    ("config,c", po::value<fs::path>(&opts.config.configFilePath), "config file to use")
+                    ("config,c", po::value<std::string>(), "config file to use")
                     ("check-non-default-ports", "also try to detect protocols which do not use their default ports")
                     ("help,h", "print this help and exit")
-                    ("index,i", po::value<fs::path>(&(opts.config.indexFilePath)), "index file to use")
+                    ("index,i", po::value<std::string>(), "index file to use")
                     ("in-memory,m", "use an in-memory index")
-                    ("keys,k", po::value<std::vector<fs::path>>(), "path to a key file or a directory with key files")
+                    ("keys,k", po::value<std::string>(), "path to a key file or a directory with key files")
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
                     ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
@@ -270,8 +270,8 @@ namespace {
 
             po::options_description positional_arguments;
             positional_arguments.add_options()
-                    ("pcap-path", po::value<fs::path>(&(opts.config.pcapPath))->required(), "pcap-path")
-                    ("mountpoint", po::value<fs::path>(&(opts.config.mountpoint)), "mountpoint");
+                    ("pcap-path", po::value<std::string>()->required(), "pcap-path")
+                    ("mountpoint", po::value<std::string>(), "mountpoint");
 
             options.add(pcapfs_options).add(fuse_options).add(positional_arguments);
             visible_options.add(pcapfs_options).add(fuse_options);
@@ -299,10 +299,10 @@ namespace {
                 throw pcapfs::ArgumentError(e.what());
             }
 
-            opts.config.pcapPath = vm["pcap-path"].as<fs::path>();
-            opts.config.pcaps = pcapfs::utils::getFilesFromPath(vm["pcap-path"].as<fs::path>(), opts.config.pcapSuffix);
+            opts.config.pcapPath = getSanitizedAsPath(vm["pcap-path"].as<std::string>());
+            opts.config.pcaps = pcapfs::utils::getFilesFromPath(opts.config.pcapPath, opts.config.pcapSuffix);
 
-            if (vm.count("mountpoint")) { opts.config.mountpoint = vm["mountpoint"].as<fs::path>(); }
+            if (vm.count("mountpoint")) { opts.config.mountpoint = getSanitizedAsPath(vm["mountpoint"].as<std::string>()); }
             if (vm.count("in-memory")) { opts.config.indexInMemory = true; }
             if (vm.count("no-mount")) { opts.config.noMount = true; }
             if (vm.count("rewrite")) { opts.config.rewrite = true; }
@@ -314,20 +314,18 @@ namespace {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
             }
             if (vm.count("keys")) {
-                auto keyFilePaths = vm["keys"].as<std::vector<fs::path>>();
-                std::sort(keyFilePaths.begin(), keyFilePaths.end());
-                keyFilePaths.erase(std::unique(keyFilePaths.begin(), keyFilePaths.end()), keyFilePaths.end());
-                for (const auto &path : keyFilePaths) {
-                    const auto keyFiles = pcapfs::utils::getFilesFromPath(path, "");
-                    opts.config.keyFiles.insert(opts.config.keyFiles.end(), keyFiles.cbegin(), keyFiles.cend());
-                }
+                const fs::path keyFilePath = getSanitizedAsPath(vm["keys"].as<std::string>());
+                const auto keyFiles = pcapfs::utils::getFilesFromPath(keyFilePath, "");
+                opts.config.keyFiles.insert(opts.config.keyFiles.end(), keyFiles.cbegin(), keyFiles.cend());
             }
+            if(vm.count("index")) { opts.config.indexFilePath = getSanitizedAsPath(vm["index"].as<std::string>()); }
 
             if (!opts.config.indexInMemory && opts.config.indexFilePath.empty()) {
                 opts.config.indexFilePath = boost::filesystem::path(generateIndexFileName());
             }
 
-            if (!opts.config.configFilePath.empty()) {
+            if (vm.count("config")) {
+                opts.config.configFilePath = getSanitizedAsPath(vm["config"].as<std::string>());
                 const auto configFileOptions = pcapfs::options::configfile::parse(opts.config.configFilePath);
                 opts.config.decodeMap = configFileOptions.decodeMap;
                 if (vm["sortby"].defaulted() && !configFileOptions.sortby.empty()) {
@@ -359,6 +357,12 @@ namespace {
         };
 
     private:
+        fs::path getSanitizedAsPath(const std::string &filePath) {
+            std::string temp(filePath.begin(), filePath.end());
+            boost::replace_all(temp, "\\ ", " ");
+            return fs::path(temp);
+        }
+
         boost::program_options::options_description options;
         boost::program_options::options_description visible_options;
         pcapfs::options::CommandLineOptions opts;
