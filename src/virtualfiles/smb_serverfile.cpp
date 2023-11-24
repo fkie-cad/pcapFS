@@ -34,8 +34,6 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     birthTime = smb::winFiletimeToTimePoint(metaData->creationTime);
     isDirectory = metaData->isDirectory;
 
-    LOG_ERROR << "FILEPATH: " << filePath;
-
     const size_t backslashPos = filePath.rfind("\\");
     if (filePath != "\\" && backslashPos != std::string::npos) {
         setFilename(std::string(filePath.begin()+backslashPos+1, filePath.end()));
@@ -68,7 +66,6 @@ void pcapfs::SmbServerFile::initializeFilePtr(const std::shared_ptr<smb::SmbCont
     setFilesizeProcessed(metaData->filesize);
     setIdInIndex(smb::SmbManager::getInstance().getNewId());
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
-    LOG_ERROR << "parent dir id set for " << getFilename() << ": " << parentDirId;
 }
 
 

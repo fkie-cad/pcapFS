@@ -8,6 +8,7 @@
 
 #include "offsets.h"
 #include "logging.h"
+#include "virtualfiles/serverfile.h"
 
 
 namespace pcapfs_filesystem {
@@ -110,8 +111,28 @@ namespace pcapfs_filesystem {
                     }
                 }
             }
-            //TODO: implement new map for mapping from file path -> IndexPosition
-            current->dirfiles.emplace(file->getFilename(), file);
+
+            if (file->isFiletype("smbserverfile")) {
+                pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
+                std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
+
+                // advance all the way from root dir to parent dir of server file and create new tree nodes on the fly if necessary
+                current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
+                                            { return getOrCreateSubdir(curr, parentDirFile->getFilename()); });
+
+                if (serverFilePtr->isDirectory && current->subdirs.count(serverFilePtr->getFilename()) == 0) {
+                    // serverfile is a directory. Add it as new DirTreeNode if not already present in subdirs of current node
+                    current = getOrCreateSubdir(current, serverFilePtr->getFilename());
+                    LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " as directory to tree node " << current->dirname;
+                } else if (!serverFilePtr->isDirectory) {
+                    // add server file as regular file
+                    current->dirfiles.emplace(serverFilePtr->getFilename(), serverFilePtr);
+                    LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " to DirTreeNode " << current->dirname;
+                }
+            } else {
+                //TODO: implement new map for mapping from file path -> IndexPosition
+                current->dirfiles.emplace(file->getFilename(), file);
+            }
 
             //TODO: does this make sense?
             DirTreeNode *temp = current;

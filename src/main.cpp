@@ -190,6 +190,7 @@ int main(int argc, const char *argv[]) {
         		<< filesToProcess.size() << ">";
 
         // insert possible SMB server files
+        LOG_TRACE << "inserting all smb server files into index";
         index.insert(pcapfs::smb::SmbManager::getInstance().getServerFiles());
 
         if (!config.indexInMemory) {

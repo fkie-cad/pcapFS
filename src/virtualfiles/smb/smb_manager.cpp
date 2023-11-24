@@ -22,7 +22,6 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
         serverFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
-
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
         if (lastAccessTime > serverFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
@@ -80,8 +79,6 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             serverFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-
-            // TODO: consider all timestamps
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
@@ -125,8 +122,6 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             serverFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-
-            // TODO: consider all timestamps
             const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
             if (lastAccessTime > serverFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
@@ -190,23 +185,15 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 
 
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
-    LOG_TRACE << "getting all SMB server files...";
     std::vector<FilePtr> resultVector;
-    for (const std::pair<ServerEndpointTree,SmbServerFiles> &entry : serverFiles) {
-        LOG_ERROR << "for server endpoint " << entry.first.serverEndpoint.ipAddress.toString() << ", " << entry.first.serverEndpoint.port << ", " << entry.first.treeId;
-        for (const std::pair<std::string,SmbServerFilePtr> &f : entry.second) {
+    for (const auto &entry : serverFiles) {
+        for (const auto &f : entry.second) {
             ServerFilePtr serverFile = f.second;
-            LOG_ERROR << "parent dir cascade of " << serverFile->getFilename();
-            LOG_ERROR << "(saved with key " << f.first << "):";
             while (serverFile->getParentDir()) {
-                LOG_ERROR << serverFile->getParentDir()->getFilename();
                 serverFile = std::static_pointer_cast<ServerFile>(serverFile->getParentDir());
             }
-            LOG_ERROR << "\n\n";
-
             resultVector.push_back(f.second);
         }
     }
-
     return resultVector;
 }

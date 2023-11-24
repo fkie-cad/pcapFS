@@ -25,6 +25,8 @@ namespace pcapfs {
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
 
+        std::vector<std::shared_ptr<ServerFile>> getAllParentDirs();
+
         bool isDirectory;
 
     protected:
