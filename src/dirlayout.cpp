@@ -136,7 +136,7 @@ namespace pcapfs_filesystem {
 
                 // advance all the way from root dir to parent dir of server file and create new tree nodes on the fly if necessary
                 current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
-                                            { return getOrCreateSubdir(curr, parentDirFile->getFilename()); });
+                                            { return getOrCreateSubdirForServerFile(curr, parentDirFile); });
 
                 if (serverFilePtr->isDirectory && current->subdirs.count(serverFilePtr->getFilename()) == 0) {
                     // serverfile is a directory. Add it as new DirTreeNode if not already present in subdirs of current node
@@ -151,12 +151,13 @@ namespace pcapfs_filesystem {
                 // update timestamps for serverfile dirs
                 DirTreeNode *temp = current;
                 const pcapfs::TimePoint minTime = pcapfs::TimePoint::min();
+                const pcapfs::TimePoint zeroTimestamp = pcapfs::TimePoint{};
                 while (temp != ROOT) {
-                    if (temp->parent->accessTime == minTime)
+                    if (temp->parent->accessTime == minTime || temp->parent->accessTime == zeroTimestamp)
                         temp->parent->accessTime = temp->accessTime;
-                    if (temp->parent->modifyTime == minTime)
+                    if (temp->parent->modifyTime == minTime || temp->parent->modifyTime == zeroTimestamp)
                         temp->parent->modifyTime = temp->modifyTime;
-                    if (temp->parent->changeTime  == pcapfs::TimePoint::max())
+                    if (temp->parent->changeTime  == pcapfs::TimePoint::max() || temp->parent->changeTime == zeroTimestamp)
                         temp->parent->changeTime = temp->changeTime;
                     temp = temp->parent;
                 }
