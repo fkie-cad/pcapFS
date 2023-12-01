@@ -9,6 +9,7 @@
 
 #include "index.h"
 #include "commontypes.h"
+#include "virtualfiles/serverfile.h"
 
 
 namespace pcapfs_filesystem {
@@ -20,8 +21,9 @@ namespace pcapfs_filesystem {
         DirTreeNode *parent;
         std::map<std::string, struct DirTreeNode *> subdirs;
         FileIndexMap dirfiles;
-        pcapfs::TimePoint timestamp = pcapfs::TimePoint::min();
-        pcapfs::TimePoint timestampOldest = pcapfs::TimePoint::max();
+        pcapfs::TimePoint accessTime = pcapfs::TimePoint::min();
+        pcapfs::TimePoint changeTime = pcapfs::TimePoint::max();
+        pcapfs::TimePoint modifyTime = pcapfs::TimePoint::min();
     } DirTreeNode;
 
 
@@ -45,6 +47,7 @@ namespace pcapfs_filesystem {
         static int fillDirTreeSortby(const pcapfs::Index &index);
 
         static DirTreeNode *getOrCreateSubdir(DirTreeNode *current, const std::string &dirname);
+        static DirTreeNode *getOrCreateSubdirForServerFile(DirTreeNode *current, const pcapfs::ServerFilePtr &serverFile);
 
         static void initRoot();
 

@@ -2,8 +2,8 @@
 #include <math.h>
 
 #include "pcapfs.h"
-
 #include "dirlayout.h"
+#include "virtualfiles/serverfile.h"
 
 
 pcapfs::PcapFs::PcapFs(pcapfs::Index &idx) : index(idx) {}
@@ -18,9 +18,9 @@ int pcapfs::PcapFs::getattr(const char *path, struct stat *stbuf, struct fuse_fi
         stbuf->st_mode = S_IFDIR | 0444;
         stbuf->st_nlink = 2;
         stbuf->st_size = node->dirfiles.size();
-        stbuf->st_mtim = {std::chrono::system_clock::to_time_t(node->timestamp), 0};
-        stbuf->st_atim = {std::chrono::system_clock::to_time_t(node->timestamp), 0};
-        stbuf->st_ctim = {std::chrono::system_clock::to_time_t(node->timestampOldest), 0};
+        stbuf->st_mtim = {std::chrono::system_clock::to_time_t(node->modifyTime), 0};
+        stbuf->st_atim = {std::chrono::system_clock::to_time_t(node->accessTime), 0};
+        stbuf->st_ctim = {std::chrono::system_clock::to_time_t(node->changeTime), 0};
 
     } else {
         pcapfs::FilePtr f_p = pcapfs_filesystem::DirectoryLayout::findFile(path);
@@ -29,9 +29,16 @@ int pcapfs::PcapFs::getattr(const char *path, struct stat *stbuf, struct fuse_fi
         }
         stbuf->st_mode = S_IFREG | 0444;
         stbuf->st_nlink = 1;
-        stbuf->st_mtim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
-        stbuf->st_atim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
-        stbuf->st_ctim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
+        if (f_p->isFiletype("smbserverfile")) {
+            const ServerFilePtr server_file = std::static_pointer_cast<ServerFile>(f_p);
+            stbuf->st_mtim = {std::chrono::system_clock::to_time_t(server_file->getModifyTime()), 0};
+            stbuf->st_atim = {std::chrono::system_clock::to_time_t(server_file->getAccessTime()), 0};
+            stbuf->st_ctim = {std::chrono::system_clock::to_time_t(server_file->getChangeTime()), 0};
+        } else {
+            stbuf->st_mtim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
+            stbuf->st_atim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
+            stbuf->st_ctim = {std::chrono::system_clock::to_time_t(f_p->getTimestamp()), 0};
+        }
 
         if (f_p->flags.test(pcapfs::flags::PROCESSED)) {
             stbuf->st_size = f_p->getFilesizeProcessed();

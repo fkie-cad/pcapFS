@@ -8,7 +8,6 @@
 
 #include "offsets.h"
 #include "logging.h"
-#include "virtualfiles/serverfile.h"
 
 
 namespace pcapfs_filesystem {
@@ -67,6 +66,25 @@ namespace pcapfs_filesystem {
         return current;
     }
 
+    pcapfs_filesystem::DirTreeNode *
+    DirectoryLayout::getOrCreateSubdirForServerFile(DirTreeNode *current, const pcapfs::ServerFilePtr &serverFile) {
+        const std::string dirname = serverFile->getFilename();
+        if (current->subdirs.count(dirname)) {
+            current = current->subdirs.at(dirname);
+        } else {
+            DirTreeNode *parent_backup = current;
+            current->subdirs[dirname] = new DirTreeNode;
+            current = current->subdirs.at(dirname);
+            current->dirname = dirname;
+            current->accessTime = serverFile->getAccessTime();
+            current->changeTime = serverFile->getChangeTime();
+            current->modifyTime = serverFile->getModifyTime();
+            current->parent = parent_backup;
+        }
+        return current;
+
+    }
+
 
     void DirectoryLayout::initRoot() {
         ROOT = new DirTreeNode;
@@ -122,39 +140,54 @@ namespace pcapfs_filesystem {
 
                 if (serverFilePtr->isDirectory && current->subdirs.count(serverFilePtr->getFilename()) == 0) {
                     // serverfile is a directory. Add it as new DirTreeNode if not already present in subdirs of current node
-                    current = getOrCreateSubdir(current, serverFilePtr->getFilename());
+                    current = getOrCreateSubdirForServerFile(current, serverFilePtr);
                     LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " as directory to tree node " << current->dirname;
                 } else if (!serverFilePtr->isDirectory) {
                     // add server file as regular file
                     current->dirfiles.emplace(serverFilePtr->getFilename(), serverFilePtr);
                     LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " to DirTreeNode " << current->dirname;
                 }
+
+                // update timestamps for serverfile dirs
+                DirTreeNode *temp = current;
+                const pcapfs::TimePoint minTime = pcapfs::TimePoint::min();
+                while (temp != ROOT) {
+                    if (temp->parent->accessTime == minTime)
+                        temp->parent->accessTime = temp->accessTime;
+                    if (temp->parent->modifyTime == minTime)
+                        temp->parent->modifyTime = temp->modifyTime;
+                    if (temp->parent->changeTime  == pcapfs::TimePoint::max())
+                        temp->parent->changeTime = temp->changeTime;
+                    temp = temp->parent;
+                }
+
             } else {
                 //TODO: implement new map for mapping from file path -> IndexPosition
                 current->dirfiles.emplace(file->getFilename(), file);
-            }
 
-            //TODO: does this make sense?
-            DirTreeNode *temp = current;
-            if (current->timestamp < file->getTimestamp()) {
-                current->timestamp = file->getTimestamp();
-                while (temp != ROOT) {
-                    if (temp->parent->timestamp < temp->timestamp) {
-                        temp->parent->timestamp = temp->timestamp;
-                        temp = temp->parent;
-                    } else {
-                        break;
+                DirTreeNode *temp = current;
+                if (current->accessTime < file->getTimestamp()) {
+                    current->accessTime = file->getTimestamp();
+                    current->modifyTime = file->getTimestamp();
+                    while (temp != ROOT) {
+                        if (temp->parent->accessTime < temp->accessTime) {
+                            temp->parent->modifyTime = temp->modifyTime;
+                            temp->parent->accessTime = temp->accessTime;
+                            temp = temp->parent;
+                        } else {
+                            break;
+                        }
                     }
                 }
-            }
-            if (current->timestampOldest > file->getTimestamp()) {
-                current->timestampOldest = file->getTimestamp();
-                while (temp != ROOT) {
-                    if (temp->parent->timestamp > temp->timestamp) {
-                        temp->parent->timestampOldest = temp->timestampOldest;
-                        temp = temp->parent;
-                    } else {
-                        break;
+                if (current->changeTime > file->getTimestamp()) {
+                    current->changeTime = file->getTimestamp();
+                    while (temp != ROOT) {
+                        if (temp->parent->accessTime > temp->accessTime) {
+                            temp->parent->changeTime = temp->changeTime;
+                            temp = temp->parent;
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
