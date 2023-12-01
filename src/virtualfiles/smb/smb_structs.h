@@ -12,6 +12,9 @@
 namespace pcapfs {
     namespace smb {
 
+        // map treeId - tree name
+        typedef std::unordered_map<uint32_t, std::string> SmbTreeNames;
+
         // Identifier for an SMB server, used as part of ServerEndpointTree and as key for treeId-treename mapping in SmbManager
         struct ServerEndpoint {
             explicit ServerEndpoint(const FilePtr &filePtr) {
@@ -45,17 +48,17 @@ namespace pcapfs {
 
         // Identifier for an SMB server tree, used as key for managing the extracted file information in SmbManager
         struct ServerEndpointTree {
-            ServerEndpointTree(const ServerEndpoint &endp, uint32_t inTreeId) : serverEndpoint(endp), treeId(inTreeId) {}
+            ServerEndpointTree(const ServerEndpoint &endp, const std::string &inTreeName) : serverEndpoint(endp), treeName(inTreeName) {}
             ServerEndpoint serverEndpoint;
-            uint32_t treeId = 0;
+            std::string treeName = "";
 
             bool operator==(const ServerEndpointTree &endpt) const {
-                return endpt.serverEndpoint == serverEndpoint && endpt.treeId == treeId;
+                return endpt.serverEndpoint == serverEndpoint && endpt.treeName == treeName;
             };
 
             bool operator<(const ServerEndpointTree &endpt) const {
                 if (serverEndpoint == endpt.serverEndpoint)
-                    return treeId < endpt.treeId;
+                    return treeName < endpt.treeName;
                 else
                     return serverEndpoint < endpt.serverEndpoint;
             };
@@ -77,6 +80,30 @@ namespace pcapfs {
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
             explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr), serverEndpoint(filePtr) {}
+
+            void addTreeNameMapping(uint32_t treeId) {
+                if (currentRequestedTree.empty()) {
+                    treeNames[treeId] = "treeId_" + std::to_string(treeId);
+                } else {
+                    if (std::all_of(currentRequestedTree.begin(), currentRequestedTree.end(), [](const unsigned char c ){ return c == 0x5C; }))
+                        return;
+                    if (currentRequestedTree.back() == 0x5C) {
+                        // chop off ending backslash(es)
+                        const auto it = std::find_if(currentRequestedTree.rbegin(), currentRequestedTree.rend(),
+                                                        [](const unsigned char c){ return c != 0x5C; });
+                        treeNames[treeId] = std::string(currentRequestedTree.begin(), it.base());
+                    } else
+                        treeNames[treeId] = currentRequestedTree;
+                }
+            }
+
+            ServerEndpointTree const getServerEndpointTree() {
+                if (treeNames.count(currentTreeId) == 0) {
+                    addTreeNameMapping(currentTreeId);
+                }
+                return ServerEndpointTree(serverEndpoint, treeNames[currentTreeId]);
+            }
+
             FilePtr offsetFile = nullptr;
             ServerEndpoint serverEndpoint;
             uint16_t dialect = 0;
@@ -85,6 +112,7 @@ namespace pcapfs {
             std::shared_ptr<QueryDirectoryRequestData> currentQueryDirectoryRequestData = nullptr;
             uint32_t currentTreeId = 0;
             std::string currentRequestedTree = "";
+            SmbTreeNames treeNames;
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
 

@@ -3,13 +3,12 @@
 #include "../smb_serverfile.h"
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext) {
+void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext) {
     // update server files with file infos obtained from create messages
     LOG_TRACE << "updating SMB server files with create response infos";
 
-    const ServerEndpointTree endpointTree(smbContext->serverEndpoint, smbContext->currentTreeId);
-
-    const std::string filePath = constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId) + "\\" + smbContext->currentCreateRequestFile;
+    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const std::string filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile;
 
     // update fileId-filename mapping
     fileHandles[endpointTree][createResponse->fileId] = filePath;
@@ -38,7 +37,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
 }
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, const SmbContextPtr &smbContext) {
+void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext) {
     // update server files with file infos obtained from query info messages
     LOG_TRACE << "updating SMB server files with query info response infos";
 
@@ -47,7 +46,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_BASIC_INFORMATION ||
         smbContext-> currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_NETWORK_OPEN_INFORMATION)) {
 
-        const ServerEndpointTree endpointTree(smbContext->serverEndpoint, smbContext->currentTreeId);
+        const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
         std::string filePath = "";
         if (fileHandles[endpointTree].find(smbContext->currentQueryInfoRequestData->fileId) != fileHandles[endpointTree].end()) {
             // filePath already present in fileHandles-map of smbContext
@@ -56,7 +55,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             // filePath not present in fileHandles-map of smbContext
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION && queryInfoResponse->filename != "") {
                 // filename can be determined when we have FILE_ALL_INFORMATION
-                filePath = constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId) + "\\";
+                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\";
 
                 // this could produce wrong result
                 if (smbContext->currentCreateRequestFile != "")
@@ -96,11 +95,11 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
 }
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext) {
+void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext) {
     // update server files with file infos obtained from query directory messages
     LOG_TRACE << "updating SMB server files with query directory response infos";
 
-    const ServerEndpointTree endpointTree(smbContext->serverEndpoint, smbContext->currentTreeId);
+    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
     bool directoryNameKnown = (fileHandles[endpointTree].find(smbContext->currentQueryDirectoryRequestData->fileId) != fileHandles[endpointTree].end());
 
     for (const std::shared_ptr<FileInformation> &fileInfo : fileInfos) {
@@ -109,10 +108,10 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
         else if (smbContext->currentCreateRequestFile != "")
             // this could produce wrong result
-            filePath = constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId) + "\\" +
+            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" +
                         smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
         else
-            filePath = constructTreeString(smbContext->serverEndpoint, smbContext->currentTreeId) + "\\" + fileInfo->filename;
+            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + fileInfo->filename;
 
         SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
         if (!serverFilePtr) {
@@ -139,28 +138,13 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
 }
 
 
-void pcapfs::smb::SmbManager::addTreeNameMapping(const ServerEndpoint &endp, uint32_t treeId, const std::string &treeName) {
-    if (treeName.empty() || std::all_of(treeName.begin(), treeName.end(), [](const unsigned char c ){ return c == 0x5C; }))
-        return;
-    if (treeName.back() == 0x5C) {
-        // chop off ending backslash(es)
-        const auto it = std::find_if(treeName.rbegin(), treeName.rend(), [](const unsigned char c){ return c != 0x5C; });
-        treeNames[endp][treeId] = std::string(treeName.begin(), it.base());
-    } else
-        treeNames[endp][treeId] = treeName;
+pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const SmbContextPtr &smbContext) {
+    return fileHandles[smbContext->getServerEndpointTree()];
 }
 
 
-std::string const pcapfs::smb::SmbManager::constructTreeString(const ServerEndpoint &endp, uint32_t treeId) {
-    if (treeNames[endp].find(treeId) != treeNames[endp].end())
-        return treeNames[endp][treeId];
-    else
-        return "treeId_" + std::to_string(treeId);
-}
-
-
-pcapfs::SmbServerFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, const std::shared_ptr<smb::SmbContext> &smbContext) {
-    const ServerEndpointTree endpt(smbContext->serverEndpoint, smbContext->currentTreeId);
+pcapfs::SmbServerFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext) {
+    const ServerEndpointTree endpt = smbContext->getServerEndpointTree();
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
         LOG_TRACE << "parent directory is already known as an SmbFile";
         return serverFiles[endpt][filePath];

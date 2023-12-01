@@ -3,14 +3,13 @@
 
 #include "smb_messages.h"
 #include "../smb_serverfile.h"
+#include "smb_structs.h"
 
 namespace pcapfs {
     namespace smb {
 
         // map filename - FilePtr
         typedef std::unordered_map<std::string, SmbServerFilePtr> SmbServerFiles;
-        // map treeId - tree name
-        typedef std::unordered_map<uint32_t, std::string> SmbTreeNames;
         // map guid - filename
         typedef std::unordered_map<std::string, std::string> SmbFileHandles;
 
@@ -24,25 +23,21 @@ namespace pcapfs {
             SmbManager(SmbManager const&) = delete;
             void operator=(SmbManager const&) = delete;
 
-            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext);
-            void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, const SmbContextPtr &smbContext);
-            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, const SmbContextPtr &smbContext);
+            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext);
+            void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext);
+            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext);
             std::vector<FilePtr> const getServerFiles();
-            SmbServerFilePtr const getAsParentDirFile(const std::string &filePath, const std::shared_ptr<smb::SmbContext> &smbContext);
+            SmbServerFilePtr const getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext);
 
-            void addTreeNameMapping(const ServerEndpoint &endp, uint32_t treeId, const std::string &treeName);
 
-            SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext) {
-                                                return fileHandles[ServerEndpointTree(smbContext->serverEndpoint, smbContext->currentTreeId)]; };
+            SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
 
             uint64_t getNewId();
 
         private:
             SmbManager() {}
-            std::string const constructTreeString(const ServerEndpoint &endp, uint32_t treeId);
             std::map<ServerEndpointTree, SmbServerFiles> serverFiles;
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
-            std::map<ServerEndpoint, SmbTreeNames> treeNames;
             uint64_t idCounter = 0;
         };
     }

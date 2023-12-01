@@ -38,14 +38,9 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
                 case Smb2Commands::SMB2_TREE_CONNECT:
                     if (isResponse) {
-                        if (!smbContext->currentRequestedTree.empty()) {
-                            // TODO: what to do with ASYNC messages?
-                            SmbManager::getInstance().addTreeNameMapping(smbContext->serverEndpoint, packetHeader->treeId,
-                                                                            smbContext->currentRequestedTree);
-                        } else {
-                            SmbManager::getInstance().addTreeNameMapping(smbContext->serverEndpoint, packetHeader->treeId,
-                                                                            "treeId_" + std::to_string(packetHeader->treeId));
-                        }
+                        // TODO: what to do with ASYNC messages?
+                        smbContext->addTreeNameMapping(packetHeader->treeId);
+                        smbContext->currentRequestedTree = "";
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
                     } else {
                         std::shared_ptr<TreeConnectRequest> treeConnectRequest =
