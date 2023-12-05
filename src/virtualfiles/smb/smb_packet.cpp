@@ -41,7 +41,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         // TODO: what to do with ASYNC messages?
                         smbContext->addTreeNameMapping(packetHeader->treeId);
                         // add tree name as SmbServerFile
-                        SmbManager::getInstance().getAsParentDirFile(smbContext->currentRequestedTree, smbContext);
+                        if (smbContext->treeNames.count(packetHeader->treeId))
+                            SmbManager::getInstance().getAsParentDirFile(smbContext->treeNames[packetHeader->treeId], smbContext);
                         smbContext->currentRequestedTree = "";
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
                     } else {
