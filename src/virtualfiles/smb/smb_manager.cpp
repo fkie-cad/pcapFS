@@ -104,7 +104,37 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
 
     for (const std::shared_ptr<FileInformation> &fileInfo : fileInfos) {
         std::string filePath = "";
-        if (directoryNameKnown)
+        if (fileInfo->filename == "." || fileInfo->filename == "..") {
+            if (directoryNameKnown)
+                filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId);
+            else if (smbContext->currentCreateRequestFile != "") {
+                // this could produce wrong result
+                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile;
+            } else {
+                // real file path of "." or ".." could not be determined
+                continue;
+            }
+
+            if (fileInfo->filename == ".." && serverFiles.count(endpointTree) && serverFiles[endpointTree].count(filePath) &&
+                serverFiles[endpointTree][filePath]) {
+                // analyze FileInfo of parent directory only when the parent directory is already known as SmbServerFile
+                const SmbServerFilePtr tmpServerFilePtr = serverFiles[endpointTree][filePath];
+                if (tmpServerFilePtr->getParentDir()) {
+                    const size_t backslashPos = filePath.rfind("\\");
+                    if (backslashPos != std::string::npos) {
+                        filePath = std::string(filePath.begin(), filePath.begin()+backslashPos);
+                    } else
+                        continue;
+                } else {
+                    // real file path of ".." is beyond root
+                    continue;
+                }
+            } else {
+                // real file path of ".." could not be determined
+                continue;
+            }
+        }
+        else if (directoryNameKnown)
             filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
         else if (smbContext->currentCreateRequestFile != "")
             // this could produce wrong result
