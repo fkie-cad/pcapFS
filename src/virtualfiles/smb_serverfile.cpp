@@ -40,7 +40,7 @@ void pcapfs::SmbServerFile::initializeFilePtr(smb::SmbContextPtr &smbContext, co
         LOG_TRACE << "filename set: " << std::string(filePath.begin()+backslashPos+1, filePath.end());
         const std::string remainder(filePath.begin(), filePath.begin()+backslashPos);
 
-        if(!remainder.empty()) {
+        if(!remainder.empty() && remainder != "\\") {
             LOG_TRACE << "detected subdir(s)";
             LOG_TRACE << "remainder: " << remainder;
             parentDir = smb::SmbManager::getInstance().getAsParentDirFile(remainder, smbContext);

@@ -30,10 +30,10 @@ namespace pcapfs {
         bool isDirectory;
 
     protected:
-        TimePoint accessTime;
-        TimePoint modifyTime;
-        TimePoint changeTime;
-        TimePoint birthTime;
+        TimePoint accessTime = TimePoint{};
+        TimePoint modifyTime = TimePoint{};
+        TimePoint changeTime = TimePoint{};
+        TimePoint birthTime = TimePoint{};
         uint64_t parentDirId = 0;
         FilePtr parentDir = nullptr;
     };
