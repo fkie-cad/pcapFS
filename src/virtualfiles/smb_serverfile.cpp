@@ -53,7 +53,7 @@ void pcapfs::SmbServerFile::initializeFilePtr(smb::SmbContextPtr &smbContext, co
         parentDir = nullptr;
     }
 
-    setTimestamp(accessTime);
+    setTimestamp(changeTime);
     setProperty("protocol", "smb");
     setFiletype("smbserverfile");
     setOffsetType(smbContext->offsetFile->getFiletype());

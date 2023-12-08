@@ -21,15 +21,16 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
         serverFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
-        const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
-        if (lastAccessTime > serverFilePtr->getAccessTime()) {
+        // for NTFS timestamps, changeTime is the most sensitive one ->
+        const TimePoint lastChangeTime = winFiletimeToTimePoint(createResponse->metaData->changeTime);
+        if (lastChangeTime > serverFilePtr->getChangeTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
-            serverFilePtr->setTimestamp(lastAccessTime);
+            serverFilePtr->setTimestamp(lastChangeTime);
             serverFilePtr->setFilesizeRaw(createResponse->metaData->filesize);
             serverFilePtr->setFilesizeProcessed(createResponse->metaData->filesize);
-            serverFilePtr->setAccessTime(lastAccessTime);
+            serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastAccessTime));
             serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
-            serverFilePtr->setChangeTime(smb::winFiletimeToTimePoint(createResponse->metaData->changeTime));
+            serverFilePtr->setChangeTime(lastChangeTime);
         }
     }
 
@@ -85,15 +86,15 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             serverFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
-            if (lastAccessTime > serverFilePtr->getAccessTime()) {
+            const TimePoint lastChangeTime = winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime);
+            if (lastChangeTime > serverFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                serverFilePtr->setTimestamp(lastAccessTime);
+                serverFilePtr->setTimestamp(lastChangeTime);
                 serverFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
                 serverFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
-                serverFilePtr->setAccessTime(lastAccessTime);
+                serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime));
                 serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
-                serverFilePtr->setChangeTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime));
+                serverFilePtr->setChangeTime(lastChangeTime);
             }
         }
 
@@ -158,15 +159,15 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             serverFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
-            if (lastAccessTime > serverFilePtr->getAccessTime()) {
+            const TimePoint lastChangeTime = winFiletimeToTimePoint(fileInfo->metaData->changeTime);
+            if (lastChangeTime > serverFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                serverFilePtr->setTimestamp(lastAccessTime);
+                serverFilePtr->setTimestamp(lastChangeTime);
                 serverFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
                 serverFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
-                serverFilePtr->setAccessTime(lastAccessTime);
+                serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime));
                 serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
-                serverFilePtr->setChangeTime(smb::winFiletimeToTimePoint(fileInfo->metaData->changeTime));
+                serverFilePtr->setChangeTime(lastChangeTime);
             }
         }
 

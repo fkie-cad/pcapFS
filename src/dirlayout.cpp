@@ -157,7 +157,7 @@ namespace pcapfs_filesystem {
                         temp->parent->accessTime = temp->accessTime;
                     if (temp->parent->modifyTime == minTime || temp->parent->modifyTime == zeroTimestamp)
                         temp->parent->modifyTime = temp->modifyTime;
-                    if (temp->parent->changeTime  == pcapfs::TimePoint::max() || temp->parent->changeTime == zeroTimestamp)
+                    if (temp->parent->changeTime == pcapfs::TimePoint::max() || temp->parent->changeTime == zeroTimestamp)
                         temp->parent->changeTime = temp->changeTime;
                     temp = temp->parent;
                 }
