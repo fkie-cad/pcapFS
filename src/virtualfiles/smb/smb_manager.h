@@ -28,10 +28,7 @@ namespace pcapfs {
             void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext);
             std::vector<FilePtr> const getServerFiles();
             SmbServerFilePtr const getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext);
-
-
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
-
             uint64_t getNewId();
 
         private:

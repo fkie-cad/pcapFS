@@ -41,7 +41,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         // TODO: what to do with ASYNC messages?
                         smbContext->addTreeNameMapping(packetHeader->treeId);
                         // add tree name as SmbServerFile
-                        if (smbContext->treeNames.count(packetHeader->treeId))
+                        if (smbContext->createServerFiles && smbContext->treeNames.count(packetHeader->treeId))
                             SmbManager::getInstance().getAsParentDirFile(smbContext->treeNames[packetHeader->treeId], smbContext);
                         smbContext->currentRequestedTree = "";
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
@@ -130,7 +130,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                     std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
                                         smbContext->currentQueryDirectoryRequestData->fileInfoClass);
 
-                                if (!queryDirectoryResponse->fileInfos.empty())
+                                if (smbContext->createServerFiles && !queryDirectoryResponse->fileInfos.empty())
                                     SmbManager::getInstance().updateServerFiles(queryDirectoryResponse->fileInfos, smbContext);
                                 smbContext->currentQueryDirectoryRequestData = nullptr;
                                 message = queryDirectoryResponse;
@@ -209,7 +209,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 default:
-                    message = std::make_shared<SmbMessage>(&data[64], len - 64);
+                    message = std::make_shared<SmbMessage>(len - 64);
                     parsingFailed = true;
             }
         } catch (const SmbSizeError &err) {
@@ -222,18 +222,18 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     isErrorResponse = true;
                 } catch (const SmbError &smbErr) {
                     LOG_WARNING << "Failed to parse SMB2 Message: " << smbErr.what();
-                    message = std::make_shared<SmbMessage>(&data[64], len - 64);
+                    message = std::make_shared<SmbMessage>(len - 64);
                     parsingFailed = true;
                 }
             } else {
                 LOG_WARNING << "Failed to parse SMB2 Message: " << err.what();
-                message = std::make_shared<SmbMessage>(&data[64], len - 64);
+                message = std::make_shared<SmbMessage>(len - 64);
                 parsingFailed = true;
             }
 
         } catch (const SmbError &err) {
             LOG_WARNING << "Failed to parse SMB2 Message: " << err.what();
-            message = std::make_shared<SmbMessage>(&data[64], len - 64);
+            message = std::make_shared<SmbMessage>(len - 64);
             parsingFailed = true;
         }
         size = 64 + message->totalSize;
@@ -249,7 +249,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         if (len < 52 + transformHeader->messageSize)
             throw SmbError("Invalid SMB2 Transform Header");
 
-        message = std::make_shared<SmbMessage>(&data[52], transformHeader->messageSize);
+        message = std::make_shared<SmbMessage>(transformHeader->messageSize);
         size = 52 + message->totalSize;
         header = transformHeader;
         headerType = HeaderType::SMB2_TRANSFORM_HEADER;
@@ -266,8 +266,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
             if (16 + compressionTransformHeaderUnchained->offset > len)
                 throw SmbError("Invalid SMB2 Compression Transform Header");
 
-            message = std::make_shared<SmbMessage>(&data[16 + compressionTransformHeaderUnchained->offset],
-                                    len - (16 + compressionTransformHeaderUnchained->offset));
+            message = std::make_shared<SmbMessage>(len - (16 + compressionTransformHeaderUnchained->offset));
             size = 16 + compressionTransformHeaderUnchained->offset + message->totalSize;
             header = compressionTransformHeaderUnchained;
             headerType = HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_UNCHAINED;
@@ -280,10 +279,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                 throw SmbError("Invalid SMB2 Compression Transform Header");
 
             if (compressionTransformHeaderChained->usesOriginalPayloadSizeField()) {
-                message = std::make_shared<SmbMessage>(&data[16 + 4], compressionTransformHeaderChained->length - 4);
+                message = std::make_shared<SmbMessage>(compressionTransformHeaderChained->length - 4);
                 size = 16 + 4 + message->totalSize;
             } else {
-                message = std::make_shared<SmbMessage>(&data[16], compressionTransformHeaderChained->length);
+                message = std::make_shared<SmbMessage>(compressionTransformHeaderChained->length);
                 size = 16 + message->totalSize;
             }
 
@@ -302,7 +301,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         isResponse = packetHeader->flags & Smb1HeaderFlags::SMB_FLAGS_REPLY;
         header = packetHeader;
         headerType = HeaderType::SMB1_PACKET_HEADER;
-        message = std::make_shared<SmbMessage>(&data[32], len - 32);
+        message = std::make_shared<SmbMessage>(len - 32);
         size = 32 + message->totalSize;
 
     } else {

@@ -12,17 +12,16 @@ namespace pcapfs {
 
         class SmbMessage {
         public:
-            SmbMessage() : rawData(0) {}
-            SmbMessage(const uint8_t* data, size_t len) : rawData(data, data+len), totalSize(len) {};
-            Bytes rawData;
+            explicit SmbMessage(size_t len) : totalSize(len) {};
             size_t totalSize = 0;
         };
 
 
         class ErrorResponse : public SmbMessage {
         public:
-            ErrorResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            ErrorResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Error Response");
 
@@ -42,8 +41,9 @@ namespace pcapfs {
 
         class NegotiateRequest : public SmbMessage {
         public:
-            NegotiateRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            NegotiateRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 36)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Negotiate Request");
 
@@ -51,7 +51,7 @@ namespace pcapfs {
                 if (dialectCount > 5 || (size_t)(2*dialectCount + 36) > len)
                     throw SmbError("Invalid amount of dialects in SMB2 Negotiate Request");
 
-                if (contains311Dialect(dialectCount)) {
+                if (contains311Dialect(dialectCount, rawData)) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(28);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(32);
                     if ((size_t)(negotiateContextOffset + (8*negotiateContextCount) - 64) > len)
@@ -64,7 +64,7 @@ namespace pcapfs {
             }
 
         private:
-            bool contains311Dialect(uint16_t dialectCount) {
+            bool contains311Dialect(uint16_t dialectCount, const Bytes &rawData) {
                 for (int pos = 36; pos < 36 + (dialectCount*2) ; pos += 2) {
                     if (*(uint16_t*) &rawData.at(pos) == Version::SMB_VERSION_3_1_1)
                         return true;
@@ -76,8 +76,9 @@ namespace pcapfs {
 
         class NegotiateResponse : public SmbMessage {
         public:
-            NegotiateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            NegotiateResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 65)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Negotiate Response");
 
@@ -104,8 +105,9 @@ namespace pcapfs {
 
         class SessionSetupRequest : public SmbMessage {
         public:
-            SessionSetupRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            SessionSetupRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 25)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Session Setup Request");
 
@@ -125,8 +127,9 @@ namespace pcapfs {
 
         class SessionSetupResponse : public SmbMessage {
         public:
-            SessionSetupResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            SessionSetupResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Session Setup Response");
 
@@ -146,8 +149,9 @@ namespace pcapfs {
 
         class TreeConnectRequest : public SmbMessage {
         public:
-            TreeConnectRequest(const uint8_t* data, size_t len, uint16_t dialect) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            TreeConnectRequest(const uint8_t* data, size_t len, uint16_t dialect) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Tree Connect Request");
 
@@ -195,8 +199,9 @@ namespace pcapfs {
 
         class TreeConnectResponse : public SmbMessage {
         public:
-            TreeConnectResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            TreeConnectResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 16)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Tree Connect Response");
 
@@ -207,8 +212,9 @@ namespace pcapfs {
 
         class CreateRequest : public SmbMessage {
         public:
-            CreateRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            CreateRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 57)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Create Request");
 
@@ -252,8 +258,9 @@ namespace pcapfs {
 
         class CreateResponse : public SmbMessage {
         public:
-            CreateResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            CreateResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 89)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Create Response");
 
@@ -288,8 +295,9 @@ namespace pcapfs {
 
         class CloseRequest : public SmbMessage {
         public:
-            CloseRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            CloseRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 24)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Close Request");
 
@@ -302,7 +310,7 @@ namespace pcapfs {
 
         class CloseResponse : public SmbMessage {
         public:
-            CloseResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            CloseResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 60)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Close Response");
@@ -314,7 +322,7 @@ namespace pcapfs {
 
         class FlushRequest : public SmbMessage {
         public:
-            FlushRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            FlushRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 24)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Flush Request");
@@ -326,8 +334,9 @@ namespace pcapfs {
 
         class ReadRequest : public SmbMessage {
         public:
-            ReadRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            ReadRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 49)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Read Request");
 
@@ -353,8 +362,9 @@ namespace pcapfs {
 
         class ReadResponse : public SmbMessage {
         public:
-            ReadResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            ReadResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 17)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Read Response");
 
@@ -374,8 +384,9 @@ namespace pcapfs {
 
         class WriteRequest : public SmbMessage {
         public:
-            WriteRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            WriteRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 49)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Write Request");
 
@@ -407,7 +418,7 @@ namespace pcapfs {
 
         class WriteResponse : public SmbMessage {
         public:
-            WriteResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            WriteResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 17)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Write Response");
@@ -419,7 +430,7 @@ namespace pcapfs {
 
         class OplockBreakMessage : public SmbMessage {
         public:
-            OplockBreakMessage(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            OplockBreakMessage(const uint8_t* data, size_t len) : SmbMessage(len) {
                 // includes Oplock Break Notification, Acknowledgement and Response
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 24)
@@ -432,8 +443,9 @@ namespace pcapfs {
 
         class LockRequest : public SmbMessage {
         public:
-            LockRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            LockRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 48)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Lock Request");
 
@@ -451,8 +463,9 @@ namespace pcapfs {
 
         class IoctlRequest : public SmbMessage {
         public:
-            IoctlRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            IoctlRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 57)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Ioctl Request");
 
@@ -482,8 +495,9 @@ namespace pcapfs {
 
         class IoctlResponse : public SmbMessage {
         public:
-            IoctlResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            IoctlResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 49)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Ioctl Response");
 
@@ -503,8 +517,9 @@ namespace pcapfs {
 
         class QueryDirectoryRequest : public SmbMessage {
         public:
-            QueryDirectoryRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            QueryDirectoryRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 33)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Directory Request");
 
@@ -535,8 +550,9 @@ namespace pcapfs {
 
         class QueryDirectoryResponse : public SmbMessage {
         public:
-            QueryDirectoryResponse(const uint8_t* data, size_t len, uint8_t fileInfoClass) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            QueryDirectoryResponse(const uint8_t* data, size_t len, uint8_t fileInfoClass) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Directory Response");
 
@@ -585,7 +601,7 @@ namespace pcapfs {
 
         class ChangeNotifyRequest: public SmbMessage {
         public:
-            ChangeNotifyRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            ChangeNotifyRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 32)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Change Notify Request");
@@ -597,8 +613,9 @@ namespace pcapfs {
 
         class ChangeNotifyResponse : public SmbMessage {
         public:
-            ChangeNotifyResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            ChangeNotifyResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Change Notify Response");
 
@@ -618,8 +635,9 @@ namespace pcapfs {
 
         class QueryInfoRequest : public SmbMessage {
         public:
-            QueryInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            QueryInfoRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 41)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Info Request");
 
@@ -664,8 +682,9 @@ namespace pcapfs {
 
         class QueryInfoResponse : public SmbMessage {
         public:
-            QueryInfoResponse(const uint8_t* data, size_t len, const std::shared_ptr<QueryInfoRequestData> &queryInfoRequestData) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            QueryInfoResponse(const uint8_t* data, size_t len, const std::shared_ptr<QueryInfoRequestData> &queryInfoRequestData) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 9)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Query Info Response");
 
@@ -742,8 +761,9 @@ namespace pcapfs {
 
         class SetInfoRequest : public SmbMessage {
         public:
-            SetInfoRequest(const uint8_t* data, size_t len) : SmbMessage(data, len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+            SetInfoRequest(const uint8_t* data, size_t len) : SmbMessage(len) {
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 33)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Set Info Request");
 
@@ -788,7 +808,7 @@ namespace pcapfs {
 
         class SetInfoResponse : public SmbMessage {
         public:
-            SetInfoResponse(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            SetInfoResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
                 const uint16_t structureSize = *(uint16_t*) data;
                 if (structureSize != 2)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Set Info Response");
@@ -800,7 +820,7 @@ namespace pcapfs {
 
         class FourByteMessage : public SmbMessage {
         public:
-            FourByteMessage(const uint8_t* data, size_t len) : SmbMessage(data, len) {
+            FourByteMessage(const uint8_t* data, size_t len) : SmbMessage(len) {
                 // includes Logoff Request/Response, Tree Disconnect Request/Response, Flush Response,
                 // Lock Response, Echo Request/Response and  Cancel Request
                 const uint16_t structureSize = *(uint16_t*) data;

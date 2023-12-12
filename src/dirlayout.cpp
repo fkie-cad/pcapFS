@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <numeric>
-
 #include <boost/algorithm/string/split.hpp>
 
 #include "offsets.h"

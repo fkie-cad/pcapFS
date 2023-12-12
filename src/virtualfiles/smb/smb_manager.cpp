@@ -12,6 +12,8 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
 
     // update fileId-filename mapping
     fileHandles[endpointTree][createResponse->fileId] = filePath;
+    if (!smbContext->createServerFiles)
+        return;
 
     SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
     if (!serverFilePtr) {
@@ -21,7 +23,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
         serverFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
-        // for NTFS timestamps, changeTime is the most sensitive one ->
+        // for NTFS timestamps, changeTime is the most sensitive one
         const TimePoint lastChangeTime = winFiletimeToTimePoint(createResponse->metaData->changeTime);
         if (lastChangeTime > serverFilePtr->getChangeTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
@@ -37,7 +39,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     serverFiles[endpointTree][filePath] = serverFilePtr;
 
     if (!createResponse->metaData->isDirectory) {
-        // this prevents possible wrong file path compositions in the other updateServerFiles-functions in the case that
+        // this prevents possible wrong file path compositions in the other updateServerFiles functions in the case that
         // currentCreateRequestFile is chosen as parent directory path of the respective server files although
         // it isn't even a directory
         smbContext->currentCreateRequestFile = "";
@@ -77,6 +79,9 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
                 return;
             }
         }
+
+        if (!smbContext->createServerFiles)
+            return;
 
         SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
         if (!serverFilePtr) {

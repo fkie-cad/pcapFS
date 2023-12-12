@@ -29,7 +29,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
     bool reachedOffsetAfterNbssSetup = false;
     std::stringstream ss;
-    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr);
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr, true);
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
     for (unsigned int i = 0; i < numElements; ++i) {
@@ -194,7 +194,6 @@ void pcapfs::SmbFile::fillGlobalProperties(std::shared_ptr<SmbFile> &controlFile
     controlFilePtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
     controlFilePtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
     controlFilePtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    controlFilePtr->setProperty("smbTree", "(controlfiles)");
 }
 
 
@@ -204,26 +203,19 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
                                             [](const auto &elem) { return elem == 0; });
     if(buffer_needs_content == false) {
         LOG_TRACE << "BUFFER HIT for read in SMB control file";
-        assert(buffer.size() == filesizeProcessed);
-        memcpy(buf, (const char*) buffer.data() + startOffset, length);
-
-        if (startOffset + length < filesizeProcessed) {
-            //read till length is ended
-            LOG_TRACE << "File is not done yet. (filesizeProcessed: " << filesizeProcessed << ")";
-            LOG_TRACE << "Length read: " << length;
+        if (buffer.size() >= startOffset + length) {
+            memcpy(buf, (const char*) buffer.data() + startOffset, length);
             return length;
         } else {
-            // read till file end
-            LOG_TRACE << "File is done now. (filesizeProcessed: " << filesizeProcessed << ")";
-            LOG_TRACE << "all processed bytes: " << filesizeProcessed - startOffset;
-            return filesizeProcessed - startOffset;
+            const size_t toRead = buffer.size() - startOffset;
+            memcpy(buf, (const char*) buffer.data() + startOffset, toRead);
+            return toRead;
         }
-
     } else {
         LOG_TRACE << "no buffer hit for read in SMB control file, starting read cascade";
         std::stringstream ss;
         const FilePtr filePtr = idx.get({offsetType, fragments.at(0).id});
-        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr);
+        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr, false);
 
         for (const Fragment fragment: fragments) {
             Bytes rawData(fragment.length);

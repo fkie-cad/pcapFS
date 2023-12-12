@@ -15,7 +15,7 @@ namespace pcapfs {
         // map treeId - tree name
         typedef std::unordered_map<uint32_t, std::string> SmbTreeNames;
 
-        // Identifier for an SMB server, used as part of ServerEndpointTree and as key for treeId-treename mapping in SmbManager
+        // Identifier for an SMB server, used as part of ServerEndpointTree
         struct ServerEndpoint {
             explicit ServerEndpoint(const FilePtr &filePtr) {
                 const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
@@ -71,7 +71,7 @@ namespace pcapfs {
             std::string fileId = "";
         };
 
-        // for memorizing requested file information between query info request and response
+        // for memorizing requested file information between query directory request and response
         struct QueryDirectoryRequestData {
             uint8_t fileInfoClass = 0;
             std::string fileId = "";
@@ -79,21 +79,18 @@ namespace pcapfs {
 
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
-            explicit SmbContext(const FilePtr &filePtr) : offsetFile(filePtr), serverEndpoint(filePtr) {}
+            SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
+                    offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles) {}
 
             void addTreeNameMapping(uint32_t treeId) {
                 if (currentRequestedTree.empty()) {
                     treeNames[treeId] = "treeId_" + std::to_string(treeId);
                 } else {
-                    if (std::all_of(currentRequestedTree.begin(), currentRequestedTree.end(), [](const unsigned char c ){ return c == 0x5C; }))
+                    const std::string sanitizedFilename = sanitizeFilename(currentRequestedTree);
+                    if (sanitizedFilename.empty())
                         return;
-                    if (currentRequestedTree.back() == 0x5C) {
-                        // chop off ending backslash(es)
-                        const auto it = std::find_if(currentRequestedTree.rbegin(), currentRequestedTree.rend(),
-                                                        [](const unsigned char c){ return c != 0x5C; });
-                        treeNames[treeId] = std::string(currentRequestedTree.begin(), it.base());
-                    } else
-                        treeNames[treeId] = currentRequestedTree;
+                    else
+                        treeNames[treeId] = sanitizedFilename;
                 }
             }
 
@@ -113,6 +110,7 @@ namespace pcapfs {
             uint32_t currentTreeId = 0;
             std::string currentRequestedTree = "";
             SmbTreeNames treeNames;
+            bool createServerFiles = false;
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
 
