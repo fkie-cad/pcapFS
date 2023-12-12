@@ -12,6 +12,14 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
 
     // update fileId-filename mapping
     fileHandles[endpointTree][createResponse->fileId] = filePath;
+
+    if (!createResponse->metaData->isDirectory) {
+        // this prevents possible wrong file path compositions in the other updateServerFiles functions in the case that
+        // currentCreateRequestFile is chosen as parent directory path of the respective server files although
+        // it isn't even a directory
+        smbContext->currentCreateRequestFile = "";
+    }
+
     if (!smbContext->createServerFiles)
         return;
 
@@ -37,13 +45,6 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     }
 
     serverFiles[endpointTree][filePath] = serverFilePtr;
-
-    if (!createResponse->metaData->isDirectory) {
-        // this prevents possible wrong file path compositions in the other updateServerFiles functions in the case that
-        // currentCreateRequestFile is chosen as parent directory path of the respective server files although
-        // it isn't even a directory
-        smbContext->currentCreateRequestFile = "";
-    }
 }
 
 
