@@ -52,12 +52,10 @@ pcapfs::TimePoint pcapfs::smb::winFiletimeToTimePoint(uint64_t winFiletime) {
 
 
 std::string const pcapfs::smb::sanitizeFilename(const std::string &inFilename) {
-    if (std::all_of(inFilename.begin(), inFilename.end(), [](const unsigned char c ){ return c == 0x5C; }))
-        return "";
-    else if (inFilename.back() == 0x5C) {
-        // chop off ending backslash(es)
-        const auto it = std::find_if(inFilename.rbegin(), inFilename.rend(), [](const unsigned char c){ return c != 0x5C; });
-        return std::string(inFilename.begin(), it.base());
-    }
-    return inFilename;
+    // chop off ending backslash(es)
+    const auto it1 = std::find_if(inFilename.rbegin(), inFilename.rend(), [](const unsigned char c){ return c != 0x5C; });
+    std::string temp(inFilename.begin(), it1.base());
+    // chop off leading backslash(es)
+    const auto it2 = std::find_if(temp.begin(), temp.end(), [](const unsigned char c){ return c != 0x5C; });
+    return std::string(it2, temp.end());
 }

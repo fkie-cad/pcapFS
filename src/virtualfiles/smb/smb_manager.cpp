@@ -66,13 +66,8 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
             // filePath not present in fileHandles-map of smbContext
             if (smbContext->currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION && queryInfoResponse->filename != "") {
                 // filename can be determined when we have FILE_ALL_INFORMATION
-                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\";
+                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + queryInfoResponse->filename;
 
-                // this could produce wrong result
-                if (smbContext->currentCreateRequestFile != "")
-                    filePath += smbContext->currentCreateRequestFile + "\\" + queryInfoResponse->filename;
-                else
-                    filePath += queryInfoResponse->filename;
                 // update smbContext so that the mapping between GUID and filename is now known
                 fileHandles[endpointTree][smbContext->currentQueryInfoRequestData->fileId] = filePath;
             } else {
@@ -122,9 +117,12 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             if (directoryNameKnown)
                 filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId);
             else if (smbContext->currentCreateRequestFile != "") {
-                // this could produce wrong result
+                // this case can occur when we have a create request and query directory request for the same file are chained together
+                // (then, the fileId gets known "too late" for us)
+                // => take currentCreateRequestFile
                 filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile;
-            } else {
+            }
+            else {
                 // real file path of "." or ".." could not be determined
                 continue;
             }
@@ -150,12 +148,16 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         }
         else if (directoryNameKnown)
             filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
-        else if (smbContext->currentCreateRequestFile != "")
+        else if (smbContext->currentCreateRequestFile != "") {
+            // this case can occur when we have a create request and query directory request for the same file are chained together
+            // (then, the fileId gets known "too late" for us)
+            // => take currentCreateRequestFile as parent directory
+            // it is ensured that currentCreateRequestFile is a directory
+            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
+        } else {
             // this could produce wrong result
-            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" +
-                        smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
-        else
             filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + fileInfo->filename;
+        }
 
         SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
         if (!serverFilePtr) {
