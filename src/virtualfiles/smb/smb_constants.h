@@ -13,6 +13,8 @@ namespace pcapfs {
         const uint8_t SMB2_MAGIC[4] = {0xFE, 0x53, 0x4D, 0x42};
         const uint8_t SMB1_MAGIC[4] = {0xFF, 0x53, 0x4D, 0x42};
 
+        const std::string CHAINED_FILEID = "ffffffffffffffffffffffffffffffff";
+
         enum Version : uint16_t {
             SMB_VERSION_2_0_2 = 0x0202,
             SMB_VERSION_2_1 = 0x0210,

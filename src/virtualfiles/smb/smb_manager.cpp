@@ -68,12 +68,23 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
                 // filename can be determined when we have FILE_ALL_INFORMATION
                 filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + queryInfoResponse->filename;
 
-                // update smbContext so that the mapping between GUID and filename is now known
-                fileHandles[endpointTree][smbContext->currentQueryInfoRequestData->fileId] = filePath;
+            } else if (smbContext->currentCreateRequestFile != "" && smbContext->currentQueryDirectoryRequestData->fileId == CHAINED_FILEID) {
+                // this case can occur when we have a create request and query info request for the same file are chained together
+                // (then, the fileId gets known "too late" for us)
+                // => take currentCreateRequestFile as file
+                // it is ensured that currentCreateRequestFile is a directory
+                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile;
+            } else if (queryInfoResponse->filename.empty() && queryInfoResponse->metaData->isDirectory) {
+                // probably root directory of the tree
+                // can be wrong
+                filePath = smbContext->treeNames[smbContext->currentTreeId];
             } else {
-                // we cannot determine the filename to the GUID -> return
+                // filePath for fileId can't be derived
                 return;
             }
+
+            // update fileId-filename mapping
+            fileHandles[endpointTree][smbContext->currentQueryInfoRequestData->fileId] = filePath;
         }
 
         if (!smbContext->createServerFiles)
@@ -116,13 +127,12 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         if (fileInfo->filename == "." || fileInfo->filename == "..") {
             if (directoryNameKnown)
                 filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId);
-            else if (smbContext->currentCreateRequestFile != "") {
+            else if (smbContext->currentCreateRequestFile != "" && smbContext->currentQueryDirectoryRequestData->fileId == CHAINED_FILEID) {
                 // this case can occur when we have a create request and query directory request for the same file are chained together
                 // (then, the fileId gets known "too late" for us)
                 // => take currentCreateRequestFile
                 filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile;
-            }
-            else {
+            } else {
                 // real file path of "." or ".." could not be determined
                 continue;
             }
@@ -148,15 +158,19 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
         }
         else if (directoryNameKnown)
             filePath = fileHandles[endpointTree].at(smbContext->currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
-        else if (smbContext->currentCreateRequestFile != "") {
+        else if (smbContext->currentCreateRequestFile != "" && smbContext->currentQueryDirectoryRequestData->fileId == CHAINED_FILEID) {
             // this case can occur when we have a create request and query directory request for the same file are chained together
             // (then, the fileId gets known "too late" for us)
             // => take currentCreateRequestFile as parent directory
             // it is ensured that currentCreateRequestFile is a directory
             filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->currentCreateRequestFile + "\\" + fileInfo->filename;
-        } else {
+        } else if (smbContext->currentCreateRequestFile.empty()) {
+            // probably root directory of the tree
             // this could produce wrong result
             filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + fileInfo->filename;
+        } else {
+            // filePath for fileId can't be derived
+            continue;
         }
 
         SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
