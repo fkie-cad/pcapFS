@@ -495,7 +495,8 @@ namespace pcapfs {
             {0xC0000043, "STATUS_SHARING_VIOLATION"},
             {0xC0000012, "STATUS_WRONG_VOLUME"},
             {0xC000007F, "STATUS_DISK_FULL"},
-            {0xC000019C, "STATUS_FS_DRIVER_REQUIRED"}
+            {0xC000019C, "STATUS_FS_DRIVER_REQUIRED"},
+            {0xC0000225, "STATUS_NOT_FOUND"}
         };
 
         enum CreateDisposition : uint32_t {

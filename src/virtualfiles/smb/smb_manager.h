@@ -23,9 +23,9 @@ namespace pcapfs {
             SmbManager(SmbManager const&) = delete;
             void operator=(SmbManager const&) = delete;
 
-            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext);
-            void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext);
-            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext);
+            void updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId);
+            void updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint64_t messageId);
+            void updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint64_t messageId);
             std::vector<FilePtr> const getServerFiles();
             SmbServerFilePtr const getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext);
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);

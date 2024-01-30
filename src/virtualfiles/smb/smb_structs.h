@@ -82,11 +82,11 @@ namespace pcapfs {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
                     offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles) {}
 
-            void addTreeNameMapping(uint32_t treeId) {
-                if (currentRequestedTree.empty()) {
+            void addTreeNameMapping(uint32_t treeId, uint64_t messageId) {
+                if (requestedTrees.find(messageId) == requestedTrees.end() || requestedTrees.at(messageId).empty()) {
                     treeNames[treeId] = "treeId_" + std::to_string(treeId);
                 } else {
-                    const std::string sanitizedFilename = sanitizeFilename(currentRequestedTree);
+                    const std::string sanitizedFilename = sanitizeFilename(requestedTrees.at(messageId));
                     if (sanitizedFilename.empty())
                         return;
                     else
@@ -96,7 +96,7 @@ namespace pcapfs {
 
             ServerEndpointTree const getServerEndpointTree() {
                 if (treeNames.count(currentTreeId) == 0) {
-                    addTreeNameMapping(currentTreeId);
+                    treeNames[currentTreeId] = "treeId_" + std::to_string(currentTreeId);
                 }
                 return ServerEndpointTree(serverEndpoint, treeNames[currentTreeId]);
             }
@@ -104,11 +104,19 @@ namespace pcapfs {
             FilePtr offsetFile = nullptr;
             ServerEndpoint serverEndpoint;
             uint16_t dialect = 0;
-            std::string currentCreateRequestFile = "";
-            std::shared_ptr<QueryInfoRequestData> currentQueryInfoRequestData = nullptr;
-            std::shared_ptr<QueryDirectoryRequestData> currentQueryDirectoryRequestData = nullptr;
+
+            // map messageId - filename
+            std::map<uint64_t, std::string> createRequestFileNames;
+
+            // map messageId - QueryInfoRequestData
+            std::map<uint64_t, std::shared_ptr<QueryInfoRequestData>> queryInfoRequestData;
+
+            // map messageId - QueryDirectoryRequestData
+            std::map<uint64_t, std::shared_ptr<QueryDirectoryRequestData>> queryDirectoryRequestData;
             uint32_t currentTreeId = 0;
-            std::string currentRequestedTree = "";
+
+            // map messageId - tree name
+            std::map<uint64_t, std::string> requestedTrees;
             SmbTreeNames treeNames;
             bool createServerFiles = false;
         };
