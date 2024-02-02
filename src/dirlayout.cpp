@@ -148,27 +148,60 @@ namespace pcapfs_filesystem {
                 }
 
                 // update timestamps for serverfile dirs
-                DirTreeNode *temp = current;
-                const pcapfs::TimePoint minTime = pcapfs::TimePoint::min();
-                const pcapfs::TimePoint zeroTimestamp = pcapfs::TimePoint{};
-                while (temp != ROOT) {
-                    if (temp->parent->accessTime == minTime || temp->parent->accessTime == zeroTimestamp)
-                        temp->parent->accessTime = temp->accessTime;
-                    if (temp->parent->modifyTime == minTime || temp->parent->modifyTime == zeroTimestamp)
-                        temp->parent->modifyTime = temp->modifyTime;
-                    if (temp->parent->changeTime == pcapfs::TimePoint::max() || temp->parent->changeTime == zeroTimestamp)
-                        temp->parent->changeTime = temp->changeTime;
-                    temp = temp->parent;
+                if (!parentDirs.empty()) {
+                    const std::string rootDirName = parentDirs.front()->getFilename();
+                    if (current->accessTime < serverFilePtr->getAccessTime()) {
+                        current->accessTime = serverFilePtr->getAccessTime();
+                        DirTreeNode *temp = current;
+                        while (temp != ROOT) {
+                            if (temp->parent->accessTime < temp->accessTime) {
+                                temp->parent->accessTime = temp->accessTime;
+                                if (temp->parent->dirname == rootDirName)
+                                    break;
+                                temp = temp->parent;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    if (current->modifyTime < serverFilePtr->getModifyTime()) {
+                        current->modifyTime = serverFilePtr->getModifyTime();
+                        DirTreeNode *temp = current;
+                        while (temp != ROOT) {
+                            if (temp->parent->modifyTime < temp->modifyTime) {
+                                temp->parent->modifyTime = temp->modifyTime;
+                                if (temp->parent->dirname == rootDirName)
+                                    break;
+                                temp = temp->parent;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    if (current->changeTime < serverFilePtr->getChangeTime()) {
+                        current->changeTime = serverFilePtr->getChangeTime();
+                        DirTreeNode *temp = current;
+                        while (temp != ROOT) {
+                            if (temp->parent->changeTime < temp->changeTime) {
+                                temp->parent->changeTime = temp->changeTime;
+                                if (temp->parent->dirname == rootDirName)
+                                    break;
+                                temp = temp->parent;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
                 }
 
             } else {
                 //TODO: implement new map for mapping from file path -> IndexPosition
                 current->dirfiles.emplace(file->getFilename(), file);
 
-                DirTreeNode *temp = current;
                 if (current->accessTime < file->getTimestamp()) {
                     current->accessTime = file->getTimestamp();
                     current->modifyTime = file->getTimestamp();
+                    DirTreeNode *temp = current;
                     while (temp != ROOT) {
                         if (temp->parent->accessTime < temp->accessTime) {
                             temp->parent->modifyTime = temp->modifyTime;
@@ -181,8 +214,9 @@ namespace pcapfs_filesystem {
                 }
                 if (current->changeTime > file->getTimestamp()) {
                     current->changeTime = file->getTimestamp();
+                    DirTreeNode *temp = current;
                     while (temp != ROOT) {
-                        if (temp->parent->accessTime > temp->accessTime) {
+                        if (temp->parent->changeTime > temp->changeTime) {
                             temp->parent->changeTime = temp->changeTime;
                             temp = temp->parent;
                         } else {
