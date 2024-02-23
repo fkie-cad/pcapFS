@@ -1031,32 +1031,34 @@ int pcapfs::CobaltStrikeFile::opensslDecryptCS(const Bytes &dataToDecrypt, Bytes
     // we can't use the crypto::opensslDecrypt function because
     // cobalt strike pads in a way that EVP_DecryptFinal doesn't like
     // => we have to unpad manually later on
-    int error = 0;
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
-        error = 1;
+        LOG_ERROR << "Openssl: EVP_CIPHER_CTX_new() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
     }
-    if (EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop", 0) != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() failed" << std::endl;
-        error = 1;
-    }
+
     if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, aesKey.data(), (const unsigned char*) "abcdefghijklmnop") != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() failed" << std::endl;
-        error = 1;
+        LOG_ERROR << "Openssl: EVP_DecryptInit_ex() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
     }
+
+    // don't remove padding
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
 
     int outlen;
     if (EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() failed" << std::endl;
-        error = 1;
+        LOG_ERROR << "Openssl: EVP_DecryptUpdate() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
     }
 
-    if (error)
-        ERR_print_errors_fp(stderr);
-
     EVP_CIPHER_CTX_cleanup(ctx);
-    return error;
+    return 0;
 }
 
 

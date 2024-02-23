@@ -173,42 +173,38 @@ void pcapfs::crypto::decrypt_AES_GCM(const CiphertextPtr &input, Bytes &output, 
 
 int pcapfs::crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char* key, const unsigned char* iv, const Bytes &dataToDecrypt, Bytes &decryptedData) {
 
-    int error = 0;
-    // From https://www.openssl.org/docs/manmaster/man3/EVP_CIPHER_CTX_set_key_length.html
-
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) {
-        LOG_ERROR << "EVP_CIPHER_CTX_new() failed" << std::endl;
-        error = 1;
-    }
-    if (EVP_CipherInit_ex(ctx, cipher, nullptr, key, iv, 0) != 1) {
-        LOG_ERROR << "EVP_CipherInit_ex() failed" << std::endl;
-        error = 1;
-    }
-    if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1) {
-        LOG_ERROR << "EVP_DecryptInit_ex() failed" << std::endl;
-        error = 1;
-    }
-
-    int outlen, tmplen;
-    if (EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
-        LOG_ERROR << "EVP_DecryptUpdate() failed" << std::endl;
-        error = 1;
-    }
-
-    if (EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &tmplen) != 1) {
-        // weird case: for 1 byte padding, the only padding byte is 0, which causes the padding to be seen as not correctly formatted
-        // (condition in line 536 in evp_enc.c is true), but according to the standard, the padding is correct
-        // (see https://datatracker.ietf.org/doc/html/rfc5246#section-6.2.3.2)
-        // => handle this case separately
-        if(decryptedData.back() != 0) {
-            LOG_ERROR << "EVP_DecryptFinal_ex() failed" << std::endl;
-            error = 1;
-        }
-    }
-    if (error)
+        LOG_ERROR << "Openssl: EVP_CIPHER_CTX_new() failed" << std::endl;
         ERR_print_errors_fp(stderr);
+        return 1;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1) {
+        LOG_ERROR << "Openssl: EVP_DecryptInit_ex() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
+    }
+
+    // don't remove padding
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+    int outlen;
+    if (EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
+        LOG_ERROR << "Openssl: EVP_DecryptUpdate() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
+    }
+
+    if (EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &outlen) != 1) {
+        LOG_ERROR << "Openssl: EVP_DecryptFinal_ex() failed" << std::endl;
+        ERR_print_errors_fp(stderr);
+        EVP_CIPHER_CTX_cleanup(ctx);
+        return 1;
+    }
 
     EVP_CIPHER_CTX_cleanup(ctx);
-    return error;
+    return 0;
  }

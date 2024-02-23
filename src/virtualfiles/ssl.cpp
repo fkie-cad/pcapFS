@@ -380,17 +380,19 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
         // when an ssl decode config is supplied we only decrypt ssl traffic which meets the given config
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
-			const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
-            if(!keyMaterial.empty()) {
-			    //TODO: not good to add sslkey file directly into index!!!
-			    std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
-			    		keyMaterial);
-			    idx.insert(keyPtr);
-			    resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
-			    resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
-                resultPtr->flags.set(pcapfs::flags::PROCESSED);
-            } else
-                LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
+            if ((handshakeData->cipherSuite->getSymKeyAlg() != pcpp::SSL_SYM_RC4_128) || crypto::loadLegacyProvider()) {
+                // for cipher suites with RC4 we need to load the openssl legacy provider
+			    const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
+                if(!keyMaterial.empty()) {
+			        std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
+			        		keyMaterial);
+			        idx.insert(keyPtr);
+			        resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
+			        resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+                    resultPtr->flags.set(pcapfs::flags::PROCESSED);
+                } else
+                    LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
+            }
 		}
 	}
     resultPtr->setOffsetType(filePtr->getFiletype());
@@ -624,10 +626,10 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshak
             LOG_ERROR << "dynamic_pointer_cast failed for ssl key file";
             continue;
         }
-        if (sslKeyFile->getClientRandom() == handshakeData->clientRandom){
+        if (sslKeyFile->getClientRandom().size() != 0 && sslKeyFile->getClientRandom() == handshakeData->clientRandom){
             return sslKeyFile->getMasterSecret();
         } else if (isRsaKeyX) {
-            if (sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
+            if (sslKeyFile->getRsaIdentifier().size() != 0 && sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
                 return crypto::createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
             } else if (crypto::matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
                 return crypto::createKeyMaterial(crypto::rsaPrivateDecrypt(handshakeData->encryptedPremasterSecret,

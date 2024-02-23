@@ -24,6 +24,7 @@ namespace pcapfs {
 
         std::string const calculateMD5(const std::string &input);
 
+        bool loadLegacyProvider();
     }
 }
 
