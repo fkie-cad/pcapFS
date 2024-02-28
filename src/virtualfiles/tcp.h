@@ -23,8 +23,6 @@ namespace pcapfs {
 
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        //methods and classes used for tcp reassembly
-        static int calcIpPayload(pcpp::Packet &p);
 
     protected:
         static bool registeredAtFactory;

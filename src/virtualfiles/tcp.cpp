@@ -58,24 +58,6 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
     }
 }
 
-int pcapfs::TcpFile::calcIpPayload(pcpp::Packet &p) {
-    if (p.isPacketOfType(pcpp::IPv4)) {
-        pcpp::IPv4Layer *ip = p.getLayerOfType<pcpp::IPv4Layer>();
-        if (ip == nullptr) {
-            LOG_ERROR << p.toString();
-            throw std::runtime_error("nullptr for ipv4 packet");
-        }
-        return ntohs(ip->getIPv4Header()->totalLength) - (int) ip->getHeaderLen();
-    } else if (p.isPacketOfType(pcpp::IPv6)) {
-        pcpp::IPv6Layer *ip = p.getLayerOfType<pcpp::IPv6Layer>();
-        if (ip == nullptr) {
-            LOG_ERROR << p.toString();
-            throw std::runtime_error("nullptr for ipv6 packet");
-        }
-        return ntohs(ip->getIPv6Header()->payloadLength);
-    }
-    throw std::runtime_error("packet not ipv4 nor ipv6");
-}
 
 void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
@@ -218,7 +200,7 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
                     state.currentFragment.fragment.start += l->getHeaderLen();
                 }
                 pcpp::TcpLayer *tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
-                state.currentFragment.fragment.length = calcIpPayload(parsedPacket) - tcpLayer->getHeaderLen();
+                state.currentFragment.fragment.length = tcpLayer->getLayerPayloadSize();
 
                 reassembly.reassemblePacket(parsedPacket);
 
