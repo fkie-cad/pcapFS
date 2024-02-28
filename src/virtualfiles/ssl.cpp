@@ -380,19 +380,16 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
         // when an ssl decode config is supplied we only decrypt ssl traffic which meets the given config
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
-            if ((handshakeData->cipherSuite->getSymKeyAlg() != pcpp::SSL_SYM_RC4_128) || crypto::loadLegacyProvider()) {
-                // for cipher suites with RC4 we need to load the openssl legacy provider
-			    const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
-                if(!keyMaterial.empty()) {
-			        std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
-			        		keyMaterial);
-			        idx.insert(keyPtr);
-			        resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
-			        resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
-                    resultPtr->flags.set(pcapfs::flags::PROCESSED);
-                } else
-                    LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
-            }
+		    const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
+            if(!keyMaterial.empty()) {
+		        std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
+		        		keyMaterial);
+		        idx.insert(keyPtr);
+		        resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
+		        resultPtr->flags.set(pcapfs::flags::HAS_DECRYPTION_KEY);
+                resultPtr->flags.set(pcapfs::flags::PROCESSED);
+            } else
+                LOG_ERROR << "Failed to create key material. Look above why" << std::endl;
 		}
 	}
     resultPtr->setOffsetType(filePtr->getFiletype());
@@ -945,6 +942,19 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
 void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 		const std::vector<CiphertextPtr> &cipherTextVector,
 		std::vector<Bytes> &outputPlainTextVector) {
+
+    const pcpp::SSLCipherSuite *cipher = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
+    if (!cipher) {
+        LOG_ERROR << "invalid cipher suite: " << cipherSuite;
+        // set ciphertext as output
+        std::transform(cipherTextVector.begin(), cipherTextVector.end(), std::back_inserter(outputPlainTextVector),
+                        [](auto &elem){ return elem->getCipherBlock(); });
+        return;
+    }
+
+    // for cipher suites with RC4 we need to load the openssl legacy provider
+    if (cipher->getSymKeyAlg() == pcpp::SSL_SYM_RC4_128)
+        crypto::loadLegacyProvider();
 
     for (size_t i=0; i<cipherTextVector.size(); i++) {
         CiphertextPtr element = cipherTextVector.at(i);
