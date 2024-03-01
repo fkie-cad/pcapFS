@@ -124,6 +124,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
     LOG_TRACE << "number of connection breaks aka future DNS files: " << numElements;
     const std::shared_ptr<UdpFile> udpFile = std::dynamic_pointer_cast<UdpFile>(filePtr);
 
+    unsigned int j = 0;
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
@@ -132,14 +133,17 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-        for (const Fragment &udpFrag : udpFile->fragments) {
+        uint64_t innerOffset = 0;
+        do {
+            const Fragment &udpFrag = udpFile->fragments.at(i + j);
+
             std::shared_ptr<pcapfs::DnsFile> resultPtr = std::make_shared<pcapfs::DnsFile>();
             pcpp::Packet packet;
-            const pcpp::DnsLayer dnsLayer = pcpp::DnsLayer(data.data() + offset, udpFrag.length, nullptr, &packet);
+            const pcpp::DnsLayer dnsLayer = pcpp::DnsLayer(data.data() + offset + innerOffset, udpFrag.length, nullptr, &packet);
 
             Fragment fragment;
             fragment.id = filePtr->getIdInIndex();
-            fragment.start = offset;
+            fragment.start = offset + innerOffset;
             fragment.length = udpFrag.length;
             resultPtr->fragments.push_back(fragment);
 
@@ -162,19 +166,27 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             resultPtr->setProperty("protocol", "dns");
             resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
-            resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            try {
+                resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
+            } catch (nlohmann::json_abi_v3_11_3::detail::type_error &err) {
+                LOG_ERROR << "Failed to parse DNS content.";
+                if (innerOffset + udpFrag.length >= size)
+                    break;
+                continue;
+            }
 
-            if (filePtr->getProperty("dstPort") == "53") {
+            if (resultPtr->getProperty("dstPort") == "53") {
                 resultPtr->setFilename("REQ-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
-            } else if (filePtr->getProperty("srcPort") == "53") {
+            } else if (resultPtr->getProperty("srcPort") == "53") {
                 resultPtr->setFilename("RES-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
             }
             resultVector.push_back(resultPtr);
 
-            offset += udpFrag.length;
-            if (offset >= size)
+            innerOffset += udpFrag.length;
+            if (innerOffset >= size)
                 break;
-        }
+            ++j;
+        } while (1);
     }
     return resultVector;
 }

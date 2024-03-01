@@ -25,6 +25,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
     LOG_TRACE << "number of connection breaks aka future DHCP files: " << numElements;
     const std::shared_ptr<UdpFile> udpFile = std::dynamic_pointer_cast<UdpFile>(filePtr);
 
+    unsigned int j = 0;
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = filePtr->connectionBreaks.at(i).first;
         if (i == numElements - 1) {
@@ -33,14 +34,17 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
             size = filePtr->connectionBreaks.at(i + 1).first - offset;
         }
 
-        for (const Fragment &udpFrag : udpFile->fragments) {
+        uint64_t innerOffset = 0;
+        do {
+            const Fragment &udpFrag = udpFile->fragments.at(i + j);
+
             std::shared_ptr<pcapfs::DhcpFile> resultPtr = std::make_shared<pcapfs::DhcpFile>();
             pcpp::Packet packet;
-            const pcpp::DhcpLayer dhcpLayer(data.data() + offset, udpFrag.length, nullptr, &packet);
+            const pcpp::DhcpLayer dhcpLayer(data.data() + offset + innerOffset, udpFrag.length, nullptr, &packet);
 
             Fragment fragment;
             fragment.id = filePtr->getIdInIndex();
-            fragment.start = offset;
+            fragment.start = offset + innerOffset;
             fragment.length = udpFrag.length;
             resultPtr->fragments.push_back(fragment);
 
@@ -67,8 +71,7 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
             } catch (nlohmann::json_abi_v3_11_3::detail::type_error &err) {
                 LOG_ERROR << "Failed to parse DHCP content.";
-                offset += udpFrag.length;
-                if (offset >= size)
+                if (innerOffset + udpFrag.length >= size)
                     break;
                 continue;
             }
@@ -79,10 +82,11 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
                 resultPtr->setFilename("RES-" + std::to_string(be32toh(dhcpLayer.getDhcpHeader()->transactionID)));
             resultVector.push_back(resultPtr);
 
-            offset += udpFrag.length;
-            if (offset >= size)
+            innerOffset += udpFrag.length;
+            if (innerOffset >= size)
                 break;
-        }
+            ++j;
+        } while (1);
     }
 
     return resultVector;

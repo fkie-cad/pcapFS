@@ -39,13 +39,11 @@ pcapfs::UdpConnection::UdpConnection(const pcpp::Packet &packet, const TimePoint
 bool pcapfs::UdpConnection::directionChanged(const UdpConnection &conn) {
     if (streamsToEndpoint1)
         if (conn.endpoint1 == endpoint1 && conn.endpoint2 == endpoint2) {
-            streamsToEndpoint1 = false;
             return true;
         } else
             return false;
     else {
         if (conn.endpoint1 == endpoint2 && conn.endpoint2 == endpoint1) {
-            streamsToEndpoint1 = true;
             return true;
         } else
             return false;
@@ -142,6 +140,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     if (targetConn.directionChanged(udpConn)) {
                         // direction of UDP packet changed -> add connection break
                         LOG_TRACE << "add new connection break";
+                        pos->first.streamsToEndpoint1 = !pos->first.streamsToEndpoint1;
                         state.files[targetConn]->connectionBreaks.emplace_back(state.files[targetConn]->getFilesizeRaw() - udpLayer->getLayerPayloadSize(),
                                                                             state.currentTimestamp);
                     }
