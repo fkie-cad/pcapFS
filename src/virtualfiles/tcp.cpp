@@ -69,6 +69,17 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         LOG_TRACE << "Empty tcp Data";
     }
 
+    size_t tcpDataLength = 0;
+    if (state->currentFragment.fragment.length > tcpData.getDataLength()) {
+        LOG_TRACE << "Partial retransmission found";
+        const size_t overlapSize = state->currentFragment.fragment.length - tcpData.getDataLength();
+        state->currentFragment.fragment.start += overlapSize;
+        state->currentFragment.fragment.length -= overlapSize;
+        tcpDataLength = state->currentFragment.fragment.length;
+    } else {
+        tcpDataLength = tcpData.getDataLength();
+    }
+
     if (state->files.find(flowkey) == state->files.end()) {
         LOG_TRACE << "New file with key: " << flowkey;
 
@@ -81,8 +92,8 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer->setFilename("tcp" + std::to_string(state->nextUniqueId));
         tcpPointer->setIdInIndex(state->nextUniqueId);
         tcpPointer->setOffsetType(state->isPcapng ? "pcapng" : "pcap"); //tcp files point directly into the pcap
-        tcpPointer->setFilesizeRaw(tcpData.getDataLength());
-        tcpPointer->setFilesizeProcessed(tcpData.getDataLength());
+        tcpPointer->setFilesizeRaw(tcpDataLength);
+        tcpPointer->setFilesizeProcessed(tcpDataLength);
         tcpPointer->setFiletype("tcp");
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
@@ -94,14 +105,14 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         ++state->nextUniqueId;
     } else {
         tcpPointer = state->files[flowkey];
-        tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + tcpData.getDataLength());
+        tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + tcpDataLength);
         tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw());
     }
 
     if (state->currentSide[flowkey] != side) {
         //current filesize (without tcp data) equals the offset in tcp stream where break occurred
         state->currentSide[flowkey] = side;
-        tcpPointer->connectionBreaks.emplace_back(tcpPointer->getFilesizeRaw() - tcpData.getDataLength(),
+        tcpPointer->connectionBreaks.emplace_back(tcpPointer->getFilesizeRaw() - tcpDataLength,
                                                   state->currentTimestamp);
 
     }
