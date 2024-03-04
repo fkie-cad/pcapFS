@@ -576,7 +576,12 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + encryptedDataLen);
 
 				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
-			}
+
+			} else if (recType == pcpp::SSL_ALERT) {
+                const pcpp::SSLAlertLayer *alertLayer =
+                        dynamic_cast<pcpp::SSLAlertLayer *>(sslLayer);
+                offset += alertLayer->getHeaderLen();
+            }
 
             sslLayer->parseNextLayer();
             sslLayer = dynamic_cast<pcpp::SSLLayer *>(sslLayer->getNextLayer());

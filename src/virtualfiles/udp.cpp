@@ -115,7 +115,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
 
             pcapPosition += pcapPtr->getOffsetFromLastBlock(i);
 
-            if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(pcpp::IP)) {
+            if (parsedPacket.isPacketOfType(pcpp::UDP) && parsedPacket.isPacketOfType(pcpp::IP) && !parsedPacket.isPacketOfType(pcpp::ICMP)) {
 
                 state.currentOffset.id = state.currentPcapfileID;
                 state.currentOffset.start = pcapPosition;
@@ -126,6 +126,11 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     state.currentOffset.start += l->getHeaderLen();
                 }
                 const pcpp::UdpLayer *udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
+                if (udpLayer->getLayerPayloadSize() == 0) {
+                    if (pcap->getFiletype() == "pcap")
+                        pcapPosition += parsedPacket.getFirstLayer()->getDataLen();
+                    continue;
+                }
                 state.currentOffset.length = udpLayer->getLayerPayloadSize();
 
                 const UdpConnection udpConn(parsedPacket, state.currentTimestamp);
