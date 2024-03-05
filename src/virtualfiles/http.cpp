@@ -576,7 +576,7 @@ bool pcapfs::HttpFile::isHTTPRequest(const Bytes &data, uint64_t startOffset, ui
     const pcpp::HttpRequestLayer requestLayer((uint8_t *) (data.data() + startOffset), length, nullptr, &tmpPacket);
     const pcpp::HttpRequestFirstLine* firstLine = requestLayer.getFirstLine();
     if(firstLine->getMethod() == pcpp::HttpRequestLayer::HttpMethod::HttpMethodUnknown ||
-        firstLine->getVersion() == pcpp::HttpVersion::HttpVersionUnknown)
+        firstLine->getVersion() == pcpp::HttpVersion::HttpVersionUnknown || !requestLayer.isHeaderComplete())
         return false;
     return true;
 }
@@ -622,7 +622,7 @@ bool pcapfs::HttpFile::isHTTPResponse(const Bytes &data, uint64_t startOffset, s
     const pcpp::HttpResponseLayer responseLayer((uint8_t *) (data.data() + startOffset), length, nullptr, &tmpPacket);
     const pcpp::HttpResponseFirstLine* firstLine = responseLayer.getFirstLine();
     if(firstLine->getStatusCode() == pcpp::HttpResponseLayer::HttpResponseStatusCode::HttpStatusCodeUnknown ||
-        firstLine->getVersion() == pcpp::HttpVersionUnknown)
+        firstLine->getVersion() == pcpp::HttpVersionUnknown || !responseLayer.isHeaderComplete())
         return false;
     return true;
 }

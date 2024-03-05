@@ -141,6 +141,9 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         fragment.start = 0;
         tcpPointer->fragments.push_back(fragment);
         tcpPointer->flags.set(pcapfs::flags::MISSING_DATA);
+
+        tcpPointer->setFilesizeRaw(tcpPointer->getFilesizeRaw() + missing_count - missing_str_len);
+        tcpPointer->setFilesizeProcessed(tcpPointer->getFilesizeRaw());
     }
 
     if (state->gotCallback) {
