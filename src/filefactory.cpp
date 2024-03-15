@@ -7,13 +7,13 @@
 std::map<std::string, pcapfs::FileFactory::CreateMethod> &pcapfs::FileFactory::getFactoryFileTypes() {
     static std::map<std::string, CreateMethod> g_;
     return g_;
-};
+}
 
 
 std::map<std::string, pcapfs::FileFactory::ParseMethod> &pcapfs::FileFactory::getFactoryParseMethods() {
     static std::map<std::string, ParseMethod> g_;
     return g_;
-};
+}
 
 
 bool pcapfs::FileFactory::registerAtFactory(const std::string &type, pcapfs::FileFactory::CreateMethod createMethod) {

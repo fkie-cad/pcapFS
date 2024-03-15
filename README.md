@@ -36,7 +36,7 @@ Building pcapFS works best on rather modern Linux distribution. See the [corresp
 this README for further details.
 
 # Building pcapFS
-As already mentioned, there are several dependencies which are not packaged for most Linux distributions. Moreover, you
+As already mentioned, there are some dependencies which are not packaged for most Linux distributions. Moreover, you
 need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are
 different steps required to compile pcapFS. Have a look at the scripts [here](scripts/dependencies).
 

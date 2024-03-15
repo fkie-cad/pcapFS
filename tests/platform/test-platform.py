@@ -18,7 +18,7 @@ PLATFORMS = {
     "ubuntu-20.04": "Ubuntu 20.04",
     "ubuntu-22.04": "Ubuntu 22.04",
     "kali": "Kali",
-    "centos-7": "CentOS 7"
+    "centos-7": "CentOS 7",
 }
 
 LOG_FILE_NAME_PREFIX = "platform-tests"
