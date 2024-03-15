@@ -170,8 +170,10 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
             } catch (nlohmann::json_abi_v3_11_3::detail::type_error &err) {
                 LOG_ERROR << "Failed to parse DNS content.";
-                if (innerOffset + udpFrag.length >= size)
+                innerOffset += udpFrag.length;
+                if (innerOffset >= size)
                     break;
+                ++j;
                 continue;
             }
 

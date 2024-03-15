@@ -180,6 +180,9 @@ int main(int argc, const char *argv[]) {
             } catch (const std::logic_error &err) {
                 LOG_ERROR << "Failed to parse capture file";
                 return 3;
+            } catch (const pcapfs::IndexError &err) {
+                LOG_ERROR << "Failed to parse capture file: " << err.what();
+                return 4;
             }
             index.insert(newFiles);
             LOG_TRACE << "Progress ("<< counter << "): <newfiles|filesToProcess> <" << newFiles.size() << "|"
@@ -205,7 +208,7 @@ int main(int argc, const char *argv[]) {
             index.assertCorrectPcaps(pcapFiles);
         } catch (const pcapfs::IndexError &err) {
             LOG_ERROR << err.what() << std::endl;
-            return 4;
+            return 5;
         }
     }
 

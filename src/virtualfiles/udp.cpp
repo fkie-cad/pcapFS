@@ -17,7 +17,7 @@
 #include "../capturefiles/pcapng.h"
 
 
-pcapfs::UdpConnection::UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp) {
+pcapfs::UdpConnection::UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp, const std::string &fileType, uint64_t pcapID) {
     if (packet.isPacketOfType(pcpp::IPv4)) {
         const pcpp::IPv4Layer *ipv4Layer = packet.getLayerOfType<pcpp::IPv4Layer>();
         endpoint1.ipAddress = ipv4Layer->getSrcIPv4Address().toString();
@@ -33,6 +33,8 @@ pcapfs::UdpConnection::UdpConnection(const pcpp::Packet &packet, const TimePoint
     endpoint2.port = ntohs(udpLayer->getUdpHeader()->portDst);
     startTime = timestamp;
     streamsToEndpoint1 = false;
+    captureFileType = fileType;
+    captureFileId = pcapID;
 }
 
 
@@ -133,7 +135,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                 }
                 state.currentOffset.length = udpLayer->getLayerPayloadSize();
 
-                const UdpConnection udpConn(parsedPacket, state.currentTimestamp);
+                const UdpConnection udpConn(parsedPacket, state.currentTimestamp, pcapPtr->getFiletype(), state.currentPcapfileID);
                 const auto pos = std::find_if(state.files.begin(), state.files.end(), [udpConn](const auto &elem){ return elem.first == udpConn; });
                 if (pos != state.files.end()) {
                     // packet is part of already known UDP "connection" and UDP payload is added as fragment to existing UDP file

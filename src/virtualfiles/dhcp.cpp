@@ -71,8 +71,11 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
                 resultPtr->setFilesizeProcessed(resultPtr->calculateProcessedSize(idx));
             } catch (nlohmann::json_abi_v3_11_3::detail::type_error &err) {
                 LOG_ERROR << "Failed to parse DHCP content.";
-                if (innerOffset + udpFrag.length >= size)
+                LOG_ERROR << err.what();
+                innerOffset += udpFrag.length;
+                if (innerOffset >= size)
                     break;
+                ++j;
                 continue;
             }
 

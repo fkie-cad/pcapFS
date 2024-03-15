@@ -40,12 +40,13 @@ namespace pcapfs {
 
     class UdpConnection {
     public:
-        UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp);
+        UdpConnection(const pcpp::Packet &packet, const TimePoint &timestamp, const std::string &fileType, uint64_t pcapID);
         bool operator==(const UdpConnection &conn) const {
             return ((conn.endpoint1 == endpoint1 && conn.endpoint2 == endpoint2) ||
                     (conn.endpoint1 == endpoint2 && conn.endpoint2 == endpoint1)) &&
                     // new UDP "connection" after 30 seconds
-                    std::chrono::duration_cast<std::chrono::seconds>(conn.startTime - startTime).count() < 30;
+                    std::chrono::duration_cast<std::chrono::seconds>(conn.startTime - startTime).count() < 30 &&
+                    conn.captureFileType == captureFileType && conn.captureFileId == captureFileId;
         };
 
         bool operator<(const UdpConnection &conn) const {
@@ -57,6 +58,8 @@ namespace pcapfs {
         UdpEndpoint endpoint1;
         UdpEndpoint endpoint2;
         TimePoint startTime;
+        std::string captureFileType;
+        uint64_t captureFileId = 0;
         mutable bool streamsToEndpoint1 = false;
     };
 

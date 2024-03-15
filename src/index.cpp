@@ -71,7 +71,6 @@ pcapfs::FilePtr pcapfs::Index::get(const pcapfs::index::IndexPosition &idxPositi
         return files.at(idxPosition.first + std::to_string(idxPosition.second));
     } catch (std::out_of_range &e) {
         const std::string msg = idxPosition.first + std::to_string(idxPosition.second) + " not found in index!";
-        LOG_ERROR << msg;
         throw IndexError(msg);
     }
 }
@@ -101,7 +100,6 @@ void pcapfs::Index::insert(const pcapfs::FilePtr &filePtr) {
     }
     std::string key = filePtr->getFiletype();
 
-    //TODO: should work, use already set id if id set
     if (filePtr->getIdInIndex() != 0) {
         key += std::to_string(filePtr->getIdInIndex());
     } else {
