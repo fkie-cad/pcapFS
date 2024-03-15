@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -eu
 
+lsb_release="$(which lsb_release 2> /dev/null)"
+if [[ -n "${lsb_release}" ]]; then
+    distro="$(lsb_release -is)"
+    if [[ "${distro}" = 'Fedora' ]]; then
+        sudo dnf install -y catch2
+        exit 0
+    elif [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
+        sudo apt install -y catch2
+        exit 0
+    fi
+fi
+
 SAVED_PWD="$(pwd -P)"
 HERE=$(dirname $(readlink -e $0))
 source "${HERE}/install-helpers.sh"

@@ -48,11 +48,16 @@ if [ "${distro}" = 'CentOS' ]; then
         echo "Unsupported CentOS release ${release}." >&2
         exit 2
     fi
-    ${enable_devtoolset} ${here}/install-pcap-plus-plus.sh
+    ${enable_devtoolset} ${here}/install-cpptoml.sh
     ${enable_devtoolset} ${here}/install-fuse.sh
-    ${here}/install-fusepp.sh
-    ${here}/install-json.sh
-    ${here}/install-openssl.sh
+    ${enable_devtoolset} ${here}/install-fusepp.sh
+    ${enable_devtoolset} ${here}/install-json.sh
+    ${enable_devtoolset} ${here}/install-openssl.sh
+    if [ "${release_major}" = '6' ]; then
+        ${enable_devtoolset} ${here}/install-pcap-plus-plus.sh
+    else
+        ${enable_devtoolset} ${here}/install-pcap-plus-plus-precompiled.sh
+    fi
 else
     echo 'This script is supposed to run on CentOS systems only.' >&2
     exit 3

@@ -13,15 +13,23 @@ Vagrant.configure("2") do |config|
     centos7.vm.box = "bento/centos-7"
   end
 
+  # Fedora boxes
+  config.vm.define "fedora-37" do |fedora37|
+    fedora37.vm.box = "bento/fedora-37"
+  end
+  config.vm.define "fedora-38" do |fedora38|
+    fedora38.vm.box = "bento/fedora-38"
+  end
+  config.vm.define "fedora-39" do |fedora39|
+    fedora39.vm.box = "bento/fedora-39"
+  end
+
   # Kali boxes
   config.vm.define "kali" do |kali|
     kali.vm.box = "kalilinux/rolling"
   end
 
   # Ubuntu boxes
-  config.vm.define "ubuntu-16.04" do |xenial|
-    xenial.vm.box = "ubuntu/xenial64"
-  end
   config.vm.define "ubuntu-18.04" do |bionic|
     bionic.vm.box = "ubuntu/bionic64"
   end

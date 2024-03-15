@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -u
 
-distro="$(lsb_release -is)"
-release="$(lsb_release -rs)"
-
 mkdir pcapfs
 
 (cd /vagrant && tar -cf - \
@@ -13,6 +10,13 @@ mkdir pcapfs
     --exclude=./dependencies \
     --exclude=.git \
     --exclude=.vagrant .) | tar -C pcapfs -xf -
+
+if [[ -f '/etc/fedora-release' ]]; then
+    sudo dnf install -y lsb_release python3-virtualenv
+fi
+
+distro="$(lsb_release -is)"
+release="$(lsb_release -rs)"
 
 if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     sudo DEBIAN_FRONTEND=noninteractive apt-get update

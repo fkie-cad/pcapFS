@@ -26,50 +26,40 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     done
     sudo DEBIAN_FRONTEND=noninteractive apt-get update
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${common_pkgs}
-    if [[ "${release}" = '14.04' ]]; then
-        PYTHON_VERSION='3.6'
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        sudo apt-get update
+    if [[ "${release}" = '18.04' ]]; then
         sudo apt-get install -y \
-                    g++-6 \
-                    python${PYTHON_VERSION} \
-                    python${PYTHON_VERSION}-dev \
-                    python${PYTHON_VERSION}-venv
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-6 90
-        python=$(which python${PYTHON_VERSION})
-        sudo ${python} -m ensurepip
-        pip=$(which pip${PYTHON_VERSION})
-        sudo ${pip} install --upgrade pip
-        sudo ${pip} install --upgrade \
-            cmake \
-            meson \
-            ninja
-        ${here}/install-boost.sh
-    elif [[ "${release}" = '16.04' ]]; then
-        sudo apt-get install -y \
-                    ${boost_pkgs} \
+                    cmake \
+                    ninja-build \
                     python3-pip
-        LC_ALL='C' pip3 install --upgrade \
-            cmake \
-            meson \
-	    ninja
-    elif [[ "${release}" = '18.04' || "${release}" =~ ^2[0-2]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
-        sudo apt-get install -y \
+        LC_ALL='C' pip3 install --upgrade meson
+        . ~/.profile
+        ${here}/install-boost.sh
+        ${here}/install-cpptoml.sh
+        ${here}/install-openssl.sh
+    elif [[ "${release}" =~ ^2[0-2]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
                     ${boost_pkgs} \
                     cmake \
                     meson \
                     ninja-build
+        if [[ "${release}" = '22.04' ]]; then
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y openssl libcpptoml-dev
+        elif [[ "${distro}" = 'Kali' ]]; then
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y openssl cpptoml
+        else
+            # openssl package is not the required version 3 -> need to build from source
+            ${here}/install-cpptoml.sh
+            ${here}/install-openssl.sh
+        fi
     else
         echo "Unsupported Ubuntu release ${release}." >&2
         exit 2
     fi
-    ${here}/install-cpptoml.sh
+
     ${here}/install-fuse.sh
     ${here}/install-fusepp.sh
     ${here}/install-json.sh
-    ${here}/install-openssl.sh
-    ${here}/install-pcap-plus-plus.sh
+    ${here}/install-pcap-plus-plus-precompiled.sh
 else
     echo 'This script is supposed to run on Ubuntu systems only.' >&2
     exit 3

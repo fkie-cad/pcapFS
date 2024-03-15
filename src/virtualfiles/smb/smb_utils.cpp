@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+#include <algorithm>
 
 
 size_t pcapfs::smb::calculate311NegotiateMessageLength(const Bytes &rawData, uint32_t negotiateContextOffset,

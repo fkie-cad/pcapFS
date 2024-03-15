@@ -1,16 +1,12 @@
 # Build Tests
 We continuously build pcapFS on the following platforms:
 
-| Distribution | Release |
+| Distribution | Releases |
 |---|---|
-|**CentOS**| 7 |
-|**Kali**|  |
-|Kali|Light|
-|**Ubuntu**|  |
-|Ubuntu|14.04|
-|Ubuntu|16.04|
-|Ubuntu|18.04|
-|Ubuntu|22.04|
+|Fedora|37, 38, 39|
+|Ubuntu|18.04, 20.04, 22.04|
+|Kali|Rolling|
+|CentOS Linux| 7 |
 
 If you successfully built and tested pcapFS on a platform not listed here,
 please send us some information what to do in order to compile it on this

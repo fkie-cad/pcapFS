@@ -11,12 +11,14 @@ from tabulate import tabulate
 
 PLATFORMS = {
     "all": "[All platforms]",
-    "centos-7": "CentOS 7",
-    "kali": "Kali",
-    "ubuntu-16.04": "Ubuntu 16.04",
+    "fedora-37": "Fedora 37",
+    "fedora-38": "Fedora 38",
+    "fedora-39": "Fedora 39",
     "ubuntu-18.04": "Ubuntu 18.04",
     "ubuntu-20.04": "Ubuntu 20.04",
     "ubuntu-22.04": "Ubuntu 22.04",
+    "kali": "Kali",
+    "centos-7": "CentOS 7"
 }
 
 LOG_FILE_NAME_PREFIX = "platform-tests"
