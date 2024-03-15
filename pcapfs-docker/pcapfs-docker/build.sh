@@ -1,12 +1,11 @@
 #!/bin/bash
-echo "Installation File:"
-git clone https://github.com/fkie-cad/pcapFS.git
-git checkout experimental
+
+git clone 'https://github.com/fkie-cad/pcapFS.git'
 cd pcapFS
-ls -lah
-./scripts/dependencies/install-all-dependencies.sh   #optional, if you don't want to install everything yourself (use at your own risk)
-./scripts/dependencies/install-catch2.sh             #optional, if you don't want to install everything yourself (use at your own risk)
+git checkout dev
+./scripts/dependencies/install-all-dependencies.sh
 mkdir build
 cd build
-cmake -DBUILD_TESTING=on ..
+cmake ..
 make -j$(nproc)
+#ln -s build/pcapfs /usr/bin

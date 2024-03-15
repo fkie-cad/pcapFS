@@ -35,8 +35,5 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER pcapfs
 
 COPY --chown=pcapfs:pcapfs build.sh build.sh
-RUN id
-RUN whoami
-RUN ls -lah
 RUN chmod +x build.sh
 RUN ./build.sh
