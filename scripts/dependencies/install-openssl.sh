@@ -12,6 +12,6 @@ wget "${URL}" -O- | tar -xzf-
 cd openssl-3.0.13
 ./config --prefix=${PREFIX}
 make
-make install
+make install_sw
 
 cd "${SAVED_PWD}"

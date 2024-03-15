@@ -27,7 +27,6 @@ elif [[ "${distro}" = 'CentOS' && "${release}" = '7' ]]; then
 
 elif [[ "${distro}" = 'Fedora' && "${release}" = '37' ]]; then
     libdir='lib64'
-    mkdir -p "${PREFIX}"/$libdir
     package='pcapplusplus-23.09-fedora-37-gcc-12.2.1-x86_64'
 
 else
@@ -37,6 +36,7 @@ fi
 
 URL="https://github.com/seladb/PcapPlusPlus/releases/download/v23.09/${package}.tar.gz"
 
+mkdir -p "${PREFIX}"/$libdir
 cd "${PREFIX}"
 wget "${URL}" -O- | tar -xzf-
 sed -i "1s#.*#prefix=\"${PREFIX}\"#" $package/$libdir/pkgconfig/PcapPlusPlus.pc
@@ -44,4 +44,3 @@ cp -r $package/$libdir/* "${PREFIX}"/$libdir
 cp -r $package/include/* "${PREFIX}"/include
 rm -r $package
 cd "${SAVED_PWD}"
-

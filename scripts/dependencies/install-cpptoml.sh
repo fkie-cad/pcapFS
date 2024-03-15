@@ -18,7 +18,7 @@ patch "${pkgdir}"/include/cpptoml.h < "${HERE}"/cpptomlfix.patch
 cd "${pkgdir}"
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX} ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX} -DCPPTOML_BUILD_EXAMPLES=OFF ..
 make
 make install
 

@@ -42,21 +42,23 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
                     cmake \
                     meson \
                     ninja-build
-        if [[ "${release}" = '22.04' ]]; then
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y openssl libcpptoml-dev
-        elif [[ "${distro}" = 'Kali' ]]; then
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y openssl cpptoml
+        if [[ "${release}" = '22.04'|| "${distro}" = 'Kali' ]]; then
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+                    fuse3 \
+                    libfuse3-dev \
+                    libssl-dev \
+                    libcpptoml-dev
         else
-            # openssl package is not the required version 3 -> need to build from source
+            # openssl and fuse package are not the required version 3 -> need to build from source
             ${here}/install-cpptoml.sh
             ${here}/install-openssl.sh
+            ${here}/install-fuse.sh
         fi
     else
         echo "Unsupported Ubuntu release ${release}." >&2
         exit 2
     fi
 
-    ${here}/install-fuse.sh
     ${here}/install-fusepp.sh
     ${here}/install-json.sh
     ${here}/install-pcap-plus-plus-precompiled.sh

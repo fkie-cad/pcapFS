@@ -15,7 +15,7 @@ clone_or_update_git_repo "${URL}" "${pkgdir}"
 cd "${pkgdir}"
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX} ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=${PREFIX} -DPCAPPP_BUILD_EXAMPLES=OFF -DPCAPPP_BUILD_TESTS=OFF ..
 make all install
 
 cd "${SAVED_PWD}"
