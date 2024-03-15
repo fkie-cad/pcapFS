@@ -78,8 +78,7 @@ void pcapfs::FtpControlFile::fillGlobalProperties(std::shared_ptr<pcapfs::FtpCon
 }
 
 
-void
-pcapfs::FtpControlFile::parseUSERCredentials(std::shared_ptr<pcapfs::FtpControlFile> &result, size_t i,
+void pcapfs::FtpControlFile::parseUSERCredentials(std::shared_ptr<pcapfs::FtpControlFile> &result, size_t i,
                                                     pcapfs::FilePtr &filePtr,
                                                     std::shared_ptr<pcapfs::FtpControlFile> &credentials) {
     parseCredentials(credentials, filePtr, i);
@@ -103,8 +102,7 @@ void pcapfs::FtpControlFile::parsePASSCredentials(pcapfs::FilePtr &filePtr,
 }
 
 
-void
-pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile> result,
+void pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile> result,
                                                 pcapfs::FilePtr filePtr, size_t i) {
     const size_t numElements = filePtr->connectionBreaks.size();
     const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
@@ -117,8 +115,7 @@ pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControlFile>
 }
 
 
-void
-pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> result,
+void pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> result,
                                            pcapfs::FilePtr filePtr, size_t i) {
     const size_t numElements = filePtr->connectionBreaks.size();
     const OffsetWithTime owt = filePtr->connectionBreaks.at(i);
@@ -153,8 +150,7 @@ uint8_t pcapfs::FtpControlFile::handleResponse(std::shared_ptr<FtpControlFile> &
 }
 
 
-size_t
-pcapfs::FtpControlFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset) {
+size_t pcapfs::FtpControlFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset) {
     if (isLastElement(numElements, i)) {
         return filePtr->getFilesizeRaw() - offset;
     } else {
@@ -191,8 +187,7 @@ bool pcapfs::FtpControlFile::charIsInt(char c) {
 }
 
 
-pcapfs::FtpControlFile::Response
-pcapfs::FtpControlFile::parseResponse(char *raw_data, size_t size, TimePoint timestamp) {
+pcapfs::FtpControlFile::Response pcapfs::FtpControlFile::parseResponse(char *raw_data, size_t size, TimePoint timestamp) {
     const std::string raw_code = std::string(raw_data, RESPONSE_CODE_LN);
     const uint16_t code = stol(raw_code);
     std::string message = std::string(raw_data + RESPONSE_CODE_LN, size - RESPONSE_CODE_LN);
@@ -204,20 +199,15 @@ pcapfs::FtpControlFile::parseResponse(char *raw_data, size_t size, TimePoint tim
 
 void pcapfs::FtpControlFile::handleResponseTypes(const Response &response,
                                                         std::shared_ptr<pcapfs::FtpControlFile> &result) {
+    std::string port;
     if (response.code == FTPResponseCodes::EnteringPassiveMode) {
-        handleEnteringPassiveMode(response.message, result);
+        port = parsePassivePort(response.message);
+    } else if (response.code == FTPResponseCodes::EnteringExtendedPassiveMode) {
+        port = parseExtendedPassivePort(response.message);
+    } else {
+        return;
     }
-}
-
-
-void pcapfs::FtpControlFile::handleEnteringPassiveMode(const std::string &message,
-                                                              std::shared_ptr<pcapfs::FtpControlFile> &result) {
-    const uint16_t port = parsePassivePort(message);
-//    FTPPortBridge::getInstance().addPort(port);
-
-    result->setProperty("activeDataPort", std::to_string(port));
-//    std::cout << "FtpControlFile::handleEnteringPassiveMode\n";
-//    std::cout << " - active port: "<<result->getProperty("activeDataPort")<<"\n";
+    result->setProperty("activeDataPort", port);
 }
 
 
@@ -225,7 +215,7 @@ void pcapfs::FtpControlFile::handleEnteringPassiveMode(const std::string &messag
  * message format: "Entering Passive Mode (127,0,0,1,000,255)".
  * The last two numbers represent the port being two signs of a hex value.
  */
-uint16_t pcapfs::FtpControlFile::parsePassivePort(std::string message) {
+std::string const pcapfs::FtpControlFile::parsePassivePort(std::string message) {
     const size_t last_colon = message.rfind(',');
     const size_t blast_colon = message.rfind(',', last_colon - 1);
     const size_t closing_bracket = message.rfind(')');
@@ -234,12 +224,24 @@ uint16_t pcapfs::FtpControlFile::parsePassivePort(std::string message) {
     const uint8_t second_byte = stoi(message.substr(last_colon + 1, (closing_bracket - last_colon - 1)));
     const uint16_t port = first_byte * 256 + second_byte;
 
+    return std::to_string(port);
+}
+
+/**
+ * message format: "Entering Extended Passive Mode (|||1337|)".
+ * 1337 is the respective port.
+ */
+std::string const pcapfs::FtpControlFile::parseExtendedPassivePort(std::string message) {
+    const auto last_delim = message.rfind('|');
+    const auto second_last_delim = message.rfind('|', last_delim - 1);
+
+    const std::string port = message.substr(second_last_delim + 1,  last_delim - second_last_delim - 1);
     return port;
 }
 
 
 uint8_t pcapfs::FtpControlFile::handleCommand(const std::shared_ptr<pcapfs::FtpControlFile> &result,
-                                                     const pcapfs::FilePtr &filePtr, size_t i, size_t size) {
+                                                const pcapfs::FilePtr &filePtr, size_t i, size_t size) {
     const size_t numElements = filePtr->connectionBreaks.size();
     const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
     const TimePoint cmd_timestamp = filePtr->connectionBreaks.at(i).second;
@@ -257,17 +259,15 @@ uint8_t pcapfs::FtpControlFile::handleCommand(const std::shared_ptr<pcapfs::FtpC
 }
 
 
-pcapfs::TimePoint
-pcapfs::FtpControlFile::getTimestampAfterResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements,
-                                                         const pcapfs::FtpControlFile::Response &response) {
+pcapfs::TimePoint pcapfs::FtpControlFile::getTimestampAfterResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements,
+                                                                    const pcapfs::FtpControlFile::Response &response) {
     return (numElements > i)
            ? filePtr->connectionBreaks.at(i).second
            : response.timestamp + std::chrono::seconds(1);
 }
 
 
-pcapfs::FtpControlFile::Response
-pcapfs::FtpControlFile::getCommandResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements,
+pcapfs::FtpControlFile::Response pcapfs::FtpControlFile::getCommandResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements,
                                                   pcapfs::Bytes &data) {
     if (numElements <= i) {
         return {0, "", TimePoint::min()};
@@ -285,8 +285,7 @@ pcapfs::FtpControlFile::getCommandResponse(const pcapfs::FilePtr &filePtr, size_
 }
 
 
-pcapfs::FtpControlFile::Command
-pcapfs::FtpControlFile::parseCommand(char *raw_data, size_t size) {
+pcapfs::FtpControlFile::Command pcapfs::FtpControlFile::parseCommand(char *raw_data, size_t size) {
     std::string c = std::string(raw_data, size);
     c.erase(c.find_last_not_of(" \n\r\t") + 1);
     boost::trim(c);
@@ -301,42 +300,19 @@ pcapfs::FtpControlFile::parseCommand(char *raw_data, size_t size) {
 }
 
 
-void
-pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> result, const Command &cmd,
+void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> result, const Command &cmd,
                                                   const Response &response, const TimeSlot &time_slot) {
     const std::string command = cmd.first;
 
     if (command == FTPCommands::PASS) {
-        handlePASS(result, cmd);
+        result->setProperty(FTPCommands::PASS, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
     } else if (command == FTPCommands::USER) {
-        handleUSER(result, cmd);
+        result->setProperty(FTPCommands::USER, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
     } else if (command == FTPCommands::PORT) {
-        handlePORT(result, cmd);
+        result->setProperty("activeDataPort", parsePassivePort(cmd.second.at(0)));
     } else if (response.code == FTPResponseCodes::FileStatusOK) {
         handleDataTransferCommand(result, cmd, time_slot);
     }
-}
-
-
-void
-pcapfs::FtpControlFile::handlePASS(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd) {
-    const std::string pass = (cmd.second.size() > 0) ? cmd.second.at(0) : "";
-    result->setProperty(FTPCommands::PASS, pass);
-}
-
-
-void
-pcapfs::FtpControlFile::handleUSER(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd) {
-    const std::string user = (cmd.second.size() > 0) ? cmd.second.at(0) : "";
-    result->setProperty(FTPCommands::USER, user);
-}
-
-
-void
-pcapfs::FtpControlFile::handlePORT(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd) {
-    const uint16_t port = parsePassivePort(cmd.second.at(0));
-
-    result->setProperty("activeDataPort", std::to_string(port));
 }
 
 
@@ -355,14 +331,6 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
 }
 
 
-/**
- *
- * @param startOffset
- * @param length total length of buf
- * @param idx
- * @param buf writing buffer
- * @return
- */
 size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *buf) {
     size_t i = 0;
     size_t read_count = 0;

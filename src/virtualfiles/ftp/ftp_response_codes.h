@@ -10,6 +10,7 @@ namespace pcapfs {
 			FileStatusOK = 150,
 			ClosingDataConnection = 226,
 			EnteringPassiveMode = 227,
+			EnteringExtendedPassiveMode = 229,
 			ClosingControlConnection = 421,
 		};
 	};

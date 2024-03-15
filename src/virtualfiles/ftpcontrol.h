@@ -70,10 +70,9 @@ namespace pcapfs {
         static void
         handleResponseTypes(const Response &response, std::shared_ptr<pcapfs::FtpControlFile> &result);
 
-        static void handleEnteringPassiveMode(const std::string &message,
-                                              std::shared_ptr<pcapfs::FtpControlFile> &result);
+        static std::string const parsePassivePort(std::string message);
 
-        static uint16_t parsePassivePort(std::string message);
+        static std::string const  parseExtendedPassivePort(std::string message);
 
         static uint8_t
         handleCommand(const std::shared_ptr<pcapfs::FtpControlFile> &result, const pcapfs::FilePtr &filePtr,
@@ -91,12 +90,6 @@ namespace pcapfs {
         static void
         handleCommandTypes(std::shared_ptr<FtpControlFile> result, const Command &cmd, const Response &response,
                            const TimeSlot &time_slot);
-
-        static void handlePASS(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd);
-
-        static void handleUSER(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd);
-
-        static void handlePORT(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd);
 
         static void
         handleDataTransferCommand(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd,
