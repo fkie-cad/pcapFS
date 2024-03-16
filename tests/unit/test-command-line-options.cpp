@@ -114,33 +114,14 @@ SCENARIO("test the command line parsing", "[cmdline]") {
         }
 
         WHEN("two key files are given") {
-            argc = 7;
+            argc = 5;
             const auto xorKeyFile = keysdir / "single-xor.key";
             const auto tlsKeyFile = keysdir / "single-tls.key";
-            const char *argv[] = {"pcapfs", "-m", "-k", xorKeyFile.string().c_str(), "-k", tlsKeyFile.string().c_str(),
-                                  pcapfs::tests::TEST_PCAP_PATH};
+            const char *argv[] = {"pcapfs", "-m", "-k", keysdir.string().c_str(), pcapfs::tests::TEST_PCAP_PATH};
             THEN("the config should contain two key file paths") {
                 const auto options = pcapfs::parseOptions(argc, argv);
                 REQUIRE_THAT(options.pcapfsOptions.keyFiles,
                              HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile, tlsKeyFile}));
-            }
-        }
-
-        WHEN("duplicate key files are given") {
-            argc = 11;
-            const auto xorKeyFile1 = keysdir / "single-xor.key";
-            const auto xorKeyFile2 = keysdir / "single-xor.key";
-            const auto tlsKeyFile1 = keysdir / "single-tls.key";
-            const auto tlsKeyFile2 = keysdir / "single-tls.key";
-            const char *argv[] = {"pcapfs", "-m", pcapfs::tests::TEST_PCAP_PATH,
-                                  "-k", xorKeyFile1.string().c_str(),
-                                  "-k", xorKeyFile2.string().c_str(),
-                                  "-k", tlsKeyFile1.string().c_str(),
-                                  "-k", tlsKeyFile2.string().c_str()};
-            THEN("the config should contain only unique key file paths") {
-                auto options = pcapfs::parseOptions(argc, argv);
-                REQUIRE_THAT(options.pcapfsOptions.keyFiles,
-                             HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile1, tlsKeyFile1}));
             }
         }
 

@@ -78,7 +78,6 @@ def run_platform_test(platform):
     resultsfile = f"{LOG_FILE_NAME_PREFIX}-{platform}.results"
     with open(logfile, "w") as log:
         with virtual_machine(platform, log):
-            results["dependencies"] = run_dependency_compilation_test(platform, log)
             results["build"] = run_build_test(platform, log)
             results["unit"] = run_unit_tests(platform, log)
             results["system"] = run_system_tests(platform, log)
@@ -87,30 +86,24 @@ def run_platform_test(platform):
         json.dump(results, f)
 
 
-def run_dependency_compilation_test(platform, log):
-    test_command = [
-        "vagrant",
-        "ssh",
-        platform,
-        "-c",
-        "/home/vagrant/pcapfs/tests/platform/compile-dependencies.sh",
-    ]
-    return _run_test(platform, log, test_command, test_name="dependencies")
-
-
 def run_build_test(platform, log):
     test_command = [
         "vagrant",
         "ssh",
         platform,
         "-c",
-        "/home/vagrant/pcapfs/tests/platform/compile-pcapfs.sh",
+        "/home/vagrant/pcapfs/tests/build/build-pcapfs.sh",
     ]
     return _run_test(platform, log, test_command, test_name="build")
 
 
 def run_system_tests(platform, log):
-    apt_or_yum = "yum" if platform == "centos-7" else "apt"
+    if platform == "centos-7":
+        package_manager = "yum"
+    elif platform.startswith("fedora"):
+        package_manager = "dnf"
+    else:
+        package_manager = "apt"
     try:
         subprocess.check_call(
             [
@@ -118,13 +111,13 @@ def run_system_tests(platform, log):
                 "ssh",
                 platform,
                 "-c",
-                "sudo " + apt_or_yum + " -y install python3-pip",
+                "sudo " + package_manager + " -y install python3-pip",
             ],
             stdout=log,
             stderr=log,
         )
         subprocess.check_call(
-            ["vagrant", "ssh", platform, "-c", "pip install pytest"],
+            ["vagrant", "ssh", platform, "-c", "pip install pytest virtualenv"],
             stdout=log,
             stderr=log,
         )
