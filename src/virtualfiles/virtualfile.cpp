@@ -34,7 +34,7 @@ std::string pcapfs::VirtualFile::getFilename() {
     }
 
     if (flags.test(pcapfs::flags::IS_METADATA)) {
-        if (filetype == "ssl") {
+        if (filetype == "tls") {
             temp += ".pem";
         } else {
             temp += ".meta";

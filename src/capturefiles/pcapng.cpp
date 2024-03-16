@@ -2,7 +2,7 @@
 
 #include "../exceptions.h"
 #include "../filefactory.h"
-#include "../keyfiles/sslkey.h"
+#include "../keyfiles/tlskey.h"
 
 #include <sstream>
 
@@ -109,7 +109,7 @@ const std::vector<pcapfs::FilePtr> pcapfs::PcapNgFile::extractEmbeddedKeyFiles(c
     std::stringstream secretsData(std::string(&blockBody.at(8), &blockBody.at(8 + secretsLength)));
     std::string line;
     while (std::getline(secretsData, line, '\n')){
-        std::shared_ptr<SSLKeyFile> keyFile = SSLKeyFile::extractKeyContent(line);
+        std::shared_ptr<TLSKeyFile> keyFile = TLSKeyFile::extractKeyContent(line);
         if (keyFile)
             result.push_back(keyFile);
     }

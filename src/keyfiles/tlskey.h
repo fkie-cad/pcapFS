@@ -1,5 +1,5 @@
-#ifndef PCAPFS_KEY_FILES_SSLKEY_H
-#define PCAPFS_KEY_FILES_SSLKEY_H
+#ifndef PCAPFS_KEY_FILES_TLSKEY_H
+#define PCAPFS_KEY_FILES_TLSKEY_H
 
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
@@ -12,19 +12,19 @@
 
 namespace pcapfs {
 
-    class SSLKeyFile : public File {
+    class TLSKeyFile : public File {
     public:
-        SSLKeyFile() = default;
+        TLSKeyFile() = default;
 
-        ~SSLKeyFile() override = default;
+        ~TLSKeyFile() override = default;
 
-        static FilePtr create() { return std::make_shared<SSLKeyFile>(); };
+        static FilePtr create() { return std::make_shared<TLSKeyFile>(); };
 
         static std::vector<FilePtr> parseCandidates(const Paths &keyFiles);
 
-        static std::shared_ptr<SSLKeyFile> extractKeyContent(const std::string &line);
+        static std::shared_ptr<TLSKeyFile> extractKeyContent(const std::string &line);
 
-        static std::shared_ptr<pcapfs::SSLKeyFile> createKeyFile(const Bytes &keyMaterial);
+        static std::shared_ptr<pcapfs::TLSKeyFile> createKeyFile(const Bytes &keyMaterial);
 
         Bytes getMasterSecret() { return masterSecret; };
 
@@ -60,4 +60,4 @@ namespace pcapfs {
 
 }
 
-#endif //PCAPFS_KEY_FILES_SSLKEY_H
+#endif //PCAPFS_KEY_FILES_TLSKEY_H

@@ -8,7 +8,7 @@ import pytest
 
 """
 test decryption with master secret, premaster secret, private server key and
-ssl certificate extraction for separate ssl connections in one pcap
+tls certificate extraction for separate tls connections in one pcap
 """
 
 HERE = os.path.dirname(os.path.realpath(__file__))
@@ -84,10 +84,10 @@ def expected_files():
             "http/4-0_GET.meta",
             "http/4-117",
             "http/4-73.meta",
-            "ssl/0-626_SSLCertificate.pem",
-            "ssl/1-1726_SSL",
-            "ssl/1-193_SSLCertificate.pem",
-            "ssl/2-1624_SSL",
-            "ssl/2-195_SSLCertificate.pem",
+            "tls/0-626_TLSCertificate.pem",
+            "tls/1-1726_TLS",
+            "tls/1-193_TLSCertificate.pem",
+            "tls/2-1624_TLS",
+            "tls/2-195_TLSCertificate.pem",
         ]
     )

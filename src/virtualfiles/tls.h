@@ -1,5 +1,5 @@
-#ifndef PCAPFS_VIRTUAL_FILES_SSL_H
-#define PCAPFS_VIRTUAL_FILES_SSL_H
+#ifndef PCAPFS_VIRTUAL_FILES_TLS_H
+#define PCAPFS_VIRTUAL_FILES_TLS_H
 
 #include <iostream>
 #include <string>
@@ -12,17 +12,17 @@
 #include <pcapplusplus/SSLLayer.h>
 
 #include "../file.h"
-#include "../keyfiles/sslkey.h"
+#include "../keyfiles/tlskey.h"
 #include "virtualfile.h"
-#include "../crypto/cipherTextElement.h"
+#include "../crypto/ciphertextelement.h"
 #include "../crypto/handshakedata.h"
 
 namespace pcapfs {
 
-    class SslFile : public VirtualFile {
+    class TlsFile : public VirtualFile {
     public:
 
-        static FilePtr create() { return std::make_shared<SslFile>(); };
+        static FilePtr create() { return std::make_shared<TlsFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
@@ -32,11 +32,11 @@ namespace pcapfs {
 
         uint64_t getKeyIDinIndex() { return keyIDinIndex; };
         std::string const getCipherSuite() { return cipherSuite; };
-        uint16_t getSslVersion() { return sslVersion; };
+        uint16_t getTlsVersion() { return tlsVersion; };
 
         void setKeyIDinIndex(uint64_t keyIDinIndex) { this->keyIDinIndex = keyIDinIndex; };
         void setCipherSuite(const std::string &cipherSuite) { this->cipherSuite = cipherSuite; };
-        void setSslVersion(uint16_t sslVersion) { this->sslVersion = sslVersion; };
+        void setTlsVersion(uint16_t tlsVersion) { this->tlsVersion = tlsVersion; };
 
         bool encryptThenMacEnabled;
         bool truncatedHmacEnabled;
@@ -63,7 +63,7 @@ namespace pcapfs {
         static void createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
                                                         const TLSHandshakeDataPtr &handshakeData, const Index &idx);
 
-        static void initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr,
+        static void initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, const FilePtr &filePtr,
                             const TLSHandshakeDataPtr &handshakeData, Index &idx);
 
         static bool isClientMessage(uint64_t i);
@@ -78,7 +78,7 @@ namespace pcapfs {
 
     protected:
         std::string cipherSuite;
-        uint16_t sslVersion;
+        uint16_t tlsVersion;
         static bool registeredAtFactory;
         uint64_t keyIDinIndex;
         std::vector<uint64_t> previousBytes;
@@ -86,4 +86,4 @@ namespace pcapfs {
     };
 }
 
-#endif //PCAPFS_VIRTUAL_FILES_SSL_H
+#endif //PCAPFS_VIRTUAL_FILES_TLS_H

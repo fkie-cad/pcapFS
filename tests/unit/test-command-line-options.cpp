@@ -116,13 +116,13 @@ SCENARIO("test the command line parsing", "[cmdline]") {
         WHEN("two key files are given") {
             argc = 7;
             const auto xorKeyFile = keysdir / "single-xor.key";
-            const auto sslKeyFile = keysdir / "single-ssl.key";
-            const char *argv[] = {"pcapfs", "-m", "-k", xorKeyFile.string().c_str(), "-k", sslKeyFile.string().c_str(),
+            const auto tlsKeyFile = keysdir / "single-tls.key";
+            const char *argv[] = {"pcapfs", "-m", "-k", xorKeyFile.string().c_str(), "-k", tlsKeyFile.string().c_str(),
                                   pcapfs::tests::TEST_PCAP_PATH};
             THEN("the config should contain two key file paths") {
                 const auto options = pcapfs::parseOptions(argc, argv);
                 REQUIRE_THAT(options.pcapfsOptions.keyFiles,
-                             HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile, sslKeyFile}));
+                             HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile, tlsKeyFile}));
             }
         }
 
@@ -130,17 +130,17 @@ SCENARIO("test the command line parsing", "[cmdline]") {
             argc = 11;
             const auto xorKeyFile1 = keysdir / "single-xor.key";
             const auto xorKeyFile2 = keysdir / "single-xor.key";
-            const auto sslKeyFile1 = keysdir / "single-ssl.key";
-            const auto sslKeyFile2 = keysdir / "single-ssl.key";
+            const auto tlsKeyFile1 = keysdir / "single-tls.key";
+            const auto tlsKeyFile2 = keysdir / "single-tls.key";
             const char *argv[] = {"pcapfs", "-m", pcapfs::tests::TEST_PCAP_PATH,
                                   "-k", xorKeyFile1.string().c_str(),
                                   "-k", xorKeyFile2.string().c_str(),
-                                  "-k", sslKeyFile1.string().c_str(),
-                                  "-k", sslKeyFile2.string().c_str()};
+                                  "-k", tlsKeyFile1.string().c_str(),
+                                  "-k", tlsKeyFile2.string().c_str()};
             THEN("the config should contain only unique key file paths") {
                 auto options = pcapfs::parseOptions(argc, argv);
                 REQUIRE_THAT(options.pcapfsOptions.keyFiles,
-                             HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile1, sslKeyFile1}));
+                             HasSameElementsAs<pcapfs::Paths>(pcapfs::Paths{xorKeyFile1, tlsKeyFile1}));
             }
         }
 

@@ -1,6 +1,6 @@
 unreadVariable:src/logging.cpp
 unreadVariable:src/virtualfiles/http.cpp
-unreadVariable:src/virtualfiles/ssl.cpp
+unreadVariable:src/virtualfiles/tls.cpp
 noOperatorEq:src/virtualfiles/tcp.cpp
 unusedStructMember:src/virtualfiles/tcp.h
 unusedStructMember:src/virtualfiles/ftpcontrol.h

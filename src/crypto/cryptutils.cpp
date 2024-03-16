@@ -21,7 +21,7 @@ std::string const pcapfs::crypto::convertToPem(const Bytes &input) {
     // convert raw DER content to internal X509 structure
     x509 = d2i_X509(&x509, &c, input.size());
     if (!x509) {
-        LOG_WARNING << "Openssl: Failed to read in raw ssl certificate content";
+        LOG_WARNING << "Openssl: Failed to read in raw tls certificate content";
         //ERR_print_errors_fp(stderr);
         X509_free(x509);
         return result;
@@ -30,7 +30,7 @@ std::string const pcapfs::crypto::convertToPem(const Bytes &input) {
     // write x509 certificate in bio
     BIO* bio = BIO_new(BIO_s_mem());
     if (!PEM_write_bio_X509(bio, x509)) {
-        LOG_ERROR << "Openssl: Failed to write ssl certificate as pem into bio:";
+        LOG_ERROR << "Openssl: Failed to write tls certificate as pem into bio:";
         ERR_print_errors_fp(stderr);
         BIO_free(bio);
         X509_free(x509);
@@ -59,13 +59,6 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
 
     //function to derive the master secret from premaster secret and derive key material from master secret
     /*
-     * SSLv3:
-     *
-     * It is a bit longer, see this one:
-     *
-     * https://tools.ietf.org/html/rfc6101#section-6.2.1
-     *
-     *
      * TLS 1.0 and TLS 1.1:
      *          PRF(secret, label, seed) = P_MD5(S1, label + seed) XOR
      *                                      P_SHA-1(S2, label + seed);
@@ -94,8 +87,8 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
     if (input.empty())
         return output;
 
-    if ((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
-        (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
+    if ((handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_1) ||
+        (handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_2)) {
 
         if (handshakeData->clientRandom.empty() || handshakeData->serverRandom.empty()) {
             LOG_ERROR << "Failed to derive key material because client and/or server random could not be extracted";
@@ -154,7 +147,7 @@ pcapfs::Bytes const pcapfs::crypto::createKeyMaterial(const Bytes &input, const 
                 return Bytes();
             }
         } else {
-            if (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2) {
+            if (handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_2) {
                 if (EVP_PKEY_CTX_set_tls1_prf_md(pctx, EVP_sha256()) <= 0) {
                     LOG_ERROR << "Openssl: Failed to set the master secret for tls 1.2" << std::endl;
                     ERR_print_errors_fp(stderr);
@@ -349,7 +342,7 @@ int pcapfs::crypto::matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &ser
     X509* x509 = nullptr;
     x509 = d2i_X509(&x509, &c, serverCertificate.size());
     if (!x509) {
-        LOG_ERROR << "Openssl: Failed to read in raw ssl certificate content";
+        LOG_ERROR << "Openssl: Failed to read in raw tls certificate content";
         ERR_print_errors_fp(stderr);
         EVP_PKEY_free(privKey);
         X509_free(x509);
@@ -369,8 +362,8 @@ pcapfs::Bytes const pcapfs::crypto::calculateSessionHash(const TLSHandshakeDataP
 
     Bytes digest(0);
 
-    if((handshakeData->sslVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_1) ||
-        (handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2)) {
+    if((handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_0) || (handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_1) ||
+        (handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_2)) {
 
         bool useSha384 = (handshakeData->cipherSuite->getMACAlg() == pcpp::SSL_HASH_SHA384) ? true : false;
 
@@ -392,7 +385,7 @@ pcapfs::Bytes const pcapfs::crypto::calculateSessionHash(const TLSHandshakeDataP
                 return Bytes();
             }
         } else {
-            if(handshakeData->sslVersion == pcpp::SSLVersion::TLS1_2){
+            if(handshakeData->tlsVersion == pcpp::SSLVersion::TLS1_2){
                 digest.resize(32);
                 digest_len = 32;
                 if(EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr) != 1) {
@@ -428,7 +421,7 @@ pcapfs::Bytes const pcapfs::crypto::calculateSessionHash(const TLSHandshakeDataP
 
 	    EVP_MD_CTX_free(mdctx);
     } else {
-        LOG_ERROR << "TLS/SSL version not supported for decryption" << std::endl;
+        LOG_ERROR << "TLS version not supported for decryption" << std::endl;
     }
 
     return digest;

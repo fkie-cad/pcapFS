@@ -3,7 +3,7 @@
 
 #include <openssl/evp.h>
 #include <pcapplusplus/SSLLayer.h>
-#include "cipherTextElement.h"
+#include "ciphertextelement.h"
 
 #include <memory>
 

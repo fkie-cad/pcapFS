@@ -1,4 +1,4 @@
-#include "sslkey.h"
+#include "tlskey.h"
 
 #include <cctype>
 #include <fstream>
@@ -18,7 +18,7 @@ namespace {
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vector<boost::filesystem::path> &keyFiles) {
+std::vector<pcapfs::FilePtr> pcapfs::TLSKeyFile::parseCandidates(const std::vector<boost::filesystem::path> &keyFiles) {
     std::vector<pcapfs::FilePtr> resultVector;
     for (auto &keyFile: keyFiles) {
         std::ifstream infile(keyFile.string());
@@ -28,7 +28,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
         }
         std::string line;
         while (std::getline(infile, line)) {
-            std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
+            std::shared_ptr<TLSKeyFile> keyPtr = std::make_shared<TLSKeyFile>();
 
             if (line.rfind(RSA_KEY_BEGIN) != std::string::npos) {
                 char elem;
@@ -39,7 +39,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
                     keyPtr->rsaPrivateKey.push_back(elem);
                 }
 
-                keyPtr->setFiletype("sslkey");
+                keyPtr->setFiletype("tlskey");
                 resultVector.push_back(keyPtr);
 
             } else {
@@ -53,8 +53,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SSLKeyFile::parseCandidates(const std::vect
 }
 
 
-std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::extractKeyContent(const std::string &line) {
-    std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
+std::shared_ptr<pcapfs::TLSKeyFile> pcapfs::TLSKeyFile::extractKeyContent(const std::string &line) {
+    std::shared_ptr<TLSKeyFile> keyPtr = std::make_shared<TLSKeyFile>();
     std::vector<std::string> splitInput;
     boost::split(splitInput, line, boost::is_any_of(" "));
     //TODO: check this before?
@@ -66,18 +66,18 @@ std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::extractKeyContent(const 
         try {
             keyPtr->clientRandom = utils::hexStringToBytes(splitInput.at(1));
             keyPtr->masterSecret = utils::hexStringToBytes(splitInput.at(2));
-            keyPtr->setFiletype("sslkey");
+            keyPtr->setFiletype("tlskey");
         } catch (std::out_of_range &e) {
-            LOG_ERROR << "invalid key file format of ssl key file";
+            LOG_ERROR << "invalid key file format of tls key file";
             return nullptr;
         }
     } else if (splitInput.at(0) == RSA_STRING) {
         try {
             keyPtr->rsaIdentifier = utils::hexStringToBytes(splitInput.at(1));
             keyPtr->preMasterSecret = utils::hexStringToBytes(splitInput.at(2));
-            keyPtr->setFiletype("sslkey");
+            keyPtr->setFiletype("tlskey");
         } catch (std::out_of_range &e) {
-            LOG_ERROR << "invalid key file format of ssl key file";
+            LOG_ERROR << "invalid key file format of tls key file";
             return nullptr;
         }
     }
@@ -86,25 +86,25 @@ std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::extractKeyContent(const 
 }
 
 
-std::shared_ptr<pcapfs::SSLKeyFile> pcapfs::SSLKeyFile::createKeyFile(const Bytes &keyMaterial) {
-    std::shared_ptr<SSLKeyFile> keyPtr = std::make_shared<SSLKeyFile>();
+std::shared_ptr<pcapfs::TLSKeyFile> pcapfs::TLSKeyFile::createKeyFile(const Bytes &keyMaterial) {
+    std::shared_ptr<TLSKeyFile> keyPtr = std::make_shared<TLSKeyFile>();
     keyPtr->keyMaterial = keyMaterial;
-    keyPtr->setFiletype("sslkey");
+    keyPtr->setFiletype("tlskey");
     return keyPtr;
 }
 
 
-void pcapfs::SSLKeyFile::serialize(boost::archive::text_oarchive &archive) {
+void pcapfs::TLSKeyFile::serialize(boost::archive::text_oarchive &archive) {
     File::serialize(archive);
     archive << keyMaterial;
 }
 
 
-void pcapfs::SSLKeyFile::deserialize(boost::archive::text_iarchive &archive) {
+void pcapfs::TLSKeyFile::deserialize(boost::archive::text_iarchive &archive) {
     File::deserialize(archive);
     archive >> keyMaterial;
 }
 
 
-bool pcapfs::SSLKeyFile::registeredAtFactory =
-        pcapfs::FileFactory::registerAtFactory("sslkey", pcapfs::SSLKeyFile::create);
+bool pcapfs::TLSKeyFile::registeredAtFactory =
+        pcapfs::FileFactory::registerAtFactory("tlskey", pcapfs::TLSKeyFile::create);

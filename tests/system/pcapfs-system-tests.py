@@ -29,14 +29,14 @@ class TestBasicFunctionality:
                 "dns",
                 "http",
                 "ssh",
-                "ssl",
                 "tcp",
+                "tls",
             ]
 
     def test_mount_point_contains_all_files(self, testpcap, expected_files):
         with mount_pcap(testpcap) as mountpoint:
             files = list()
-            for d in ["dhcp", "dns", "http", "ssh", "ssl", "tcp"]:
+            for d in ["dhcp", "dns", "http", "ssh", "tls", "tcp"]:
                 files.extend(
                     os.path.join(d, f) for f in os.listdir(os.path.join(mountpoint, d))
                 )
@@ -60,7 +60,7 @@ class TestSortByOption:
             "52218/1-306_ip",
             "60906/11-2338_SSH-5",
             "22/11-2526_SSH-6",
-            "443/0-1838_SSL",
+            "443/0-1838_TLS",
             "12345/0-135_tcp9",
             "54321/0-143_tcp10",
         )
@@ -85,7 +85,7 @@ class TestSortByOption:
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/11-2526_SSH-6",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-135_tcp9",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-143_tcp10",
-            "1949310ab64717817ba98300d889efb3/48ed6c8d9eb6d18b50b12cee7c730ef5/0-1838_SSL",
+            "1949310ab64717817ba98300d889efb3/48ed6c8d9eb6d18b50b12cee7c730ef5/0-1838_TLS",
         )
         with mount_pcap(testpcap, params=["--sortby=ja3/ja3s"]) as mountpoint:
             assert get_file_list(mountpoint) == sorted(expected_files)
@@ -106,7 +106,7 @@ class TestSortByOption:
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/1-306_ip",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-135_tcp9",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-143_tcp10",
-            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-1838_SSL",
+            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-1838_TLS",
             "0df0d56bb50c6b2426d8d40234bf1826/a95c22bf8e9b19ed0a5dc74bb2f9c613/11-2338_SSH-5",
             "0df0d56bb50c6b2426d8d40234bf1826/a95c22bf8e9b19ed0a5dc74bb2f9c613/11-2526_SSH-6",
         )
@@ -114,50 +114,50 @@ class TestSortByOption:
             assert get_file_list(mountpoint) == sorted(expected_files)
 
 
-class TestSsl:
-    def test_with_single_ssl_key_file(self, testpcap, expected_files_with_ssl):
+class TestTls:
+    def test_with_single_tls_key_file(self, testpcap, expected_files_with_tls):
         with mount_pcap(
-            testpcap, params=["-k", "{here}/keyfiles/ssl.key".format(here=HERE)]
+            testpcap, params=["-k", "{here}/keyfiles/tls.key".format(here=HERE)]
         ) as mountpoint:
-            assert get_file_list(mountpoint) == expected_files_with_ssl
+            assert get_file_list(mountpoint) == expected_files_with_tls
 
 
-class TestSslFileReadRaw:
-    def test_read_raw_ssl_rc4_full_appdata(
+class TestTlsFileReadRaw:
+    def test_read_raw_tls_rc4_full_appdata(
         self, testpcap, content_tls_appdata_all_cipher
     ):
         with mount_pcap(testpcap) as mountpoint:
             files = get_file_list(mountpoint)
-            assert "ssl/0-1838_SSL" in files
-            with open(os.path.join(mountpoint, "ssl/0-1838_SSL"), "rb") as f:
+            assert "tls/0-1838_TLS" in files
+            with open(os.path.join(mountpoint, "tls/0-1838_TLS"), "rb") as f:
                 content = f.read()
                 data = binascii.hexlify(content)
                 hexdata = str(data, "UTF-8")
                 assert hexdata == content_tls_appdata_all_cipher
 
 
-class TestSslFileReadProcessed:
-    def test_read_processed_ssl_rc4_full_appdata(
+class TestTlsFileReadProcessed:
+    def test_read_processed_tls_rc4_full_appdata(
         self, testpcap, content_tls_appdata_all_plain
     ):
         with mount_pcap(
             testpcap,
-            params=["--show-all", "-k", "{here}/keyfiles/ssl.key".format(here=HERE)],
+            params=["--show-all", "-k", "{here}/keyfiles/tls.key".format(here=HERE)],
         ) as mountpoint:
             files = get_file_list(mountpoint)
-            assert "ssl/0-1838_SSL" in files
-            with open(os.path.join(mountpoint, "ssl/0-1838_SSL"), "rb") as f:
+            assert "tls/0-1838_TLS" in files
+            with open(os.path.join(mountpoint, "tls/0-1838_TLS"), "rb") as f:
                 content = f.read()
                 data = binascii.hexlify(content)
                 hexdata = str(data, "UTF-8")
                 assert hexdata == content_tls_appdata_all_plain
 
-    def test_read_processed_ssl_as_http(
+    def test_read_processed_tls_as_http(
         self, testpcap, content_tls_appdata_all_plain_response_body_only
     ):
         with mount_pcap(
             testpcap,
-            params=["--show-all", "-k", "{here}/keyfiles/ssl.key".format(here=HERE)],
+            params=["--show-all", "-k", "{here}/keyfiles/tls.key".format(here=HERE)],
         ) as mountpoint:
             files = get_file_list(mountpoint)
             assert "http/0-279" in files
@@ -307,7 +307,7 @@ def expected_files():
             "http/1-306_ip",
             "ssh/11-2338_SSH-5",
             "ssh/11-2526_SSH-6",
-            "ssl/0-1838_SSL",
+            "tls/0-1838_TLS",
             "tcp/0-135_tcp9",
             "tcp/0-143_tcp10",
         ]
@@ -322,8 +322,8 @@ def expected_files_with_xor(expected_files):
 
 
 @pytest.fixture
-def expected_files_with_ssl(expected_files):
-    expected_files.remove("ssl/0-1838_SSL")
+def expected_files_with_tls(expected_files):
+    expected_files.remove("tls/0-1838_TLS")
     expected_files.append("http/0-279")
     return sorted(expected_files)
 

@@ -1,4 +1,4 @@
-#include "decryptSymmetric.h"
+#include "decrypt_symmetric.h"
 #include <string>
 #include <vector>
 #include <openssl/err.h>

@@ -149,7 +149,7 @@ namespace {
     void parseDecodeSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config, const pcapfs::Path &configPath) {
         if (!section) { return; }
 
-        const std::set<std::string> validDecodeTypes = {"xor", "ssl", "cobaltstrike"};
+        const std::set<std::string> validDecodeTypes = {"xor", "tls", "cobaltstrike"};
 
         for (const auto &subsection : *section) {
             if (std::find_if(validDecodeTypes.begin(), validDecodeTypes.end(), [subsection](const std::string &s){

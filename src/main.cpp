@@ -18,7 +18,7 @@
 #include "pcapfs.h"
 #include "dirlayout.h"
 #include "capturefiles/capturefile.h"
-#include "keyfiles/sslkey.h"
+#include "keyfiles/tlskey.h"
 #include "keyfiles/xorkey.h"
 #include "keyfiles/cskey.h"
 #include "virtualfiles/tcp.h"
@@ -33,7 +33,7 @@ namespace fs = boost::filesystem;
 /*
  * This function is entered for all *filesToProcess* candidates and to handle the new *newFiles*
  * which occur after this function *getNextVirtualFile* detects new candidates.
- * This happens e.g. when SSL Files are first parsed as TCP files and then as HTTP content files
+ * This happens e.g. when TLS Files are first parsed as TCP files and then as HTTP content files
  * after the decryption stage. It happens that the functions are called twice or in theory even more often.
  */
 
@@ -122,7 +122,7 @@ int main(int argc, const char *argv[]) {
     }
 
     if (!config.keyFiles.empty()) {
-        std::vector<pcapfs::FilePtr> keyFiles = pcapfs::SSLKeyFile::parseCandidates(config.keyFiles);
+        std::vector<pcapfs::FilePtr> keyFiles = pcapfs::TLSKeyFile::parseCandidates(config.keyFiles);
         index.insertKeyCandidates(keyFiles);
         keyFiles = pcapfs::XORKeyFile::parseCandidates(config.keyFiles);
         index.insertKeyCandidates(keyFiles);

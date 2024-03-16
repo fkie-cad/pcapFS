@@ -26,7 +26,7 @@ namespace pcapfs {
             bool extendedMasterSecret = false;
             uint64_t clientEncryptedData = 0;
 	    	uint64_t serverEncryptedData = 0;
-            uint16_t sslVersion = 0;
+            uint16_t tlsVersion = 0;
             unsigned int iteration = 0;
 
             Bytes clientRandom;

@@ -38,12 +38,12 @@ set(PCAPFS_COMMON_SOURCES
         src/capturefiles/capturefile.cpp
         src/capturefiles/pcap.cpp
         src/capturefiles/pcapng.cpp
-        src/crypto/decryptSymmetric.cpp
+        src/crypto/decrypt_symmetric.cpp
         src/crypto/cryptutils.cpp
         src/virtualfiles/cobaltstrike/cs_callback_codes.h
         src/virtualfiles/cobaltstrike/cs_command_codes.h
         src/virtualfiles/cobaltstrike/cs_manager.cpp
-        src/keyfiles/sslkey.cpp
+        src/keyfiles/tlskey.cpp
         src/keyfiles/xorkey.cpp
         src/keyfiles/cskey.cpp
         src/virtualfiles/virtualfile.cpp
@@ -54,7 +54,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/ftp/ftp_port_bridge.cpp
         src/virtualfiles/dns.cpp
         src/virtualfiles/http.cpp
-        src/virtualfiles/ssl.cpp
+        src/virtualfiles/tls.cpp
         src/virtualfiles/tcp.cpp
         src/virtualfiles/udp.cpp
         src/virtualfiles/xor.cpp

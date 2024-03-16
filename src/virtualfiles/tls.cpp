@@ -1,7 +1,7 @@
-#include "ssl.h"
+#include "tls.h"
 #include "../filefactory.h"
 #include "../logging.h"
-#include "../crypto/decryptSymmetric.h"
+#include "../crypto/decrypt_symmetric.h"
 #include "../crypto/ciphersuites.h"
 #include "../crypto/handshakedata.h"
 #include "../crypto/cryptutils.h"
@@ -13,16 +13,16 @@
 #include <regex>
 
 
-std::string const pcapfs::SslFile::toString() {
+std::string const pcapfs::TlsFile::toString() {
 	std::string ret;
-	ret.append("SslFile object content:\n");
+	ret.append("TlsFile object content:\n");
 
 	ret.append("ciphersuite: ");
 	ret.append(cipherSuite);
     ret.append("\n");
 
-	ret.append("sslVersion: ");
-	pcpp::SSLVersion v(sslVersion);
+	ret.append("tlsVersion: ");
+	pcpp::SSLVersion v(tlsVersion);
 	ret.append(v.toString());
 	ret.append("\n");
 
@@ -62,7 +62,7 @@ std::string const pcapfs::SslFile::toString() {
 }
 
 
-size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
+size_t pcapfs::TlsFile::calculateProcessedSize(const Index &idx) {
     std::vector<CiphertextPtr> cipherTextVector(0);
     std::vector<Bytes> result(0);
 
@@ -74,7 +74,7 @@ size_t pcapfs::SslFile::calculateProcessedSize(const Index &idx) {
 }
 
 
-bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
+bool pcapfs::TlsFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
     if (filePtr->getProperty("protocol") != "tcp")
         return false;
     if (!config.checkNonDefaultPorts)
@@ -105,7 +105,7 @@ bool pcapfs::SslFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
 }
 
 
-void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
+void pcapfs::TlsFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
                                             const FilePtr &filePtr, const Index &idx){
 
     size_t currentHandshakeOffset = 0; // for extracting raw handshake data out of multiple handshake messages contained in one ssl layer
@@ -116,7 +116,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
     }
     const uint64_t numHandshakeMessages = handshakeLayer->getHandshakeMessagesCount();
     if (numHandshakeMessages > 0){
-        // add length of ssl record header
+        // add length of tls record header
         offset += 5;
     }
 
@@ -170,7 +170,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 					crypto::SERVER_RANDOM_SIZE);
             if (serverHelloMessage->getCipherSuite())
                 handshakeData->cipherSuite = serverHelloMessage->getCipherSuite();
-			handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
+			handshakeData->tlsVersion = sslLayer->getRecordVersion().asUInt();
             handshakeData->processedTLSHandshake = true;
 
 			LOG_TRACE << "We have " << serverHelloMessage->getExtensionCount() << " extensions!";
@@ -314,7 +314,7 @@ void pcapfs::SslFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 }
 
 
-size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
+size_t pcapfs::TlsFile::calculateProcessedCertSize(const Index &idx) {
     Bytes rawData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);
@@ -325,7 +325,7 @@ size_t pcapfs::SslFile::calculateProcessedCertSize(const Index &idx) {
 }
 
 
-void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
+void pcapfs::TlsFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
                                                                     const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
     uint64_t offsetTemp = 0;
 
@@ -333,7 +333,7 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
     LOG_TRACE << "we have " << certificateMessage->getNumOfCertificates() << " certificates";
 
     for (int i = 0; i < certificateMessage->getNumOfCertificates(); ++i) {
-        std::shared_ptr<SslFile> certPtr = std::make_shared<SslFile>();
+        std::shared_ptr<TlsFile> certPtr = std::make_shared<TlsFile>();
         const pcpp::SSLx509Certificate* certificate = certificateMessage->getCertificate(i);
 
         offsetTemp += 3; // length field in front of each certificate
@@ -347,14 +347,14 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
         certPtr->fragments.push_back(fragment);
         certPtr->setFilesizeRaw(fragment.length);
         certPtr->setFilesizeProcessed(fragment.length);
-        certPtr->setFiletype("ssl");
-        certPtr->setFilename("SSLCertificate");
+        certPtr->setFiletype("tls");
+        certPtr->setFilename("TLSCertificate");
         certPtr->setOffsetType("tcp");
         certPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
 	    certPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
 	    certPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
 	    certPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-	    certPtr->setProperty("protocol", "ssl");
+	    certPtr->setProperty("protocol", "tls");
         if (!handshakeData->serverName.empty())
             certPtr->setProperty("domain", handshakeData->serverName);
         certPtr->flags.set(pcapfs::flags::IS_METADATA);
@@ -372,17 +372,17 @@ void pcapfs::SslFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
 }
 
 
-void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, const FilePtr &filePtr, const TLSHandshakeDataPtr &handshakeData, Index &idx){
+void pcapfs::TlsFile::initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, const FilePtr &filePtr, const TLSHandshakeDataPtr &handshakeData, Index &idx){
 	//search for master secret in candidates
-    if ((config.getDecodeMapFor("ssl").empty() || filePtr->meetsDecodeMapCriteria("ssl")) &&
+    if ((config.getDecodeMapFor("tls").empty() || filePtr->meetsDecodeMapCriteria("tls")) &&
         handshakeData->processedTLSHandshake && handshakeData->cipherSuite) {
-        // when no decode config for ssl is supplied we try to decrypt all ssl traffic (with the resp. keys)
-        // when an ssl decode config is supplied we only decrypt ssl traffic which meets the given config
+        // when no decode config for tls is supplied we try to decrypt all tls traffic (with the resp. keys)
+        // when an tls decode config is supplied we only decrypt tls traffic which meets the given config
 		const Bytes masterSecret = searchCorrectMasterSecret(handshakeData, idx);
 		if (!masterSecret.empty() && isSupportedCipherSuite(handshakeData->cipherSuite)) {
 		    const Bytes keyMaterial = crypto::createKeyMaterial(masterSecret, handshakeData, false);
             if(!keyMaterial.empty()) {
-		        std::shared_ptr<SSLKeyFile> keyPtr = SSLKeyFile::createKeyFile(
+		        std::shared_ptr<TLSKeyFile> keyPtr = TLSKeyFile::createKeyFile(
 		        		keyMaterial);
 		        idx.insert(keyPtr);
 		        resultPtr->setKeyIDinIndex(keyPtr->getIdInIndex());
@@ -393,7 +393,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 		}
 	}
     resultPtr->setOffsetType(filePtr->getFiletype());
-    resultPtr->setFiletype("ssl");
+    resultPtr->setFiletype("tls");
     if (handshakeData->cipherSuite)
         resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
     if (!handshakeData->ja3.empty())
@@ -402,13 +402,13 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
         resultPtr->setProperty("ja3s", handshakeData->ja3s);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
-    resultPtr->setSslVersion(handshakeData->sslVersion);
-    resultPtr->setFilename("SSL");
+    resultPtr->setTlsVersion(handshakeData->tlsVersion);
+    resultPtr->setFilename("TLS");
     resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
     resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
     resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
     resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    resultPtr->setProperty("protocol", "ssl");
+    resultPtr->setProperty("protocol", "tls");
     if (!handshakeData->serverName.empty())
         resultPtr->setProperty("domain", handshakeData->serverName);
     resultPtr->setTimestamp(filePtr->connectionBreaks.at(handshakeData->iteration).second);
@@ -419,7 +419,7 @@ void pcapfs::SslFile::initResultPtr(const std::shared_ptr<SslFile> &resultPtr, c
 }
 
 
-bool pcapfs::SslFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite) {
+bool pcapfs::TlsFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherSuite) {
     if (!cipherSuite)
         return false;
     if (crypto::supportedCipherSuiteIds.find(cipherSuite->getID()) == crypto::supportedCipherSuiteIds.end()) {
@@ -430,19 +430,19 @@ bool pcapfs::SslFile::isSupportedCipherSuite(const pcpp::SSLCipherSuite* cipherS
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx) {
+std::vector<pcapfs::FilePtr> pcapfs::TlsFile::parse(FilePtr filePtr, Index &idx) {
     Bytes data = filePtr->getBuffer();
     std::vector<FilePtr> resultVector(0);
 
-    // detect ssl stream by checking for dst Port 443
+    // detect tls stream by checking for dst Port 443
     if(!isTLSTraffic(filePtr, data)) {
         return resultVector;
     }
 
     size_t size = 0;
     const size_t numElements = filePtr->connectionBreaks.size();
-    bool visitedVirtualSslFile = false;
-    std::shared_ptr<SslFile> resultPtr = nullptr;
+    bool visitedVirtualTlsFile = false;
+    std::shared_ptr<TlsFile> resultPtr = nullptr;
     TLSHandshakeDataPtr handshakeData = std::make_shared<crypto::TLSHandshakeData>();
 
     // process all logical breaks in underlying virtual file
@@ -460,7 +460,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         //connection break has wrong size if content is encrypted
         LOG_DEBUG << "connectionBreaks Size: " << size;
 
-        // one logical fragment may contain multiple ssl layer messages
+        // one logical fragment may contain multiple tls layer messages
         pcpp::SSLLayer *sslLayer = pcpp::SSLLayer::createSSLMessage((uint8_t *) data.data() + offset, size, nullptr, nullptr);
         bool connectionBreakOccured = true;
         handshakeData->iteration = i;
@@ -481,7 +481,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     LOG_DEBUG << "server starting encryption now!";
                     handshakeData->serverChangeCipherSpec = true;
                 }
-                // length of change cipher spec is always 1, add ssl record layer header length
+                // length of change cipher spec is always 1, add tls record layer header length
                 offset += 6;
 
             } else if (recType == pcpp::SSL_APPLICATION_DATA) {
@@ -495,22 +495,22 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 }
 
                 const uint64_t encryptedDataLen = applicationDataLayer->getEncryptedDataLen();
-                const uint64_t completeSSLLen = applicationDataLayer->getHeaderLen();
+                const uint64_t completeTLSLen = applicationDataLayer->getHeaderLen();
 
                 LOG_TRACE << "applicationDataLayer->getEncryptedDataLen(): " << applicationDataLayer->getEncryptedDataLen();
                 LOG_TRACE << "applicationDataLayer->getHeaderLen(): " << applicationDataLayer->getHeaderLen();
 
-                const uint64_t bytesBeforeEncryptedData = completeSSLLen - encryptedDataLen;
+                const uint64_t bytesBeforeEncryptedData = completeTLSLen - encryptedDataLen;
                 LOG_TRACE << "bytesBeforeEncryptedData: " << bytesBeforeEncryptedData;
 
-                //create ssl application file
+                //create tls application file
                 //TODO: does client always send first?
                 if (!resultPtr) {
-                    if (handshakeData->sslVersion == 0)
-                        // possible that extraction of sslVersion was not done in advance
-                        handshakeData->sslVersion = sslLayer->getRecordVersion().asUInt();
+                    if (handshakeData->tlsVersion == 0)
+                        // possible that extraction of tlsVersion was not done in advance
+                        handshakeData->tlsVersion = sslLayer->getRecordVersion().asUInt();
 
-                    resultPtr = std::make_shared<SslFile>();
+                    resultPtr = std::make_shared<TlsFile>();
                     initResultPtr(resultPtr, filePtr, handshakeData, idx);
 
                     //init with 0
@@ -533,7 +533,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                             resultPtr->setFilesizeProcessed(resultPtr->filesizeProcessed + resultPtr->calculateProcessedSize(idx));
                         else
                             resultPtr->setFilesizeProcessed(resultPtr->getFilesizeRaw());
-                        visitedVirtualSslFile = true;
+                        visitedVirtualTlsFile = true;
                     }
 
                     resultPtr->connectionBreaks.push_back({resultPtr->getFilesizeProcessed(), filePtr->connectionBreaks.at(i).second});
@@ -550,8 +550,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                 fragment.start = offset + bytesBeforeEncryptedData;
                 fragment.length = encryptedDataLen;
 
-                // if size is a mismatch => ssl packet is malformed
-                // TODO: Better detection of malformed ssl packets
+                // if size is a mismatch => tls packet is malformed
+                // TODO: Better detection of malformed tls packets
                 if (fragment.length > sslLayer->getDataLen()) {
                     break;
                 }
@@ -571,11 +571,11 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
                     LOG_DEBUG << "server encrypted " << std::to_string(handshakeData->serverEncryptedData);
                 }
 
-                offset += completeSSLLen;
+                offset += completeTLSLen;
 
                 resultPtr->setFilesizeRaw(resultPtr->getFilesizeRaw() + encryptedDataLen);
 
-				LOG_DEBUG << "Full SSL File afterwards:\n" << resultPtr->toString();
+				LOG_DEBUG << "Full TLS File afterwards:\n" << resultPtr->toString();
 
 			} else if (recType == pcpp::SSL_ALERT) {
                 const pcpp::SSLAlertLayer *alertLayer =
@@ -592,7 +592,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
              * Idea: Just one decryption after all ciphertext is available. We need to keep track
              * of all connection breaks and package breaks. Then we can reconstruct it here inside the parser.
              */
-            if(!sslLayer && visitedVirtualSslFile && resultPtr->flags.test(flags::PROCESSED)) {
+            if(!sslLayer && visitedVirtualTlsFile && resultPtr->flags.test(flags::PROCESSED)) {
                 LOG_DEBUG << "Fixing the fileSizeProcessed, setting it to the full size of plaintext.";
                 const size_t calculated_size = resultPtr->calculateProcessedSize(idx);
                 /*
@@ -604,7 +604,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
         }
     }
 
-    //TODO: multiple ssl streams in one tcp stream?!
+    //TODO: multiple tls streams in one tcp stream?!
     if (resultPtr) {
         resultVector.push_back(resultPtr);
     }
@@ -617,25 +617,25 @@ std::vector<pcapfs::FilePtr> pcapfs::SslFile::parse(FilePtr filePtr, Index &idx)
 
 
 //Returns the correct Master Secret out of a bunch of candidates
-pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
+pcapfs::Bytes const pcapfs::TlsFile::searchCorrectMasterSecret(const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
 
     bool isRsaKeyX = (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA);
-    const std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("sslkey");
+    const std::vector<pcapfs::FilePtr> keyFiles = idx.getCandidatesOfType("tlskey");
 
     for (const auto &keyFile: keyFiles) {
-        const std::shared_ptr<SSLKeyFile> sslKeyFile = std::dynamic_pointer_cast<SSLKeyFile>(keyFile);
-        if (!sslKeyFile) {
-            LOG_ERROR << "dynamic_pointer_cast failed for ssl key file";
+        const std::shared_ptr<TLSKeyFile> tlsKeyFile = std::dynamic_pointer_cast<TLSKeyFile>(keyFile);
+        if (!tlsKeyFile) {
+            LOG_ERROR << "dynamic_pointer_cast failed for tls key file";
             continue;
         }
-        if (sslKeyFile->getClientRandom().size() != 0 && sslKeyFile->getClientRandom() == handshakeData->clientRandom){
-            return sslKeyFile->getMasterSecret();
+        if (tlsKeyFile->getClientRandom().size() != 0 && tlsKeyFile->getClientRandom() == handshakeData->clientRandom){
+            return tlsKeyFile->getMasterSecret();
         } else if (isRsaKeyX) {
-            if (sslKeyFile->getRsaIdentifier().size() != 0 && sslKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
-                return crypto::createKeyMaterial(sslKeyFile->getPreMasterSecret(), handshakeData, true);
-            } else if (crypto::matchPrivateKey(sslKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
+            if (tlsKeyFile->getRsaIdentifier().size() != 0 && tlsKeyFile->getRsaIdentifier() == handshakeData->rsaIdentifier) {
+                return crypto::createKeyMaterial(tlsKeyFile->getPreMasterSecret(), handshakeData, true);
+            } else if (crypto::matchPrivateKey(tlsKeyFile->getRsaPrivateKey(), handshakeData->serverCertificate)) {
                 return crypto::createKeyMaterial(crypto::rsaPrivateDecrypt(handshakeData->encryptedPremasterSecret,
-                                                sslKeyFile->getRsaPrivateKey(), true), handshakeData, true);
+                                                tlsKeyFile->getRsaPrivateKey(), true), handshakeData, true);
             }
         }
     }
@@ -643,23 +643,7 @@ pcapfs::Bytes const pcapfs::SslFile::searchCorrectMasterSecret(const TLSHandshak
 }
 
 
-/*
- * Decryption Engine:
- * We use pcap plus plus to detect the matching cipher. Pcap plus plus does provide the IANA mapping via the method
- *   pcpp::SSLCipherSuite::getCipherSuiteByName(std::__cxx11::string cipherSuite)
- *
- * Decryption is handled by openssl bindings since pcap plus plus provides only parsing for SSL/TLS.
- *
- * OpenSSL Ciphers vs standard (good to know):
- * https://testssl.sh/openssl-iana.mapping.html
- *
- * symmetric ssl encryption enum in pcap plus plus:
- * https://seladb.github.io/PcapPlusPlus-Doc/Documentation/a00202.html#ac4f9e906dad88c5eb6a34390e5ea54b7
- *
- */
-
-
-int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
+int pcapfs::TlsFile::decryptData(const CiphertextPtr &input, Bytes &output) {
 
 	const pcpp::SSLCipherSuite *cipher = pcpp::SSLCipherSuite::getCipherSuiteByName(cipherSuite);
     if (!cipher)
@@ -692,14 +676,14 @@ int pcapfs::SslFile::decryptData(const CiphertextPtr &input, Bytes &output) {
             break;
         }
         default:
-            LOG_ERROR << "unsupported encryption found in ssl cipher suite: " << cipher->asString();
+            LOG_ERROR << "unsupported encryption found in tls cipher suite: " << cipher->asString();
             return 0;
     }
     return 1;
 }
 
 
-size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+size_t pcapfs::TlsFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
     if(flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
         LOG_TRACE << "[USING KEY] start with reading decrypted content, startOffset: " << startOffset << " and length: " << length;
@@ -719,7 +703,7 @@ size_t pcapfs::SslFile::read(uint64_t startOffset, size_t length, const Index &i
 }
 
 
-size_t pcapfs::SslFile::readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+size_t pcapfs::TlsFile::readCertificate(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     Fragment fragment = fragments.at(0);
     Bytes rawData(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
@@ -731,7 +715,7 @@ size_t pcapfs::SslFile::readCertificate(uint64_t startOffset, size_t length, con
 }
 
 
-size_t pcapfs::SslFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+size_t pcapfs::TlsFile::readRaw(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     //TODO: right now this assumes each http file only contains ONE offset into a tcp stream
 	LOG_TRACE << "read_raw offset size: " << fragments.size();
     size_t position = 0;
@@ -776,7 +760,7 @@ size_t pcapfs::SslFile::readRaw(uint64_t startOffset, size_t length, const Index
 }
 
 
-size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
+size_t pcapfs::TlsFile::readDecryptedContent(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
     bool buffer_needs_content = std::all_of(buffer.cbegin(), buffer.cend(),
                                             [](const auto &elem) { return elem == 0; });
@@ -866,7 +850,7 @@ size_t pcapfs::SslFile::readDecryptedContent(uint64_t startOffset, size_t length
  * The function gets the full TLS application layer stream into a vector.
  * Each element in the vector represents one decrypted packet, containing an alternating stream of the packets from client and server.
  */
-size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<CiphertextPtr> &outputCipherTextVector) {
+size_t pcapfs::TlsFile::getFullCipherText(const Index &idx, std::vector<CiphertextPtr> &outputCipherTextVector) {
     size_t fragment = 0;
     size_t position = 0;
     int counter = 0;
@@ -889,8 +873,8 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
 
             if (flags.test(pcapfs::flags::HAS_DECRYPTION_KEY)) {
 
-                std::shared_ptr<SSLKeyFile> keyPtr = std::dynamic_pointer_cast<SSLKeyFile>(
-                    idx.get({"sslkey", getKeyIDinIndex()}));
+                std::shared_ptr<TLSKeyFile> keyPtr = std::dynamic_pointer_cast<TLSKeyFile>(
+                    idx.get({"tlskey", getKeyIDinIndex()}));
 
                 CiphertextPtr cte = std::make_shared<CipherTextElement>();
                 cte->setVirtualFileOffset(previousBytes.at(fragment));
@@ -944,7 +928,7 @@ size_t pcapfs::SslFile::getFullCipherText(const Index &idx, std::vector<Cipherte
  * Decrypt the vector of bytes using the key material provided via every frame of the vector.
  * returns a vector of the plaintext.
  */
-void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
+void pcapfs::TlsFile::decryptCiphertextVecToPlaintextVec(
 		const std::vector<CiphertextPtr> &cipherTextVector,
 		std::vector<Bytes> &outputPlainTextVector) {
 
@@ -974,7 +958,7 @@ void pcapfs::SslFile::decryptCiphertextVecToPlaintextVec(
 }
 
 
-bool pcapfs::SslFile::isClientMessage(uint64_t i) {
+bool pcapfs::TlsFile::isClientMessage(uint64_t i) {
     if (i % 2 == 0) {
         return true;
     } else {
@@ -983,14 +967,14 @@ bool pcapfs::SslFile::isClientMessage(uint64_t i) {
 }
 
 
-bool pcapfs::SslFile::registeredAtFactory =
-        pcapfs::FileFactory::registerAtFactory("ssl", pcapfs::SslFile::create, pcapfs::SslFile::parse);
+bool pcapfs::TlsFile::registeredAtFactory =
+        pcapfs::FileFactory::registerAtFactory("tls", pcapfs::TlsFile::create, pcapfs::TlsFile::parse);
 
 
-void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
+void pcapfs::TlsFile::serialize(boost::archive::text_oarchive &archive) {
     VirtualFile::serialize(archive);
     archive << cipherSuite;
-    archive << sslVersion;
+    archive << tlsVersion;
     archive << (encryptThenMacEnabled ? 1 : 0);
     archive << (truncatedHmacEnabled ? 1 : 0);
     archive << keyIDinIndex;
@@ -999,11 +983,11 @@ void pcapfs::SslFile::serialize(boost::archive::text_oarchive &archive) {
 }
 
 
-void pcapfs::SslFile::deserialize(boost::archive::text_iarchive &archive) {
+void pcapfs::TlsFile::deserialize(boost::archive::text_iarchive &archive) {
     int i, j = 0;
     VirtualFile::deserialize(archive);
     archive >> cipherSuite;
-    archive >> sslVersion;
+    archive >> tlsVersion;
     archive >> i;
     encryptThenMacEnabled = i ? true : false;
     archive >> j;

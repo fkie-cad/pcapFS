@@ -1,22 +1,16 @@
-/.idea/
 /.vagrant/
 /.vscode/
 /3rdparty/
 /bin/
 /downloads/
 /build/
-/obj/
 /cmake-build-*/
 /dependencies/
-/requirements/
 /src/versions.h
 /tests/unit/constants.h
 
-.directory/
-.DS_Store
 __pycache__/
 venv/
-
 
 platform-tests-*.results
 ._*
@@ -25,15 +19,3 @@ platform-tests-*.results
 *.pcap
 !/tests/crypto/pcaps/*.pcap
 !/tests/system/system-tests.pcap
-
-.kdev4/
-pcapFS.kdev4
-
-
-.autotools
-.cproject
-.pmd
-.project
-.settings/
-
-/profiler.csv

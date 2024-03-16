@@ -18,7 +18,7 @@
   dstPort = 2222
   protocol = "udp"
 
-[[decode.ssl.properties]]
+[[decode.tls.properties]]
   srcIP = "1.2.3.4"
   srcPort = 8080
 
