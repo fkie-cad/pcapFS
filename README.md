@@ -21,12 +21,13 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 - raw TCP and UDP
 - HTTP 1.1
 - FTP
-- TLS 1.0-1.2
+- TLS 1.0-1.2 (see [below](#decrypting-and-decoding-traffic))
+- SMB2
 - SSH
 - DNS
 - DHCP
 - XOR
-- Cobalt Strike C2 (default profile)
+- Cobalt Strike C2 (default profile, see [below](#decrypting-cobalt-strike-c2-traffic))
 
 # Getting pcapFS
 We do not provide any precompiled packages yet. This is mainly because a lot of the dependencies of pcapFS are also not
@@ -254,6 +255,13 @@ directories for the protocols. There are additional `PCAPFS_PROP_NOT_AVAIL` fold
 because the parsers for TCP and SSL do not provide the `domain` and `path` properties. The HTTP parser on the other
 hand provides these properties leading to the `server.test` and `image` subdirectories.
 
+## Showing Metadata Files with `--show-metadata`
+When you pass the option `--show-metadata` to pcapFS, additional files with useful metadata information are created. Depending on the protocol, different information is extracted for metadata files:
+- TLS: all certificates of the server-side certificate chain
+- HTTP: headers from requests and responses
+- SMB2: control files containing transferred commands and responses per connection
+- FTP: control files, credential files containing the client's login credentials
+
 ## Decrypting and Decoding Traffic
 It is possible for pcapFS to decrypt and decode certain protocols on the fly if you provide it with the corresponding
 key material. Right now, we have prototypical support for SSL/TLS and
@@ -285,9 +293,11 @@ Currently supported cipher suites are:
 | 0x009C | `TLS_RSA_WITH_AES_128_GCM_SHA256` |
 
 ### Decrypting Cobalt Strike C2 Traffic
-pcapFS supports prototypical decryption of Cobalt Strike C2 traffic as long as the Cobalt Strike default profile is used.
-In order to successfully decrypt the C2 traffic, the team server's private RSA key is required which has to be passed as a key file via the command line (`-k` or
+PcapFS supports prototypical decryption of Cobalt Strike C2 traffic as long as the Cobalt Strike default profile is used.
+In order to successfully decrypt the C2 traffic, the team server's private RSA key is required which has to be passed in PEM format as a key file via the command line (`-k` or
 `--keys`) or via the [configuration file](#configuration-file). The Cobalt Strike functionality of pcapFS includes decryption of server commands and the respective answers from beacons as well as extraction of transferred files.
+
+The team server's private RSA key may be known when a cracked Cobalt Strike version is used. How the private key can be extracted in that case, is explained in a [blog post by Didier Stevens](https://blog.nviso.eu/2021/10/21/cobalt-strike-using-known-private-keys-to-decrypt-traffic-part-1/). You can exemplarily test the decryption and parsing capabilities of pcapFS with the pcap file referenced in [this post by Malware Traffic Analysis](https://www.malware-traffic-analysis.net/2021/02/02/index.html).
 
 With the command line option `--no-cs` set, pcapFS does not try to decrypt Cobalt Strike traffic which may improve the overall performance.
 

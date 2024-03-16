@@ -1,7 +1,20 @@
 # Changelog
 
 ## [Unreleased]
--
+### Fixed
+- Support spaces in file names
+- several bugfixes
+
+### Added
+- Add SMB2 as supported protocol
+- Add option `--check-non-default-ports`
+- FTP: support `Entering Extended Passive Mode`
+- Cobalt Strike: support multiple possible AES keys per connection
+
+### Changed
+- Update dependencies, change to OpenSSL version 3
+- Capture file type detection
+- Improve UDP stream handling
 
 ## [0.5.0]
 ### Added
