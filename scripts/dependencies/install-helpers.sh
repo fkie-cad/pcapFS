@@ -1,11 +1,9 @@
 
 LOCAL_REPO_PATH="${HERE}/../../3rdparty"
 PREFIX="${HERE}/../../dependencies"
-DOWNLOADS="${HERE}/../../downloads"
 
 mkdir -p "${LOCAL_REPO_PATH}"
 mkdir -p "${PREFIX}"
-mkdir -p "${DOWNLOADS}"
 
 function clone_or_update_git_repo() {
     url="$1"

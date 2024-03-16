@@ -1,8 +1,6 @@
 /.vagrant/
 /.vscode/
 /3rdparty/
-/bin/
-/downloads/
 /build/
 /cmake-build-*/
 /dependencies/

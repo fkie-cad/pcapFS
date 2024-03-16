@@ -15,9 +15,9 @@ BOOST_LIBS='filesystem,iostreams,log,regex,system,serialization,program_options'
 cd "${LOCAL_REPO_PATH}"
 #wget "${URL}" -O- | tar -xjf-
 if [ ! -f "boost_${BOOST_VERSION}.tar.bz2" ]; then
-  wget "${URL}" -O "${DOWNLOADS}/boost_${BOOST_VERSION}.tar.bz2"
+  wget "${URL}" -O "${PREFIX}/boost_${BOOST_VERSION}.tar.bz2"
 fi
-tar -xjf "${DOWNLOADS}/boost_${BOOST_VERSION}.tar.bz2"
+tar -xjf "${PREFIX}/boost_${BOOST_VERSION}.tar.bz2"
 cd "boost_${BOOST_VERSION}"
 ./bootstrap.sh --with-libraries="${BOOST_LIBS}" --prefix=${PREFIX} --without-icu
 ./b2 install

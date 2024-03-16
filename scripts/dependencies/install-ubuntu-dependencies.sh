@@ -36,6 +36,7 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
         ${here}/install-boost.sh
         ${here}/install-cpptoml.sh
         ${here}/install-openssl.sh
+        ${here}/install-fuse.sh
     elif [[ "${release}" =~ ^2[0-2]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
                     ${boost_pkgs} \
