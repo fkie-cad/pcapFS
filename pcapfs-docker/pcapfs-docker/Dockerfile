@@ -37,3 +37,8 @@ USER pcapfs
 COPY --chown=pcapfs:pcapfs build.sh build.sh
 RUN chmod +x build.sh
 RUN ./build.sh
+
+
+COPY --chown=pcapfs:pcapfs entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]

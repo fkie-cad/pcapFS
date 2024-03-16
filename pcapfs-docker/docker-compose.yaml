@@ -18,6 +18,3 @@ services:
           memory: "1G"
     container_name: pcapfs
     build: ./pcapfs-docker
-    volumes:
-      - ./datastore:/root/datastore
-      - ./mountpoints:/root/mountpoints
