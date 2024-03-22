@@ -239,6 +239,7 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
     std::vector<FilePtr> resultVector;
     for (const auto &entry : serverFiles) {
         for (const auto &f : entry.second) {
+            // TODO: neglect this while loop?
             ServerFilePtr serverFile = f.second;
             while (serverFile->getParentDir()) {
                 serverFile = std::static_pointer_cast<ServerFile>(serverFile->getParentDir());

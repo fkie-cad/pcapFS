@@ -1,8 +1,6 @@
 #include "ftp.h"
-
-#include <iostream>
-
 #include "../filefactory.h"
+#include "ftp/ftp_manager.h"
 
 
 std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
@@ -21,18 +19,19 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
         return resultVector;
 
     std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
-    fillGlobalProperties(resultPtr, filePtr);
+    resultPtr->parseResult(filePtr);
+    resultPtr->isDirectory = false;
 
-    const std::string f_name = constructFileName(d);
-    resultPtr->setFilename(f_name);
-
-    const size_t numElements = filePtr->connectionBreaks.size();
-
-    for (size_t i = 0; i < numElements; ++i) {
-        parseResult(resultPtr, filePtr, i);
+    if (d.transmission_file.empty()) {
+        resultPtr->setFilename(d.transmission_type);
+        resultPtr->setParentDir(nullptr);
+        resultPtr->fillGlobalProperties(filePtr);
+        FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
+    } else {
+        resultPtr->handleAllFilesToRoot(d.transmission_file, filePtr);
+        resultPtr->fillGlobalProperties(filePtr);
+        FtpManager::getInstance().addFtpFile(d.transmission_file, resultPtr);
     }
-
-    resultVector.push_back(resultPtr);
 
     return resultVector;
 }
@@ -40,13 +39,13 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 
 std::vector<pcapfs::FileTransmissionData>
 pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
-    FTPPortBridge &bridge = FTPPortBridge::getInstance();
+    FtpManager &manager = FtpManager::getInstance();
     const uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
     const uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
 
-    std::vector<FileTransmissionData> transmission_data = bridge.getFileTransmissionData(dst_port);
+    std::vector<FileTransmissionData> transmission_data = manager.getFileTransmissionData(dst_port);
     if (transmission_data.empty()) {
-        transmission_data = bridge.getFileTransmissionData(src_port);
+        transmission_data = manager.getFileTransmissionData(src_port);
     }
     return transmission_data;
 }
@@ -57,12 +56,6 @@ pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
                                          const std::vector<pcapfs::FileTransmissionData> &transmission_data) {
     FileTransmissionData d;
     const OffsetWithTime owt = filePtr->connectionBreaks.at(0);
-    //for (const FileTransmissionData &td : transmission_data) {
-    //    if (connectionBreaksInTimeSlot(owt.second, td.time_slot)) {
-    //        d = td;
-    //        break;
-    //    }
-    //}
     auto result = std::find_if(transmission_data.cbegin(), transmission_data.cend(),
                     [owt](const FileTransmissionData &td){ return connectionBreaksInTimeSlot(owt.second, td.time_slot); });
     if (result != transmission_data.cend())
@@ -76,62 +69,68 @@ bool pcapfs::FtpFile::connectionBreaksInTimeSlot(TimePoint break_time, const pca
 }
 
 
-std::string pcapfs::FtpFile::constructFileName(const pcapfs::FileTransmissionData &d) {
-    std::string f_name = d.transmission_file;
-    replace(f_name.begin(), f_name.end(), '/', '-');
-    if (!f_name.empty())f_name = "-" + f_name;
-    f_name = d.transmission_type + f_name;
+void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const FilePtr &offsetFilePtr) {
 
-    return f_name;
-}
+    const size_t slashPos = filePath.rfind("/");
+    if (filePath != "/" && slashPos != std::string::npos) {
+        setFilename(std::string(filePath.begin()+slashPos+1, filePath.end()));
+        LOG_TRACE << "ftp file name: " << std::string(filePath.begin()+slashPos+1, filePath.end());
+        const std::string remainder(filePath.begin(), filePath.begin()+slashPos);
 
-
-void
-pcapfs::FtpFile::parseResult(std::shared_ptr<pcapfs::FtpFile> result, pcapfs::FilePtr filePtr, size_t i) {
-    const size_t numElements = filePtr->connectionBreaks.size();
-    const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
-    const size_t size = calculateSize(filePtr, numElements, i, offset);
-    const Fragment fragment = parseOffset(filePtr, offset, size);
-
-    result->fragments.push_back(fragment);
-    result->setFilesizeRaw(result->getFilesizeRaw() + size);
-
-    //We assume the processed file size does not change in this protocol in cmp to the raw file size
-    result->setFilesizeProcessed(result->getFilesizeRaw());
-}
-
-
-size_t
-pcapfs::FtpFile::calculateSize(pcapfs::FilePtr filePtr, size_t numElements, size_t i, const uint64_t &offset) {
-    size_t size;
-    if (i == numElements - 1) {
-        size = filePtr->getFilesizeRaw() - offset;
+        if(!remainder.empty() && remainder != "/") {
+            LOG_TRACE << "detected subdir(s)";
+            LOG_TRACE << "remainder: " << remainder;
+            parentDir = FtpManager::getInstance().getAsParentDirFile(remainder, offsetFilePtr);
+        } else {
+            // root directory has nullptr as parentDir
+            parentDir = nullptr;
+        }
     } else {
-        size = filePtr->connectionBreaks.at(i + 1).first - offset;
+        setFilename(filePath);
+        parentDir = nullptr;
     }
-
-    return size;
 }
 
 
-Fragment pcapfs::FtpFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
-    Fragment fragment;
-    fragment.id = filePtr->getIdInIndex();
-    fragment.start = offset;
-    fragment.length = size;
-    return fragment;
+void pcapfs::FtpFile::parseResult(const pcapfs::FilePtr &filePtr) {
+
+    const size_t numElements = filePtr->connectionBreaks.size();
+    for (size_t i = 0; i < numElements; ++i) {
+
+        const uint64_t &offset = filePtr->connectionBreaks.at(i).first;
+        size_t size;
+        if (i == numElements - 1) {
+            size = filePtr->getFilesizeRaw() - offset;
+        } else {
+            size = filePtr->connectionBreaks.at(i + 1).first - offset;
+        }
+
+        Fragment fragment;
+        fragment.id = filePtr->getIdInIndex();
+        fragment.start = offset;
+        fragment.length = size;
+        fragments.push_back(fragment);
+
+        setFilesizeRaw(size);
+        setFilesizeProcessed(getFilesizeRaw());
+    }
 }
 
 
-void pcapfs::FtpFile::fillGlobalProperties(std::shared_ptr<pcapfs::FtpFile> &result, FilePtr &filePtr) {
-    result->setTimestamp(filePtr->connectionBreaks.at(0).second);
-    result->setProperty("protocol", "ftp");
-    result->setFiletype("ftpdata");
-    result->setOffsetType(filePtr->getFiletype());
-    result->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    result->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    result->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    result->setProperty("dstPort", filePtr->getProperty("dstPort"));
+void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
+    accessTime = filePtr->connectionBreaks.at(0).second;
+    modifyTime = filePtr->connectionBreaks.at(0).second;
+    changeTime = filePtr->connectionBreaks.at(0).second;
+    birthTime = filePtr->connectionBreaks.at(0).second;
+    setProperty("protocol", "ftp");
+    setFiletype("ftp");
+    setOffsetType(filePtr->getFiletype());
+    setProperty("srcIP", filePtr->getProperty("srcIP"));
+    setProperty("dstIP", filePtr->getProperty("dstIP"));
+    setProperty("srcPort", filePtr->getProperty("srcPort"));
+    setProperty("dstPort", filePtr->getProperty("dstPort"));
+    setIdInIndex(FtpManager::getInstance().getNewId());
+    parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
 }
 
 

@@ -51,7 +51,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/ftpcontrol.cpp
         src/virtualfiles/ftp/ftp_commands.cpp
         src/virtualfiles/ftp/ftp_response_codes.h
-        src/virtualfiles/ftp/ftp_port_bridge.cpp
+        src/virtualfiles/ftp/ftp_manager.cpp
         src/virtualfiles/dns.cpp
         src/virtualfiles/http.cpp
         src/virtualfiles/tls.cpp

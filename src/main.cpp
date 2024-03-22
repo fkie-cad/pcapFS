@@ -26,6 +26,7 @@
 #include "virtualfiles/xor.h"
 #include "capturefiles/pcap.h"
 #include "virtualfiles/smb/smb_manager.h"
+#include "virtualfiles/ftp/ftp_manager.h"
 
 namespace fs = boost::filesystem;
 
@@ -195,6 +196,7 @@ int main(int argc, const char *argv[]) {
         // insert possible SMB server files
         LOG_TRACE << "inserting all smb server files into index";
         index.insert(pcapfs::smb::SmbManager::getInstance().getServerFiles());
+        index.insert(pcapfs::FtpManager::getInstance().getFtpFiles());
 
         if (!config.indexInMemory) {
             index.write(config.indexFilePath);

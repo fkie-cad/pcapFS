@@ -9,7 +9,7 @@
 #include "../filefactory.h"
 #include "ftp/ftp_commands.h"
 #include "ftp/ftp_response_codes.h"
-#include "ftp/ftp_port_bridge.h"
+#include "ftp/ftp_manager.h"
 
 const std::string pcapfs::FtpControlFile::DEFAULT_DATA_PORT = "20";
 const std::string pcapfs::FtpControlFile::COMMAND_PORT = "21";
@@ -199,15 +199,10 @@ pcapfs::FtpControlFile::Response pcapfs::FtpControlFile::parseResponse(char *raw
 
 void pcapfs::FtpControlFile::handleResponseTypes(const Response &response,
                                                         std::shared_ptr<pcapfs::FtpControlFile> &result) {
-    std::string port;
-    if (response.code == FTPResponseCodes::EnteringPassiveMode) {
-        port = parsePassivePort(response.message);
-    } else if (response.code == FTPResponseCodes::EnteringExtendedPassiveMode) {
-        port = parseExtendedPassivePort(response.message);
-    } else {
-        return;
-    }
-    result->setProperty("activeDataPort", port);
+    if (response.code == FTPResponseCodes::EnteringPassiveMode)
+        result->setProperty("activeDataPort", parsePassivePort(response.message));
+    else if (response.code == FTPResponseCodes::EnteringExtendedPassiveMode)
+        result->setProperty("activeDataPort", parseExtendedPassivePort(response.message));
 }
 
 
@@ -310,6 +305,14 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
         result->setProperty(FTPCommands::USER, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
     } else if (command == FTPCommands::PORT) {
         result->setProperty("activeDataPort", parsePassivePort(cmd.second.at(0)));
+    } else if (command == FTPCommands::CWD && response.code == FTPResponseCodes::FileActionSuccessful) {
+        if (cmd.second.size() > 0){
+            std::string dir = cmd.second.at(0);
+            if (dir.at(dir.length() - 1) != 0x2F)
+                 dir += "/";
+            result->setProperty("cwd", dir);
+        } else
+            result->setProperty("cwd", "/");
     } else if (response.code == FTPResponseCodes::FileStatusOK) {
         handleDataTransferCommand(result, cmd, time_slot);
     }
@@ -320,13 +323,15 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
                                                               const Command &cmd, const pcapfs::TimeSlot &time_slot) {
     const std::string command = cmd.first;
     const std::vector<std::string> params = cmd.second;
-    const std::string param = (params.size() > 0) ? params.at(0) : "";
+    const std::string param = (params.size() > 0)
+                                ? (result->getProperty("cwd").empty() ? "/" : result->getProperty("cwd")) + params.at(0)
+                                : "";
 
     const FileTransmissionData data{param, command, time_slot};
 
     if (!result->getProperty("activeDataPort").empty()) {
         const uint16_t port = stoi(result->getProperty("activeDataPort"));
-        FTPPortBridge::getInstance().addFileTransmissionData(port, data);
+        FtpManager::getInstance().addFileTransmissionData(port, data);
     }
 }
 

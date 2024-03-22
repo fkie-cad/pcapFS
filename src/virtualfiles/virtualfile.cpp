@@ -7,7 +7,8 @@
 
 std::string pcapfs::VirtualFile::getFilename() {
     std::string temp;
-    if (filetype == "cobaltstrike" || filetype == "cs_uploadedfile" || filetype == "smbserverfile")
+    if (filetype == "cobaltstrike" || filetype == "cs_uploadedfile" || filetype == "smbserverfile" ||
+        (filetype == "ftp" && filename != "MLSD"))
         return filename;
 
     if (fragments.empty()) {

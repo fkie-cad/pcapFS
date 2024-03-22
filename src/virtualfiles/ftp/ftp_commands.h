@@ -8,6 +8,7 @@ namespace pcapfs {
 		public:
 			static const std::string ALLO; // Allocate sufficient disk space to receive a file.
 			static const std::string AUTH; // authentication mechanism: AUTH TLS
+			static const std::string CWD;
 			static const std::string FEAT; // Get the feature list implemented by the server.
 			static const std::string LIST; // list files
 			static const std::string MFMT; // modify last modification info of a file

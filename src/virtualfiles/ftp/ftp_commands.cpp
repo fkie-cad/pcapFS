@@ -3,6 +3,7 @@
 namespace pcapfs {
 	const std::string FTPCommands::ALLO = "ALLO";
 	const std::string FTPCommands::AUTH = "AUTH";
+	const std::string FTPCommands::CWD = "CWD";
 	const std::string FTPCommands::FEAT = "FEAT";
 	const std::string FTPCommands::LIST = "LIST";
 	const std::string FTPCommands::MFMT = "MFMT";

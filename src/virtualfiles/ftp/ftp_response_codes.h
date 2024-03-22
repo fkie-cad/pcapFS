@@ -12,6 +12,7 @@ namespace pcapfs {
 			EnteringPassiveMode = 227,
 			EnteringExtendedPassiveMode = 229,
 			ClosingControlConnection = 421,
+			FileActionSuccessful = 250
 		};
 	};
 }

@@ -197,6 +197,9 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         archive >> indexFilename;
         archive >> type;
         currentPtr = pcapfs::FileFactory::createFilePtr(type);
+        if (!currentPtr) {
+            throw IndexError("File of type " + type + " couldnot be created");
+        }
         currentPtr->deserialize(archive);
         currentPtr->filetype = type;
         if (type == "pcap" || type == "pcapng") {
@@ -212,6 +215,14 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
             const uint64_t parentDirId = serverFilePtr->getParentDirId();
             if (parentDirId != (uint64_t)-1) {
                 serverFilePtr->setParentDir(get({"smbserverfile", parentDirId}));
+            } else {
+                serverFilePtr->setParentDir(nullptr);
+            }
+        } else if (entry.second->isFiletype("ftp")) {
+            ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
+            const uint64_t parentDirId = serverFilePtr->getParentDirId();
+            if (parentDirId != (uint64_t)-1) {
+                serverFilePtr->setParentDir(get({"ftp", parentDirId}));
             } else {
                 serverFilePtr->setParentDir(nullptr);
             }
