@@ -56,4 +56,3 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpManager::getFtpFiles() {
     std::transform(ftpFiles.begin(), ftpFiles.end(), std::back_inserter(resultVector), [](const auto &f){ return f.second; });
     return resultVector;
 }
-

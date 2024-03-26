@@ -33,6 +33,9 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
         FtpManager::getInstance().addFtpFile(d.transmission_file, resultPtr);
     }
 
+    // circumvent duplicate as TCP file
+    filePtr->flags.set(flags::PARSED);
+
     return resultVector;
 }
 
