@@ -210,11 +210,11 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
 
     // set parent dirs for serverfiles
     for (const auto &entry : files) {
-        if (entry.second->isFiletype("smbserverfile")) {
+        if (entry.second->isFiletype("smb")) {
             ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
             const uint64_t parentDirId = serverFilePtr->getParentDirId();
             if (parentDirId != (uint64_t)-1) {
-                serverFilePtr->setParentDir(get({"smbserverfile", parentDirId}));
+                serverFilePtr->setParentDir(get({"smb", parentDirId}));
             } else {
                 serverFilePtr->setParentDir(nullptr);
             }

@@ -1,26 +1,28 @@
 #ifndef PCAPFS_VIRTUAL_FILES_SMB_H
 #define PCAPFS_VIRTUAL_FILES_SMB_H
 
-#include "virtualfile.h"
+#include "serverfile.h"
+#include "../filefactory.h"
+#include "smb/smb_structs.h"
 
 
 namespace pcapfs {
 
-    class SmbFile : public VirtualFile {
+    class SmbFile : public ServerFile {
     public:
         static FilePtr create() { return std::make_shared<SmbFile>(); };
 
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-    private:
-        void fillGlobalProperties(std::shared_ptr<SmbFile> &controlFilePtr, const FilePtr &filePtr);
-        static bool isSmbOverTcp(const FilePtr &filePtr, const Bytes &data);
-        static size_t getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data);
+        void initializeFilePtr(smb::SmbContextPtr &smbContext, const std::string &filePath,
+                                const smb::FileMetaDataPtr &metaData);
 
     protected:
         static bool registeredAtFactory;
     };
+
+    typedef std::shared_ptr<SmbFile> SmbFilePtr;
 }
 
 #endif //PCAPFS_VIRTUAL_FILES_SMB_H

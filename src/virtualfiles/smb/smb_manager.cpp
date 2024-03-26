@@ -1,9 +1,9 @@
 #include "smb_manager.h"
 #include "smb_utils.h"
-#include "../smb_serverfile.h"
+#include "../smb.h"
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from create messages
     LOG_TRACE << "updating SMB server files with create response infos";
 
@@ -14,7 +14,7 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     fileHandles[endpointTree][createResponse->fileId] = filePath;
 
     if (!createResponse->metaData->isDirectory) {
-        // this prevents possible wrong file path compositions in the other updateServerFiles functions in the case that
+        // this prevents possible wrong file path compositions in the other updateSmbFiles functions in the case that
         // currentCreateRequestFile is chosen as parent directory path of the respective server files although
         // it isn't even a directory
         smbContext->createRequestFileNames.at(messageId) = "";
@@ -23,32 +23,32 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<CreateResp
     if (!smbContext->createServerFiles)
         return;
 
-    SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
-    if (!serverFilePtr) {
+    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    if (!smbFilePtr) {
         // server file not present in map -> create new one
         LOG_TRACE << "file " << filePath << " is new and added to the server files";
-        serverFilePtr = std::make_shared<SmbServerFile>();
-        serverFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
+        smbFilePtr = std::make_shared<SmbFile>();
+        smbFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
         // for NTFS timestamps, changeTime is the most sensitive one
         const TimePoint lastChangeTime = winFiletimeToTimePoint(createResponse->metaData->changeTime);
-        if (lastChangeTime > serverFilePtr->getChangeTime()) {
+        if (lastChangeTime > smbFilePtr->getChangeTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
-            serverFilePtr->setTimestamp(lastChangeTime);
-            serverFilePtr->setFilesizeRaw(createResponse->metaData->filesize);
-            serverFilePtr->setFilesizeProcessed(createResponse->metaData->filesize);
-            serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastAccessTime));
-            serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
-            serverFilePtr->setChangeTime(lastChangeTime);
+            smbFilePtr->setTimestamp(lastChangeTime);
+            smbFilePtr->setFilesizeRaw(createResponse->metaData->filesize);
+            smbFilePtr->setFilesizeProcessed(createResponse->metaData->filesize);
+            smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastAccessTime));
+            smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
+            smbFilePtr->setChangeTime(lastChangeTime);
         }
     }
 
-    serverFiles[endpointTree][filePath] = serverFilePtr;
+    serverFiles[endpointTree][filePath] = smbFilePtr;
 }
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint64_t messageId) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from query info messages
     LOG_TRACE << "updating SMB server files with query info response infos";
 
@@ -94,32 +94,32 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::shared_ptr<QueryInfoR
         if (!smbContext->createServerFiles)
             return;
 
-        SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
-        if (!serverFilePtr) {
+        SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+        if (!smbFilePtr) {
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filePath << " is new and added to the server files";
-            serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData);
+            smbFilePtr = std::make_shared<SmbFile>();
+            smbFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastChangeTime = winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime);
-            if (lastChangeTime > serverFilePtr->getChangeTime()) {
+            if (lastChangeTime > smbFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                serverFilePtr->setTimestamp(lastChangeTime);
-                serverFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
-                serverFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
-                serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime));
-                serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
-                serverFilePtr->setChangeTime(lastChangeTime);
+                smbFilePtr->setTimestamp(lastChangeTime);
+                smbFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
+                smbFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
+                smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime));
+                smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
+                smbFilePtr->setChangeTime(lastChangeTime);
             }
         }
 
-        serverFiles[endpointTree][filePath] = serverFilePtr;
+        serverFiles[endpointTree][filePath] = smbFilePtr;
     }
 }
 
 
-void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint64_t messageId) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from query directory messages
     LOG_TRACE << "updating SMB server files with query directory response infos";
 
@@ -145,8 +145,8 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
 
             if (fileInfo->filename == ".." && serverFiles.count(endpointTree) && serverFiles[endpointTree].count(filePath) &&
                 serverFiles[endpointTree][filePath]) {
-                // analyze FileInfo of parent directory only when the parent directory is already known as SmbServerFile
-                const SmbServerFilePtr tmpServerFilePtr = serverFiles[endpointTree][filePath];
+                // analyze FileInfo of parent directory only when the parent directory is already known as SmbFile
+                const SmbFilePtr tmpServerFilePtr = serverFiles[endpointTree][filePath];
                 if (tmpServerFilePtr->getParentDir()) {
                     const size_t backslashPos = filePath.rfind("\\");
                     if (backslashPos != std::string::npos) {
@@ -180,27 +180,27 @@ void pcapfs::smb::SmbManager::updateServerFiles(const std::vector<std::shared_pt
             continue;
         }
 
-        SmbServerFilePtr serverFilePtr = serverFiles[endpointTree][filePath];
-        if (!serverFilePtr) {
+        SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+        if (!smbFilePtr) {
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filePath << " is new and added to the server files";
-            serverFilePtr = std::make_shared<SmbServerFile>();
-            serverFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData);
+            smbFilePtr = std::make_shared<SmbFile>();
+            smbFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastChangeTime = winFiletimeToTimePoint(fileInfo->metaData->changeTime);
-            if (lastChangeTime > serverFilePtr->getChangeTime()) {
+            if (lastChangeTime > smbFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                serverFilePtr->setTimestamp(lastChangeTime);
-                serverFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
-                serverFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
-                serverFilePtr->setAccessTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime));
-                serverFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
-                serverFilePtr->setChangeTime(lastChangeTime);
+                smbFilePtr->setTimestamp(lastChangeTime);
+                smbFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
+                smbFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
+                smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime));
+                smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
+                smbFilePtr->setChangeTime(lastChangeTime);
             }
         }
 
-        serverFiles[endpointTree][filePath] = serverFilePtr;
+        serverFiles[endpointTree][filePath] = smbFilePtr;
     }
 }
 
@@ -210,20 +210,20 @@ pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const 
 }
 
 
-pcapfs::SmbServerFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext) {
+pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext) {
     const ServerEndpointTree endpt = smbContext->getServerEndpointTree();
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
         LOG_TRACE << "parent directory is already known as an SmbFile";
         return serverFiles[endpt][filePath];
     } else {
-        LOG_TRACE << "parent directory not known as SmbServerFile yet, create parent dir file on the fly";
+        LOG_TRACE << "parent directory not known as SmbFile yet, create parent dir file on the fly";
         FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
         // initially, all timestamps are set to 0
         metaData->isDirectory = true;
-        SmbServerFilePtr serverFilePtr = std::make_shared<SmbServerFile>();
-        serverFilePtr->initializeFilePtr(smbContext, filePath, metaData);
-        serverFiles[endpt][filePath] = serverFilePtr;
-        return serverFilePtr;
+        SmbFilePtr smbFilePtr = std::make_shared<SmbFile>();
+        smbFilePtr->initializeFilePtr(smbContext, filePath, metaData);
+        serverFiles[endpt][filePath] = smbFilePtr;
+        return smbFilePtr;
     }
 }
 
@@ -235,17 +235,10 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 }
 
 
-std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles() {
+std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles() {
     std::vector<FilePtr> resultVector;
     for (const auto &entry : serverFiles) {
-        for (const auto &f : entry.second) {
-            // TODO: neglect this while loop?
-            ServerFilePtr serverFile = f.second;
-            while (serverFile->getParentDir()) {
-                serverFile = std::static_pointer_cast<ServerFile>(serverFile->getParentDir());
-            }
-            resultVector.push_back(f.second);
-        }
+        std::transform(entry.second.begin(), entry.second.end(), std::back_inserter(resultVector), [](const auto &f){ return f.second; });
     }
     return resultVector;
 }

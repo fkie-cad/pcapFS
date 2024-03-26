@@ -41,7 +41,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         // TODO: what to do with ASYNC messages?
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
                         smbContext->addTreeNameMapping(packetHeader->treeId, packetHeader->messageId);
-                        // add tree name as SmbServerFile
+                        // add tree name as SmbFile
                         if (smbContext->createServerFiles && smbContext->treeNames.count(packetHeader->treeId))
                             SmbManager::getInstance().getAsParentDirFile(smbContext->treeNames[packetHeader->treeId], smbContext);
                         smbContext->requestedTrees.erase(packetHeader->messageId);
@@ -59,7 +59,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                 std::make_shared<CreateResponse>(&data[64], len - 64);
                         if (smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
                             !smbContext->createRequestFileNames.at(packetHeader->messageId).empty())
-                            SmbManager::getInstance().updateServerFiles(createResponse, smbContext, packetHeader->messageId);
+                            SmbManager::getInstance().updateSmbFiles(createResponse, smbContext, packetHeader->messageId);
                         message = createResponse;
                     } else {
                         std::shared_ptr<CreateRequest> createRequest =
@@ -132,7 +132,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                         smbContext->queryDirectoryRequestData[packetHeader->messageId]->fileInfoClass);
 
                                 if (smbContext->createServerFiles && !queryDirectoryResponse->fileInfos.empty())
-                                    SmbManager::getInstance().updateServerFiles(queryDirectoryResponse->fileInfos, smbContext, packetHeader->messageId);
+                                    SmbManager::getInstance().updateSmbFiles(queryDirectoryResponse->fileInfos, smbContext, packetHeader->messageId);
 
                                 smbContext->queryDirectoryRequestData.erase(packetHeader->messageId);
                                 message = queryDirectoryResponse;
@@ -183,7 +183,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                         smbContext->queryInfoRequestData[packetHeader->messageId]);
 
                                 if (queryInfoResponse->metaData)
-                                    SmbManager::getInstance().updateServerFiles(queryInfoResponse, smbContext, packetHeader->messageId);
+                                    SmbManager::getInstance().updateSmbFiles(queryInfoResponse, smbContext, packetHeader->messageId);
 
                                 smbContext->queryInfoRequestData.erase(packetHeader->messageId);
                                 message = queryInfoResponse;

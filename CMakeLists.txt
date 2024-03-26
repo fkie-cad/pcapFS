@@ -61,7 +61,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/cobaltstrike.cpp
         src/virtualfiles/ssh.cpp
         src/virtualfiles/dhcp.cpp
-        src/virtualfiles/smb.cpp
+        src/virtualfiles/smbcontrol.cpp
         src/virtualfiles/smb/smb_packet.cpp
         src/virtualfiles/smb/smb_structs.h
         src/virtualfiles/smb/smb_messages.h
@@ -69,7 +69,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/smb/smb_utils.cpp
         src/virtualfiles/smb/smb_manager.cpp
         src/virtualfiles/serverfile.cpp
-        src/virtualfiles/smb_serverfile.cpp
+        src/virtualfiles/smb.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES
