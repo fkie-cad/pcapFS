@@ -25,7 +25,7 @@ namespace pcapfs {
         const unsigned char CHUNKED = 3; // 0000 1000
         const unsigned char IS_REAL_FILE = 4; // 0001 0000
         const unsigned char PROCESSED = 5; // 0010 0000
-        const unsigned char ZERO_PADDED = 6; // 0100 0000
+        const unsigned char IS_SERVERFILE = 6; // 0100 0000
         const unsigned char MISSING_DATA = 7; // 1000 0000
         const unsigned char HAS_DECRYPTION_KEY = 8;
         const unsigned char PARSED = 9;

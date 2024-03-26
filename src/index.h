@@ -61,6 +61,8 @@ namespace pcapfs {
 
         void increaseID(const std::string &type);
 
+        void setParentDirForServerFiles();
+
         std::unordered_map<std::string, std::vector<FilePtr>> keyCandidates;
     };
 

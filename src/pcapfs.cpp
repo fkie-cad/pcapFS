@@ -29,7 +29,7 @@ int pcapfs::PcapFs::getattr(const char *path, struct stat *stbuf, struct fuse_fi
         }
         stbuf->st_mode = S_IFREG | 0444;
         stbuf->st_nlink = 1;
-        if (f_p->isFiletype("smb") || f_p->isFiletype("ftp")) {
+        if (f_p->flags.test(pcapfs::flags::IS_SERVERFILE)) {
             const ServerFilePtr server_file = std::static_pointer_cast<ServerFile>(f_p);
             stbuf->st_mtim = {std::chrono::system_clock::to_time_t(server_file->getModifyTime()), 0};
             stbuf->st_atim = {std::chrono::system_clock::to_time_t(server_file->getAccessTime()), 0};

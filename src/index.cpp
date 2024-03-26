@@ -208,21 +208,17 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         files.insert({indexFilename, currentPtr});
     }
 
-    // set parent dirs for serverfiles
+    setParentDirForServerFiles();
+}
+
+
+void pcapfs::Index::setParentDirForServerFiles() {
     for (const auto &entry : files) {
-        if (entry.second->isFiletype("smb")) {
+        if (entry.second->flags.test(flags::IS_SERVERFILE)) {
             ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
             const uint64_t parentDirId = serverFilePtr->getParentDirId();
             if (parentDirId != (uint64_t)-1) {
-                serverFilePtr->setParentDir(get({"smb", parentDirId}));
-            } else {
-                serverFilePtr->setParentDir(nullptr);
-            }
-        } else if (entry.second->isFiletype("ftp")) {
-            ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
-            const uint64_t parentDirId = serverFilePtr->getParentDirId();
-            if (parentDirId != (uint64_t)-1) {
-                serverFilePtr->setParentDir(get({"ftp", parentDirId}));
+                serverFilePtr->setParentDir(get({serverFilePtr->getFiletype(), parentDirId}));
             } else {
                 serverFilePtr->setParentDir(nullptr);
             }

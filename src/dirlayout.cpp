@@ -129,7 +129,7 @@ namespace pcapfs_filesystem {
                 }
             }
 
-            if (file->isFiletype("smb") || file->isFiletype("ftp")) {
+            if (file->flags.test(pcapfs::flags::IS_SERVERFILE)) {
                 pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
                 std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
 

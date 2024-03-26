@@ -7,6 +7,7 @@
 
 std::string pcapfs::VirtualFile::getFilename() {
     std::string temp;
+    // TODO: flags.test(pcapfs::flags::IS_SERVERFILE)
     if (filetype == "cobaltstrike" || filetype == "cs_uploadedfile" || filetype == "smb" ||
         (filetype == "ftp" && filename != "MLSD"))
         return filename;

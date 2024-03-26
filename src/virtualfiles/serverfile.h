@@ -8,6 +8,8 @@ namespace pcapfs {
 
     class ServerFile : public VirtualFile {
     public:
+        ServerFile() { flags.set(flags::IS_SERVERFILE); };
+
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override = 0;
 
         TimePoint const getAccessTime() { return accessTime; };
