@@ -213,10 +213,10 @@ pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const 
 pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext) {
     const ServerEndpointTree endpt = smbContext->getServerEndpointTree();
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
-        LOG_TRACE << "parent directory is already known as an SmbFile";
+        LOG_DEBUG << "parent directory is already known as an SmbFile";
         return serverFiles[endpt][filePath];
     } else {
-        LOG_TRACE << "parent directory not known as SmbFile yet, create parent dir file on the fly";
+        LOG_DEBUG << "parent directory not known as SmbFile yet, create parent dir file on the fly";
         FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
         // initially, all timestamps are set to 0
         metaData->isDirectory = true;

@@ -34,15 +34,16 @@ void pcapfs::SmbFile::initializeFilePtr(smb::SmbContextPtr &smbContext, const st
     birthTime = smb::winFiletimeToTimePoint(metaData->creationTime);
     isDirectory = metaData->isDirectory;
 
+    LOG_DEBUG << "SMB: building up cascade of parent dir files for " << filePath;
     const size_t backslashPos = filePath.rfind("\\");
     if (filePath != "\\" && backslashPos != std::string::npos) {
         setFilename(std::string(filePath.begin()+backslashPos+1, filePath.end()));
-        LOG_TRACE << "filename set: " << std::string(filePath.begin()+backslashPos+1, filePath.end());
+        LOG_DEBUG << "filename set: " << std::string(filePath.begin()+backslashPos+1, filePath.end());
         const std::string remainder(filePath.begin(), filePath.begin()+backslashPos);
 
         if(!remainder.empty() && remainder != "\\") {
-            LOG_TRACE << "detected subdir(s)";
-            LOG_TRACE << "remainder: " << remainder;
+            LOG_DEBUG << "detected subdir(s)";
+            LOG_DEBUG << "remainder: " << remainder;
             parentDir = smb::SmbManager::getInstance().getAsParentDirFile(remainder, smbContext);
         } else {
             // root directory has nullptr as parentDir

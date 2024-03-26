@@ -18,6 +18,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
     if (d.transmission_type.empty())
         return resultVector;
 
+    LOG_DEBUG << "FTP: found TCP connection with FTP file download";
     std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
     resultPtr->parseResult(filePtr);
     resultPtr->isDirectory = false;
@@ -74,15 +75,16 @@ bool pcapfs::FtpFile::connectionBreaksInTimeSlot(TimePoint break_time, const pca
 
 void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const FilePtr &offsetFilePtr) {
 
+    LOG_DEBUG << "FTP: building up cascade of parent dir files for " << filePath;
     const size_t slashPos = filePath.rfind("/");
     if (filePath != "/" && slashPos != std::string::npos) {
         setFilename(std::string(filePath.begin()+slashPos+1, filePath.end()));
-        LOG_TRACE << "ftp file name: " << std::string(filePath.begin()+slashPos+1, filePath.end());
+        LOG_DEBUG << "ftp file name: " << std::string(filePath.begin()+slashPos+1, filePath.end());
         const std::string remainder(filePath.begin(), filePath.begin()+slashPos);
 
         if(!remainder.empty() && remainder != "/") {
-            LOG_TRACE << "detected subdir(s)";
-            LOG_TRACE << "remainder: " << remainder;
+            LOG_DEBUG << "detected subdir(s)";
+            LOG_DEBUG << "remainder: " << remainder;
             parentDir = FtpManager::getInstance().getAsParentDirFile(remainder, offsetFilePtr);
         } else {
             // root directory has nullptr as parentDir

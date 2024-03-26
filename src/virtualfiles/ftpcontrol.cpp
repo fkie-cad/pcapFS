@@ -29,6 +29,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpControlFile::parse(FilePtr filePtr, Inde
     if (!isClientCommand(filePtr) && !isServerResponse(filePtr))
         return resultVector;
 
+    LOG_DEBUG << "Found FTP traffic";
     std::shared_ptr<pcapfs::FtpControlFile> result = std::make_shared<FtpControlFile>();;
     std::shared_ptr<pcapfs::FtpControlFile> credentials = std::make_shared<FtpControlFile>();;
 

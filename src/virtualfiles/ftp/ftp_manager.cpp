@@ -2,6 +2,7 @@
 
 
 void pcapfs::FtpManager::addFileTransmissionData(uint16_t port, const FileTransmissionData &data) {
+    LOG_DEBUG << "FTP: add file transmission data for file " << data.transmission_file;
     DataMap::iterator it = data_transmissions.find(port);
     if (it == data_transmissions.end()) {
         std::vector<FileTransmissionData> files;
@@ -25,10 +26,10 @@ std::vector<pcapfs::FileTransmissionData> pcapfs::FtpManager::getFileTransmissio
 
 pcapfs::FtpFilePtr pcapfs::FtpManager::getAsParentDirFile(const std::string &filePath, const FilePtr &offsetFilePtr) {
     if (ftpFiles.find(filePath) != ftpFiles.end()) {
-        LOG_TRACE << "parent directory is already known as an FtpFile";
+        LOG_DEBUG << "parent directory is already known as an FtpFile";
         return ftpFiles[filePath];
     } else {
-        LOG_TRACE << "parent directory not known as FtpFile yet, create parent dir file on the fly";
+        LOG_DEBUG << "parent directory not known as FtpFile yet, create parent dir file on the fly";
         FtpFilePtr newFtpDirFilePtr = std::make_shared<FtpFile>();
         newFtpDirFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
         newFtpDirFilePtr->fillGlobalProperties(offsetFilePtr);
