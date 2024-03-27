@@ -307,18 +307,19 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
     } else if (command == FTPCommands::PORT) {
         result->setProperty("activeDataPort", parsePassivePort(cmd.second.at(0)));
     } else if (command == FTPCommands::CWD && response.code == FTPResponseCodes::FileActionSuccessful && cmd.second.size() > 0) {
+        const std::string rootDirName = "FILES_FROM_" + result->getProperty("dstIP");
         std::string dir = cmd.second.at(0);
         if (dir.at(dir.length() - 1) != '/')
              dir += "/";
 
         if (dir.at(0) == '/')
-            result->setProperty("cwd", dir);
+            result->setProperty("cwd", rootDirName + dir);
         else {
             const std::string oldCwd = result->getProperty("cwd");
             if (!oldCwd.empty())
                result->setProperty("cwd", oldCwd + dir);
             else
-                result->setProperty("cwd", dir);
+                result->setProperty("cwd", rootDirName + dir);
         }
     } else if (response.code == FTPResponseCodes::FileStatusOK) {
         handleDataTransferCommand(result, cmd, time_slot);
@@ -332,11 +333,11 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
     const std::vector<std::string> params = cmd.second;
     std::string param;
     if (command == FTPCommands::MLSD) {
-        param = result->getProperty("cwd").empty() ? "/" : result->getProperty("cwd");
+        param = result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd");
         param += FTPCommands::MLSD;
     } else {
         param = (params.size() > 0) ?
-                (result->getProperty("cwd").empty() ? "/" : result->getProperty("cwd")) + params.at(0) :
+                (result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd")) + params.at(0) :
                 "";
     }
 
