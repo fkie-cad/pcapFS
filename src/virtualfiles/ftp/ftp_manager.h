@@ -39,6 +39,8 @@ namespace pcapfs {
         void addFtpFile(const std::string &filePath, const FtpFilePtr &inFtpFile) { ftpFiles[filePath] = inFtpFile; };
         std::vector<FilePtr> getFtpFiles();
 
+        void updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr);
+
     private:
         FtpManager() {}
         uint64_t idCounter = 0;

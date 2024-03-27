@@ -1,4 +1,5 @@
 #include "ftp_manager.h"
+#include "../ftp.h"
 
 
 void pcapfs::FtpManager::addFileTransmissionData(uint16_t port, const FileTransmissionData &data) {
@@ -33,6 +34,8 @@ pcapfs::FtpFilePtr pcapfs::FtpManager::getAsParentDirFile(const std::string &fil
         FtpFilePtr newFtpDirFilePtr = std::make_shared<FtpFile>();
         newFtpDirFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
         newFtpDirFilePtr->fillGlobalProperties(offsetFilePtr);
+        newFtpDirFilePtr->setFilesizeRaw(0);
+        newFtpDirFilePtr->setFilesizeProcessed(0);
         Fragment fragment;
         fragment.id = offsetFilePtr->getIdInIndex();
         fragment.start = 0;
@@ -56,4 +59,17 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpManager::getFtpFiles() {
     std::vector<FilePtr> resultVector;
     std::transform(ftpFiles.begin(), ftpFiles.end(), std::back_inserter(resultVector), [](const auto &f){ return f.second; });
     return resultVector;
+}
+
+
+void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr) {
+    FtpFilePtr ftpFilePtr = ftpFiles[filePath];
+    if (!ftpFilePtr) {
+        ftpFilePtr = std::make_shared<FtpFile>();
+        ftpFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
+        ftpFilePtr->fillGlobalProperties(offsetFilePtr);
+        ftpFilePtr->isDirectory = false;
+        ftpFilePtr->parseResult(offsetFilePtr);
+        ftpFiles[filePath] = ftpFilePtr;
+    }
 }

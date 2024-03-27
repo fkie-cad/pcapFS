@@ -1,6 +1,8 @@
 #include "ftp.h"
 #include "../filefactory.h"
 #include "ftp/ftp_manager.h"
+#include "ftp/ftp_commands.h"
+
 
 
 std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
@@ -19,19 +21,17 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
         return resultVector;
 
     LOG_DEBUG << "FTP: found TCP connection with FTP file download";
-    std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
-    resultPtr->parseResult(filePtr);
-    resultPtr->isDirectory = false;
-
     if (d.transmission_file.empty()) {
+        // no filename given: set transmission type as filename and put file in root dir
+        std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
+        resultPtr->parseResult(filePtr);
+        resultPtr->isDirectory = false;
         resultPtr->setFilename(d.transmission_type);
         resultPtr->setParentDir(nullptr);
         resultPtr->fillGlobalProperties(filePtr);
         FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
     } else {
-        resultPtr->handleAllFilesToRoot(d.transmission_file, filePtr);
-        resultPtr->fillGlobalProperties(filePtr);
-        FtpManager::getInstance().addFtpFile(d.transmission_file, resultPtr);
+        FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
     }
 
     // circumvent duplicate as TCP file
@@ -134,6 +134,7 @@ void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
     setProperty("dstIP", filePtr->getProperty("dstIP"));
     setProperty("srcPort", filePtr->getProperty("srcPort"));
     setProperty("dstPort", filePtr->getProperty("dstPort"));
+    flags.set(flags::PROCESSED);
     setIdInIndex(FtpManager::getInstance().getNewId());
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
 }
