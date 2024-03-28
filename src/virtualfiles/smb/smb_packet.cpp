@@ -8,7 +8,7 @@
 pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr &smbContext) {
 
     const uint32_t protocolId = *(uint32_t*) data;
-    if (protocolId == 0x424D53FE) {
+    if (protocolId == ProtocolId::SMB2_PACKET_HEADER_ID) {
         // classic SMB2 packet header
         if (len < 64)
             throw SmbError("Invalid SMB2 Packet Header");
@@ -250,7 +250,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         header = packetHeader;
         headerType = HeaderType::SMB2_PACKET_HEADER;
 
-    } else if (protocolId == 0x424D53FD) {
+    } else if (protocolId == ProtocolId::SMB2_TRANSFORM_HEADER_ID) {
         // transform header with encrypted message
         if (len < 52)
             throw SmbError("Invalid SMB2 Transform Header");
@@ -264,7 +264,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         header = transformHeader;
         headerType = HeaderType::SMB2_TRANSFORM_HEADER;
 
-    } else if (protocolId == 0x424D53FC) {
+    } else if (protocolId == ProtocolId::SMB2_COMPRESSION_TRANSFORM_HEADER_ID) {
         // compression transform header
         if (len < 16)
             throw SmbError("Invalid SMB2 Compression Transform Header");
@@ -302,7 +302,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         } else
             throw SmbError("Invalid SMB2 Packet Header");
 
-    } else if (protocolId == 0x424D53FF) {
+    } else if (protocolId == ProtocolId::SMB1_PACKET_HEADER_ID) {
         // SMB version 1 header
         if (len < 32)
             throw SmbError("Invalid SMB Packet Header");

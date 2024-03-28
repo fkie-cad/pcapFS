@@ -15,6 +15,13 @@ namespace pcapfs {
 
         const std::string CHAINED_FILEID = "ffffffffffffffffffffffffffffffff";
 
+        enum ProtocolId : uint32_t {
+            SMB2_PACKET_HEADER_ID = 0x424D53FE,
+            SMB2_TRANSFORM_HEADER_ID = 0x424D53FD,
+            SMB2_COMPRESSION_TRANSFORM_HEADER_ID = 0x424D53FC,
+            SMB1_PACKET_HEADER_ID = 0x424D53FF
+        };
+
         enum Version : uint16_t {
             SMB_VERSION_2_0_2 = 0x0202,
             SMB_VERSION_2_1 = 0x0210,
@@ -699,6 +706,7 @@ namespace pcapfs {
             FSCTL_DFS_GET_REFERRALS_EX = 0x000601B0,
             FSCTL_FILE_LEVEL_TRIM = 0x00098208,
             FSCTL_VALIDATE_NEGOTIATE_INFO = 0x00140204,
+            FSCTL_CREATE_OR_GET_OBJECT_ID = 0x000900c0,
             FSCTL_UNKNOWN = 0xFFFFFFFF,
         };
 
@@ -718,6 +726,7 @@ namespace pcapfs {
             {0x000601B0, "FSCTL_DFS_GET_REFERRALS_EX"},
             {0x00098208, "FSCTL_FILE_LEVEL_TRIM"},
             {0x00140204, "FSCTL_VALIDATE_NEGOTIATE_INFO"},
+            {0x000900c0, "FSCTL_CREATE_OR_GET_OBJECT_ID"},
             {0xFFFFFFFF, "FSCTL_UNKNOWN"}
         };
     }
