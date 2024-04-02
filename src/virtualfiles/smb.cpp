@@ -12,11 +12,20 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx)
 
 
 size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    (void)startOffset;
-    (void)length;
-    (void)idx;
-    (void)buf;
-    return 0;
+    if (fragments.size() == 1 && fragments.at(0).length == 0) {
+        // file is empty and only consists of dummy fragment
+        return 0;
+    }
+
+    Bytes totalContent(0);
+    for (Fragment fragment: fragments) {
+        Bytes rawData(fragment.length);
+        FilePtr filePtr = idx.get({offsetType, fragment.id});
+        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+        totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
+    }
+    memcpy(buf, totalContent.data() + startOffset, length);
+    return std::min(totalContent.size() - startOffset, length);
 }
 
 

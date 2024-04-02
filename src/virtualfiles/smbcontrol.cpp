@@ -66,6 +66,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
             while (accumulatedSmbPacketSize < smbDataSize) {
                 smb::SmbPacket smbPacket;
                 try {
+                    smbContext->currentOffset = offset;
                     smbPacket = smb::SmbPacket(data.data() + offset, smbDataSize - accumulatedSmbPacketSize, smbContext);
                 } catch (const SmbError &err) {
                     LOG_WARNING << "Failed to parse SMB2 packet: " << err.what();

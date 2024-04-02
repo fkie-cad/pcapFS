@@ -368,8 +368,8 @@ namespace pcapfs {
                 if (structureSize != 17)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Read Response");
 
-                const uint8_t dataOffset = rawData.at(2);
-                const uint32_t dataLength = *(uint32_t*) &rawData.at(4);
+                dataOffset = rawData.at(2);
+                dataLength = *(uint32_t*) &rawData.at(4);
 
                 if (dataOffset == 0 && dataLength == 0)
                     totalSize = 17;
@@ -379,6 +379,9 @@ namespace pcapfs {
                     totalSize = dataOffset + dataLength - 64;
                 }
             }
+
+            uint8_t dataOffset = 0;
+            uint32_t dataLength = 0;
         };
 
 

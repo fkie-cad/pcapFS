@@ -12,6 +12,8 @@ namespace pcapfs {
         typedef std::unordered_map<std::string, SmbFilePtr> SmbFiles;
         // map guid - filename
         typedef std::unordered_map<std::string, std::string> SmbFileHandles;
+        // map filename - readLength
+        typedef std::unordered_map<std::string, uint64_t> SmbFileReadLength;
 
         class SmbManager {
         public:
@@ -26,6 +28,7 @@ namespace pcapfs {
             void updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId);
             void updateSmbFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint64_t messageId);
             void updateSmbFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint64_t messageId);
+            void updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, SmbContextPtr &smbContext, uint64_t messageId);
             std::vector<FilePtr> const getSmbFiles();
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext);
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
@@ -35,6 +38,7 @@ namespace pcapfs {
             SmbManager() {}
             std::map<ServerEndpointTree, SmbFiles> serverFiles;
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
+            std::map<ServerEndpointTree, SmbFileReadLength> readLengths;
             uint64_t idCounter = 0;
         };
     }

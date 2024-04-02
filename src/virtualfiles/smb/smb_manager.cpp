@@ -205,6 +205,60 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
 }
 
 
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, SmbContextPtr &smbContext, uint64_t messageId) {
+    // update server files with file infos obtained from read messages
+    LOG_TRACE << "updating SMB server files with read message infos";
+
+    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const std::shared_ptr<ReadRequestData> currentReadRequestData = smbContext->readRequestData.at(messageId);
+    if (fileHandles[endpointTree].find(currentReadRequestData->fileId) == fileHandles[endpointTree].end()) {
+        // fileId - filename mapping not known
+        return;
+    }
+
+    const std::string filePath = fileHandles[endpointTree].at(currentReadRequestData->fileId);
+    if (serverFiles[endpointTree].find(filePath) == serverFiles[endpointTree].end() || !serverFiles[endpointTree].at(filePath)) {
+        // should not happen
+        return;
+    }
+
+    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+
+    Fragment newFragment;
+    newFragment.id = smbContext->offsetFile->getIdInIndex();
+    newFragment.start = smbContext->currentOffset + readResponse->dataOffset;
+    newFragment.length = readResponse->dataLength;
+
+    if (readLengths[endpointTree].find(filePath) != readLengths[endpointTree].end()) {
+        // we have already some saved fragments for the file and need to check if our read content
+        // somewhat overlaps with it or leaves gaps
+        const uint64_t priorContentLength = readLengths[endpointTree][filePath];
+        if (currentReadRequestData->readOffset < priorContentLength && currentReadRequestData->readOffset + readResponse->dataLength > priorContentLength) {
+            // new fragment starts with already saved content but has some new content at the end
+            const uint64_t overlap = priorContentLength - currentReadRequestData->readOffset;
+            newFragment.start += overlap;
+            newFragment.length -= overlap;
+        } else if (currentReadRequestData->readOffset != priorContentLength) {
+            // o/w only allow adjacent following fragments so that no gaps emerge
+            return;
+        }
+        readLengths[endpointTree][filePath] += newFragment.length;
+
+    } else if (currentReadRequestData->readOffset != 0) {
+        // do nothing when this is the first seen fragment of the file and it is not the beginning of the file
+        return;
+    } else {
+        // it is our first fragment and it belongs to the beginning of the file
+        readLengths[endpointTree][filePath] = newFragment.length;
+    }
+
+    smbFilePtr->fragments.push_back(newFragment);
+    smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
+    smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+    serverFiles[endpointTree][filePath] = smbFilePtr;
+}
+
+
 pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const SmbContextPtr &smbContext) {
     return fileHandles[smbContext->getServerEndpointTree()];
 }

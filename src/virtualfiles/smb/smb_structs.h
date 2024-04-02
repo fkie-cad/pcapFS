@@ -77,6 +77,12 @@ namespace pcapfs {
             std::string fileId = "";
         };
 
+        struct ReadRequestData {
+            std::string fileId = "";
+            uint64_t readOffset = 0;
+            uint32_t readLength = 0;
+        };
+
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
@@ -113,7 +119,14 @@ namespace pcapfs {
 
             // map messageId - QueryDirectoryRequestData
             std::map<uint64_t, std::shared_ptr<QueryDirectoryRequestData>> queryDirectoryRequestData;
+
+            // map messageId - ReadRequestData
+            std::map<uint64_t, std::shared_ptr<ReadRequestData>> readRequestData;
+
             uint32_t currentTreeId = 0;
+
+            // current offset into the underlying TCP file, needed for handling reads
+            uint64_t currentOffset = 0;
 
             // map messageId - tree name
             std::map<uint64_t, std::string> requestedTrees;
