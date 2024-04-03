@@ -18,6 +18,13 @@ namespace pcapfs {
         void initializeFilePtr(smb::SmbContextPtr &smbContext, const std::string &filePath,
                                 const smb::FileMetaDataPtr &metaData);
 
+        void setFileVersion(uint64_t num) { fileVersion = num; };
+        uint64_t getFileVersion() { return fileVersion; };
+
+        SmbFile* clone() { return new SmbFile(*this); };
+
+    private:
+        uint64_t fileVersion = 0;
     protected:
         static bool registeredAtFactory;
     };

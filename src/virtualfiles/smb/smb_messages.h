@@ -393,17 +393,17 @@ namespace pcapfs {
                 if (structureSize != 49)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Write Request");
 
-                const uint16_t dataOffset = *(uint16_t*) &rawData.at(2);
-                const uint32_t dataLength = *(uint32_t*) &rawData.at(4);
+                dataOffset = *(uint16_t*) &rawData.at(2);
+                writeLength = *(uint32_t*) &rawData.at(4);
                 const uint16_t writeChannelInfoOffset = *(uint16_t*) &rawData.at(40);
                 const uint16_t writeChannelInfoLength = *(uint16_t*) &rawData.at(42);
 
-                if (dataOffset == 0 && dataLength == 0 && writeChannelInfoOffset == 0 && writeChannelInfoLength == 0)
+                if (dataOffset == 0 && writeLength == 0 && writeChannelInfoOffset == 0 && writeChannelInfoLength == 0)
                     totalSize = 49;
                 else if (writeChannelInfoOffset == 0 && writeChannelInfoLength == 0) {
-                    if ((size_t)(dataOffset + dataLength - 64) > len)
+                    if ((size_t)(dataOffset + writeLength - 64) > len)
                         throw SmbError("Invalid buffer values in SMB2 Write Request");
-                    totalSize = dataOffset + dataLength - 64;
+                    totalSize = dataOffset + writeLength - 64;
                 } else {
                     if ((size_t)(writeChannelInfoOffset + writeChannelInfoLength - 64) > len)
                         throw SmbError("Invalid buffer values in SMB2 Write Request");
@@ -411,11 +411,11 @@ namespace pcapfs {
                 }
                 fileId = bytesToHexString(Bytes(&rawData.at(16), &rawData.at(32)));
                 writeOffset = *(uint64_t*) &rawData.at(8);
-                writeLength = *(uint32_t*) &rawData.at(4);
             }
             std::string fileId = "";
             uint64_t writeOffset = 0;
             uint32_t writeLength = 0;
+            uint16_t dataOffset = 0;
         };
 
 

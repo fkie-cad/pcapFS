@@ -110,10 +110,17 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_WRITE:
-                    if (isResponse)
+                    if (isResponse) {
                         message = std::make_shared<WriteResponse>(&data[64], len - 64);
-                    else
-                        message = std::make_shared<WriteRequest>(&data[64], len - 64);
+
+                        // ignore whether the write was successful or not!?
+                    } else {
+                        std::shared_ptr<WriteRequest> writeRequest = std::make_shared<WriteRequest>(&data[64], len - 64);
+                        if (smbContext->createServerFiles && writeRequest->writeLength != 0)
+                            SmbManager::getInstance().updateSmbFiles(writeRequest, smbContext);
+
+                        message = writeRequest;
+                    }
                     break;
 
                 case Smb2Commands::SMB2_OPLOCK_BREAK:

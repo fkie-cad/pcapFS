@@ -259,6 +259,82 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 }
 
 
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, SmbContextPtr &smbContext) {
+    // update server files with file infos obtained from write messages
+    LOG_TRACE << "updating SMB server files with write message infos";
+
+    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    if (fileHandles[endpointTree].find(writeRequest->fileId) == fileHandles[endpointTree].end()) {
+        // fileId - filename mapping not known
+        return;
+    }
+
+    const std::string filePath = fileHandles[endpointTree].at(writeRequest->fileId);
+    if (serverFiles[endpointTree].find(filePath) == serverFiles[endpointTree].end() || !serverFiles[endpointTree].at(filePath)) {
+        // should not happen
+        return;
+    }
+
+    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    const auto readLengthsPos = readLengths[endpointTree].find(filePath);
+    if (readLengthsPos == readLengths[endpointTree].end() && writeRequest->writeOffset != 0) {
+        // no fragments with file content are saved yet -> we need writeOffset = 0 analogously to read
+        // but we don't have it -> return
+        return;
+    } else {
+        Fragment newFragment;
+        newFragment.id = smbContext->offsetFile->getIdInIndex();
+        newFragment.start = smbContext->currentOffset + writeRequest->dataOffset;
+        newFragment.length = writeRequest->writeLength;
+
+        if (readLengthsPos == readLengths[endpointTree].end() && writeRequest->writeOffset == 0) {
+            // no fragments with file content are saved yet and we have writeOffset = 0
+            smbFilePtr->fragments.push_back(newFragment);
+            readLengths[endpointTree][filePath] = newFragment.length;
+
+            smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
+            smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            serverFiles[endpointTree][filePath] = smbFilePtr;
+
+        } else if (readLengthsPos != readLengths[endpointTree].end()) {
+            const uint64_t readLength = readLengths[endpointTree][filePath];
+
+            if (writeRequest->writeOffset == readLength || writeRequest->writeOffset == 0) {
+                // we have already some saved fragments for that file
+                // (we only allow adjacent fragments or fragments at the beginning of the file)
+
+                // backup current file version
+                SmbFilePtr oldVersion(smbFilePtr->clone());
+                // we need to change IdInIndex s.t. it becomes a uniquely indexable file
+                oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
+                // update filename and filePath
+                oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
+                const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
+                serverFiles[endpointTree][newFilePath] = oldVersion;
+
+
+                // add new Fragment for current file
+                smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
+                if (writeRequest->writeOffset == 0) {
+                    readLengths[endpointTree][filePath] = newFragment.length;
+                    smbFilePtr->setFilesizeRaw(newFragment.length);
+                    smbFilePtr->fragments.clear();
+                } else {
+                    readLengths[endpointTree][filePath] += newFragment.length;
+                    smbFilePtr->setFilesizeRaw(smbFilePtr->getFilesizeRaw()+newFragment.length);
+                }
+                smbFilePtr->fragments.push_back(newFragment);
+                smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+                serverFiles[endpointTree][filePath] = smbFilePtr;
+
+            } else {
+                // no appending -> ignore and return
+            }
+        }
+    }
+}
+
+
 pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const SmbContextPtr &smbContext) {
     return fileHandles[smbContext->getServerEndpointTree()];
 }
