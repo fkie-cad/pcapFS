@@ -80,7 +80,6 @@ namespace pcapfs {
         struct ReadRequestData {
             std::string fileId = "";
             uint64_t readOffset = 0;
-            uint32_t readLength = 0;
         };
 
         // holds information to be memorized along one SMB TCP connection

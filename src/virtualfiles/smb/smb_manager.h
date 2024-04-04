@@ -28,8 +28,8 @@ namespace pcapfs {
             void updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId);
             void updateSmbFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, SmbContextPtr &smbContext, uint64_t messageId);
             void updateSmbFiles(const std::vector<std::shared_ptr<FileInformation>> &fileInfos, SmbContextPtr &smbContext, uint64_t messageId);
-            void updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, SmbContextPtr &smbContext, uint64_t messageId);
-            void updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, SmbContextPtr &smbContext);
+            void updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, const SmbContextPtr &smbContext, uint64_t messageId);
+            void updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, const SmbContextPtr &smbContext);
 
             std::vector<FilePtr> const getSmbFiles();
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, SmbContextPtr &smbContext);

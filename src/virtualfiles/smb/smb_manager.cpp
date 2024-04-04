@@ -205,7 +205,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
 }
 
 
-void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, SmbContextPtr &smbContext, uint64_t messageId) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, const SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from read messages
     LOG_TRACE << "updating SMB server files with read message infos";
 
@@ -222,44 +222,61 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         return;
     }
 
-    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
-
     Fragment newFragment;
     newFragment.id = smbContext->offsetFile->getIdInIndex();
     newFragment.start = smbContext->currentOffset + readResponse->dataOffset;
+    // take size of data that is actually read at the end
     newFragment.length = readResponse->dataLength;
 
-    if (readLengths[endpointTree].find(filePath) != readLengths[endpointTree].end()) {
-        // we have already some saved fragments for the file and need to check if our read content
-        // somewhat overlaps with it or leaves gaps
-        const uint64_t priorContentLength = readLengths[endpointTree][filePath];
-        if (currentReadRequestData->readOffset < priorContentLength && currentReadRequestData->readOffset + readResponse->dataLength > priorContentLength) {
-            // new fragment starts with already saved content but has some new content at the end
-            const uint64_t overlap = priorContentLength - currentReadRequestData->readOffset;
-            newFragment.start += overlap;
-            newFragment.length -= overlap;
-        } else if (currentReadRequestData->readOffset != priorContentLength) {
-            // o/w only allow adjacent following fragments so that no gaps emerge
-            return;
-        }
-        readLengths[endpointTree][filePath] += newFragment.length;
+    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    const auto readLengthsPos = readLengths[endpointTree].find(filePath);
 
-    } else if (currentReadRequestData->readOffset != 0) {
-        // do nothing when this is the first seen fragment of the file and it is not the beginning of the file
-        return;
-    } else {
-        // it is our first fragment and it belongs to the beginning of the file
+    if (readLengthsPos == readLengths[endpointTree].end() && currentReadRequestData->readOffset == 0) {
+        // no fragments with file content are saved yet and we have readOffset = 0
+        smbFilePtr->fragments.push_back(newFragment);
         readLengths[endpointTree][filePath] = newFragment.length;
-    }
+        smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
+        smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+        serverFiles[endpointTree][filePath] = smbFilePtr;
 
-    smbFilePtr->fragments.push_back(newFragment);
-    smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
-    smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
-    serverFiles[endpointTree][filePath] = smbFilePtr;
+    } else if (readLengths[endpointTree].find(filePath) != readLengths[endpointTree].end()) {
+        // we have already some saved fragments for that file
+        // (we only allow following adjacent fragments or fragments at the beginning of the file)
+
+        if (currentReadRequestData->readOffset == readLengths[endpointTree][filePath]) {
+            // append fragment to file
+            smbFilePtr->fragments.push_back(newFragment);
+            readLengths[endpointTree][filePath] += newFragment.length;
+            smbFilePtr->setFilesizeRaw(smbFilePtr->getFilesizeRaw()+newFragment.length);
+            smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            serverFiles[endpointTree][filePath] = smbFilePtr;
+
+        } else if (currentReadRequestData->readOffset == 0) {
+            // create new File version (backup old file version)
+
+            // backup current file version
+            SmbFilePtr oldVersion(smbFilePtr->clone());
+            // we need to change IdInIndex s.t. it becomes a uniquely indexable file
+            oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
+            // update filename and filePath
+            oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
+            const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
+            serverFiles[endpointTree][newFilePath] = oldVersion;
+
+            // add new Fragment for current file
+            smbFilePtr->fragments.clear();
+            smbFilePtr->fragments.push_back(newFragment);
+            smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
+            readLengths[endpointTree][filePath] = newFragment.length;
+            smbFilePtr->setFilesizeRaw(newFragment.length);
+            smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            serverFiles[endpointTree][filePath] = smbFilePtr;
+        }
+    }
 }
 
 
-void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, SmbContextPtr &smbContext) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, const SmbContextPtr &smbContext) {
     // update server files with file infos obtained from write messages
     LOG_TRACE << "updating SMB server files with write message infos";
 
@@ -275,61 +292,54 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         return;
     }
 
+    Fragment newFragment;
+    newFragment.id = smbContext->offsetFile->getIdInIndex();
+    newFragment.start = smbContext->currentOffset + writeRequest->dataOffset;
+    newFragment.length = writeRequest->writeLength;
+
     SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
     const auto readLengthsPos = readLengths[endpointTree].find(filePath);
-    if (readLengthsPos == readLengths[endpointTree].end() && writeRequest->writeOffset != 0) {
-        // no fragments with file content are saved yet -> we need writeOffset = 0 analogously to read
-        // but we don't have it -> return
-        return;
-    } else {
-        Fragment newFragment;
-        newFragment.id = smbContext->offsetFile->getIdInIndex();
-        newFragment.start = smbContext->currentOffset + writeRequest->dataOffset;
-        newFragment.length = writeRequest->writeLength;
 
-        if (readLengthsPos == readLengths[endpointTree].end() && writeRequest->writeOffset == 0) {
-            // no fragments with file content are saved yet and we have writeOffset = 0
+    if (readLengthsPos == readLengths[endpointTree].end() && writeRequest->writeOffset == 0) {
+        // no fragments with file content are saved yet and we have writeOffset = 0
+        smbFilePtr->fragments.push_back(newFragment);
+        readLengths[endpointTree][filePath] = newFragment.length;
+        smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
+        smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+        serverFiles[endpointTree][filePath] = smbFilePtr;
+
+    } else if (readLengthsPos != readLengths[endpointTree].end()) {
+        // we have already some saved fragments for that file
+        // (we only allow following adjacent fragments or fragments at the beginning of the file)
+
+        if (writeRequest->writeOffset == readLengths[endpointTree][filePath]) {
+            // append fragment to file
             smbFilePtr->fragments.push_back(newFragment);
-            readLengths[endpointTree][filePath] = newFragment.length;
-
-            smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
+            readLengths[endpointTree][filePath] += newFragment.length;
+            smbFilePtr->setFilesizeRaw(smbFilePtr->getFilesizeRaw()+newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
-        } else if (readLengthsPos != readLengths[endpointTree].end()) {
-            const uint64_t readLength = readLengths[endpointTree][filePath];
+        } else if (writeRequest->writeOffset == 0) {
+            // create new File version (backup old file version)
 
-            if (writeRequest->writeOffset == readLength || writeRequest->writeOffset == 0) {
-                // we have already some saved fragments for that file
-                // (we only allow adjacent fragments or fragments at the beginning of the file)
+            // backup current file version
+            SmbFilePtr oldVersion(smbFilePtr->clone());
+            // we need to change IdInIndex s.t. it becomes a uniquely indexable file
+            oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
+            // update filename and filePath
+            oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
+            const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
+            serverFiles[endpointTree][newFilePath] = oldVersion;
 
-                // backup current file version
-                SmbFilePtr oldVersion(smbFilePtr->clone());
-                // we need to change IdInIndex s.t. it becomes a uniquely indexable file
-                oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
-                // update filename and filePath
-                oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
-                const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
-                serverFiles[endpointTree][newFilePath] = oldVersion;
-
-
-                // add new Fragment for current file
-                smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
-                if (writeRequest->writeOffset == 0) {
-                    readLengths[endpointTree][filePath] = newFragment.length;
-                    smbFilePtr->setFilesizeRaw(newFragment.length);
-                    smbFilePtr->fragments.clear();
-                } else {
-                    readLengths[endpointTree][filePath] += newFragment.length;
-                    smbFilePtr->setFilesizeRaw(smbFilePtr->getFilesizeRaw()+newFragment.length);
-                }
-                smbFilePtr->fragments.push_back(newFragment);
-                smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
-                serverFiles[endpointTree][filePath] = smbFilePtr;
-
-            } else {
-                // no appending -> ignore and return
-            }
+            // add new Fragment for current file
+            smbFilePtr->fragments.clear();
+            smbFilePtr->fragments.push_back(newFragment);
+            smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
+            readLengths[endpointTree][filePath] = newFragment.length;
+            smbFilePtr->setFilesizeRaw(newFragment.length);
+            smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            serverFiles[endpointTree][filePath] = smbFilePtr;
         }
     }
 }
@@ -367,8 +377,17 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles() {
     std::vector<FilePtr> resultVector;
-    for (const auto &entry : serverFiles) {
-        std::transform(entry.second.begin(), entry.second.end(), std::back_inserter(resultVector), [](const auto &f){ return f.second; });
+    for (const auto &endpt : serverFiles) {
+        for (auto &fileEntry: endpt.second) {
+            if (fileEntry.second->getFileVersion() != 0) {
+                const std::string currFilename = fileEntry.second->getFilename();
+                if (currFilename.rfind('@') == std::string::npos) {
+                    // add version tag for newest file version
+                    fileEntry.second->setFilename(currFilename + "@" + std::to_string(fileEntry.second->getFileVersion()));
+                }
+            }
+            resultVector.push_back(fileEntry.second);
+        }
     }
     return resultVector;
 }
