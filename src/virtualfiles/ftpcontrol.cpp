@@ -334,7 +334,6 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
     std::string param;
     if (command == FTPCommands::MLSD) {
         param = result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd");
-        param += FTPCommands::MLSD;
     } else {
         param = (params.size() > 0) ?
                 (result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd")) + params.at(0) :

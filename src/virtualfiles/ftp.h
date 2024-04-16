@@ -32,6 +32,8 @@ namespace pcapfs {
                                                             const std::vector<FileTransmissionData> &transmission_data);
 
         static bool connectionBreaksInTimeSlot(TimePoint break_time, const TimeSlot &time_slot);
+
+        static void handleMlsdFiles(const FilePtr &filePtr, const std::string &filePath);
     };
 
     typedef std::shared_ptr<FtpFile> FtpFilePtr;

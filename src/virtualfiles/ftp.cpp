@@ -20,18 +20,23 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
     if (d.transmission_type.empty())
         return resultVector;
 
-    LOG_DEBUG << "FTP: found TCP connection with FTP file download";
-    if (d.transmission_file.empty()) {
-        // no filename given: set transmission type as filename and put file in root dir
-        std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
-        resultPtr->parseResult(filePtr);
-        resultPtr->isDirectory = false;
-        resultPtr->setFilename(d.transmission_type);
-        resultPtr->setParentDir(nullptr);
-        resultPtr->fillGlobalProperties(filePtr);
-        FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
+    if (d.transmission_type == FTPCommands::MLSD) {
+        LOG_DEBUG << "FTP: handling MLSD file";
+        handleMlsdFiles(filePtr, d.transmission_file);
     } else {
-        FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
+        LOG_DEBUG << "FTP: found TCP connection with FTP file download";
+        if (d.transmission_file.empty()) {
+            // no filename given: set transmission type as filename and put file in root dir
+            std::shared_ptr<pcapfs::FtpFile> resultPtr = std::make_shared<FtpFile>();
+            resultPtr->parseResult(filePtr);
+            resultPtr->isDirectory = false;
+            resultPtr->setFilename(d.transmission_type);
+            resultPtr->setParentDir(nullptr);
+            resultPtr->fillGlobalProperties(filePtr);
+            FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
+        } else {
+            FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
+        }
     }
 
     // circumvent duplicate as TCP file
@@ -70,6 +75,46 @@ pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
 
 bool pcapfs::FtpFile::connectionBreaksInTimeSlot(TimePoint break_time, const pcapfs::TimeSlot &time_slot) {
     return time_slot.first <= break_time && break_time <= time_slot.second;
+}
+
+
+void pcapfs::FtpFile::handleMlsdFiles(const FilePtr &filePtr, const std::string &filePath) {
+    const Bytes data = filePtr->getBuffer();
+    const std::string totalFileContent = std::string(data.begin(), data.end());
+    std::stringstream ss(totalFileContent);
+    std::string line;
+    while(std::getline(ss,line,'\n')){
+        size_t spacePos = line.rfind("; ");
+        if (spacePos == std::string::npos || spacePos + 3 >= line.length())
+            continue;
+
+        // -1 because of ending newline
+        const std::string extractedFilename(line.begin()+spacePos+2, line.end()-1);
+        if (extractedFilename.empty() || std::any_of(extractedFilename.begin(), extractedFilename.end(),
+                                                        [](char c) { return !std::isprint(c); }))
+            continue;
+
+        std::string extractedModifyTime, extractedType;
+        std::stringstream ss2(line);
+        std::string token;
+        while(std::getline(ss2, token, ';')) {
+            std::stringstream ss3(token);
+            std::string key, value;
+            if (std::getline(ss3, key, '=') && std::getline(ss3, value)) {
+                if (key == "modify")
+                    extractedModifyTime = value;
+                else if (key == "type")
+                    extractedType = value;
+            }
+        }
+
+        std::tm tm = {};
+        std::stringstream ss4(extractedModifyTime);
+        ss4 >> std::get_time(&tm, "%Y%m%d%H%M%S");
+        const TimePoint tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+        const std::string fullFilePath = filePath + extractedFilename;
+        FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, (extractedType == "dir"), tp, filePtr);
+    }
 }
 
 

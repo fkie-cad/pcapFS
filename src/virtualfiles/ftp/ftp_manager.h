@@ -40,6 +40,7 @@ namespace pcapfs {
         std::vector<FilePtr> getFtpFiles();
 
         void updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr);
+        void updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr);
 
     private:
         FtpManager() {}

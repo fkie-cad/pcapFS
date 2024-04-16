@@ -71,5 +71,40 @@ void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FileP
         ftpFilePtr->isDirectory = false;
         ftpFilePtr->parseResult(offsetFilePtr);
         ftpFiles[filePath] = ftpFilePtr;
+    } else if (ftpFilePtr->getFilesizeRaw() == 0) {
+        // file is previously known only as empty file, now it's filled with content
+        ftpFilePtr->parseResult(offsetFilePtr);
+        ftpFiles[filePath] = ftpFilePtr;
+    }
+}
+
+
+void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr) {
+    FtpFilePtr ftpFilePtr = ftpFiles[filePath];
+    if (ftpFilePtr) {
+        if (ftpFilePtr->getModifyTime() != modifyTime) {
+            // file is already known, just update the timestamps
+            LOG_TRACE << "updated modify time of" << filePath;
+            ftpFilePtr->setModifyTime(modifyTime);
+            ftpFilePtr->setAccessTime(modifyTime);
+            ftpFilePtr->setChangeTime(modifyTime);
+            ftpFiles[filePath] = ftpFilePtr;
+        }
+    } else {
+        ftpFilePtr = std::make_shared<FtpFile>();
+        ftpFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
+        ftpFilePtr->fillGlobalProperties(offsetFilePtr);
+        ftpFilePtr->isDirectory = isDirectory;
+        ftpFilePtr->setModifyTime(modifyTime);
+        ftpFilePtr->setAccessTime(modifyTime);
+        ftpFilePtr->setChangeTime(modifyTime);
+        Fragment fragment;
+        fragment.id = offsetFilePtr->getIdInIndex();
+        fragment.start = 0;
+        fragment.length = 0;
+        ftpFilePtr->fragments.push_back(fragment);
+        ftpFilePtr->setFilesizeRaw(0);
+        ftpFilePtr->setFilesizeProcessed(0);
+        ftpFiles[filePath] = ftpFilePtr;
     }
 }
