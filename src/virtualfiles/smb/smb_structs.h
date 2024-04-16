@@ -153,7 +153,6 @@ namespace pcapfs {
                 metaData->lastAccessTime = *(uint64_t*) &rawContent.at(16);
                 metaData->lastWriteTime = *(uint64_t*) &rawContent.at(24);
                 metaData->changeTime = *(uint64_t*) &rawContent.at(32);
-                //metaData->filesize = *(uint64_t*) &rawContent.at(40);
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
                 metaData->isDirectory = extractedFileAttributes & 0x10;
                 const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
