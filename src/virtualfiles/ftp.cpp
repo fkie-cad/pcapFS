@@ -21,7 +21,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
         return resultVector;
 
     if (d.transmission_type == FTPCommands::MLSD) {
-        LOG_DEBUG << "FTP: handling MLSD file";
+        LOG_DEBUG << "FTP: handling MLSD file for " << d.transmission_file;
         handleMlsdFiles(filePtr, d.transmission_file);
     } else {
         LOG_DEBUG << "FTP: found TCP connection with FTP file download";
@@ -186,9 +186,15 @@ void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
 
 
 size_t pcapfs::FtpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Fragment &fragment = fragments.at(0);
-    FilePtr filePtr = idx.get({offsetType, fragment.id});
-    return filePtr->read(fragment.start + startOffset, length, idx, buf);
+    Bytes totalContent(0);
+    for (Fragment fragment: fragments) {
+        Bytes rawData(fragment.length);
+        FilePtr filePtr = idx.get({offsetType, fragment.id});
+        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+        totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
+    }
+    memcpy(buf, totalContent.data() + startOffset, length);
+    return std::min(totalContent.size() - startOffset, length);
 }
 
 
