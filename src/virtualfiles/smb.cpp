@@ -72,8 +72,8 @@ void pcapfs::SmbFile::initializeFilePtr(smb::SmbContextPtr &smbContext, const st
     setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
     setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
     flags.set(pcapfs::flags::PROCESSED);
-    setFilesizeRaw(metaData->filesize);
-    setFilesizeProcessed(metaData->filesize);
+    setFilesizeRaw(0);
+    setFilesizeProcessed(0);
     setIdInIndex(smb::SmbManager::getInstance().getNewId());
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
 }

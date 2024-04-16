@@ -285,7 +285,6 @@ namespace pcapfs {
                 metaData->lastAccessTime = *(uint64_t*) &rawData.at(16);
                 metaData->lastWriteTime = *(uint64_t*) &rawData.at(24);
                 metaData->changeTime = *(uint64_t*) &rawData.at(32);
-                metaData->filesize = *(uint64_t*) &rawData.at(48);
             }
             uint32_t createAction = CreateAction::ACTION_UNKNOWN;
             std::string fileId = "";
@@ -714,7 +713,6 @@ namespace pcapfs {
                                     metaData->lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
                                     metaData->lastWriteTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 16);
                                     metaData->changeTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 24);
-                                    metaData->filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 48);
                                     const uint32_t filenameLen = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 96);
                                     if (100 + filenameLen > outputBufferLength)
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
@@ -748,7 +746,6 @@ namespace pcapfs {
                                     metaData->lastAccessTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 8);
                                     metaData->lastWriteTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 16);
                                     metaData->changeTime = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 24);
-                                    metaData->filesize = *(uint64_t*) &rawData.at((outputBufferOffset - 64) + 40);
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 48);
                                     metaData->isDirectory = extractedFileAttributes & 0x10;
                                 }

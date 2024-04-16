@@ -36,8 +36,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateRespons
         if (lastChangeTime > smbFilePtr->getChangeTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
             smbFilePtr->setTimestamp(lastChangeTime);
-            smbFilePtr->setFilesizeRaw(createResponse->metaData->filesize);
-            smbFilePtr->setFilesizeProcessed(createResponse->metaData->filesize);
             smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastAccessTime));
             smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
             smbFilePtr->setChangeTime(lastChangeTime);
@@ -106,8 +104,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
             if (lastChangeTime > smbFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
                 smbFilePtr->setTimestamp(lastChangeTime);
-                smbFilePtr->setFilesizeRaw(queryInfoResponse->metaData->filesize);
-                smbFilePtr->setFilesizeProcessed(queryInfoResponse->metaData->filesize);
                 smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime));
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(lastChangeTime);
@@ -192,8 +188,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             if (lastChangeTime > smbFilePtr->getChangeTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
                 smbFilePtr->setTimestamp(lastChangeTime);
-                smbFilePtr->setFilesizeRaw(fileInfo->metaData->filesize);
-                smbFilePtr->setFilesizeProcessed(fileInfo->metaData->filesize);
                 smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime));
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(lastChangeTime);

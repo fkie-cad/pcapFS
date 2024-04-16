@@ -140,7 +140,6 @@ namespace pcapfs {
             uint64_t lastAccessTime = 0;
             uint64_t lastWriteTime = 0;
             uint64_t changeTime = 0;
-            uint64_t filesize = 0;
         };
         typedef std::shared_ptr<FileMetaData> FileMetaDataPtr;
 
@@ -154,7 +153,7 @@ namespace pcapfs {
                 metaData->lastAccessTime = *(uint64_t*) &rawContent.at(16);
                 metaData->lastWriteTime = *(uint64_t*) &rawContent.at(24);
                 metaData->changeTime = *(uint64_t*) &rawContent.at(32);
-                metaData->filesize = *(uint64_t*) &rawContent.at(40);
+                //metaData->filesize = *(uint64_t*) &rawContent.at(40);
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
                 metaData->isDirectory = extractedFileAttributes & 0x10;
                 const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
