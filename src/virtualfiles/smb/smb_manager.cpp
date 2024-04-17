@@ -231,6 +231,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         readLengths[endpointTree][filePath] = newFragment.length;
         smbFilePtr->setFilesizeRaw(readLengths[endpointTree][filePath]);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+        smbFilePtr->flags.reset(flags::IS_METADATA);
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (readLengths[endpointTree].find(filePath) != readLengths[endpointTree].end()) {
@@ -254,6 +255,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
             // update filename and filePath
             oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
+            oldVersion->flags.reset(flags::IS_METADATA);
             const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
             serverFiles[endpointTree][newFilePath] = oldVersion;
 
@@ -264,6 +266,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             readLengths[endpointTree][filePath] = newFragment.length;
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            smbFilePtr->flags.reset(flags::IS_METADATA);
             serverFiles[endpointTree][filePath] = smbFilePtr;
         }
     }
@@ -312,6 +315,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             readLengths[endpointTree][filePath] += newFragment.length;
             smbFilePtr->setFilesizeRaw(smbFilePtr->getFilesizeRaw()+newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            smbFilePtr->flags.reset(flags::IS_METADATA);
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (writeRequest->writeOffset == 0) {
@@ -323,6 +327,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
             // update filename and filePath
             oldVersion->setFilename(oldVersion->getFilename() + "@" + std::to_string(oldVersion->getFileVersion()));
+            oldVersion->flags.reset(flags::IS_METADATA);
             const std::string newFilePath = filePath +  "@" + std::to_string(oldVersion->getFileVersion());
             serverFiles[endpointTree][newFilePath] = oldVersion;
 
@@ -333,6 +338,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             readLengths[endpointTree][filePath] = newFragment.length;
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            smbFilePtr->flags.reset(flags::IS_METADATA);
             serverFiles[endpointTree][filePath] = smbFilePtr;
         }
     }

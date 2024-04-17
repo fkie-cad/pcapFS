@@ -73,6 +73,7 @@ void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FileP
         ftpFiles[filePath] = ftpFilePtr;
     } else if (ftpFilePtr->getFilesizeRaw() == 0) {
         // file is previously known only as empty file, now it's filled with content
+        ftpFilePtr->flags.reset(flags::IS_METADATA);
         ftpFilePtr->parseResult(offsetFilePtr);
         ftpFiles[filePath] = ftpFilePtr;
     }
@@ -105,6 +106,7 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
         ftpFilePtr->fragments.push_back(fragment);
         ftpFilePtr->setFilesizeRaw(0);
         ftpFilePtr->setFilesizeProcessed(0);
+        ftpFilePtr->flags.set(flags::IS_METADATA);
         ftpFiles[filePath] = ftpFilePtr;
     }
 }

@@ -71,6 +71,7 @@ void pcapfs::SmbFile::initializeFilePtr(smb::SmbContextPtr &smbContext, const st
     setProperty("dstIP", smbContext->offsetFile->getProperty("dstIP"));
     setProperty("srcPort", smbContext->offsetFile->getProperty("srcPort"));
     setProperty("dstPort", smbContext->offsetFile->getProperty("dstPort"));
+    flags.set(pcapfs::flags::IS_METADATA);
     flags.set(pcapfs::flags::PROCESSED);
     setFilesizeRaw(0);
     setFilesizeProcessed(0);
