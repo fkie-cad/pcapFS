@@ -13,7 +13,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         if (len < 64)
             throw SmbError("Invalid SMB2 Packet Header");
 
-        std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
+        const std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
         if (!(packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_ASYNC_COMMAND)) {
             // TODO: could this lead to errors/bugs?
             smbContext->currentTreeId = packetHeader->treeId;
@@ -24,7 +24,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
             switch (packetHeader->command) {
                 case Smb2Commands::SMB2_NEGOTIATE:
                     if (isResponse) {
-                        std::shared_ptr<NegotiateResponse> negResponse = std::make_shared<NegotiateResponse>(&data[64], len - 64);
+                        const std::shared_ptr<NegotiateResponse> negResponse = std::make_shared<NegotiateResponse>(&data[64], len - 64);
                         smbContext->dialect = negResponse->dialect;
                         message = negResponse;
                     } else
@@ -48,7 +48,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             SmbManager::getInstance().getAsParentDirFile(smbContext->treeNames[packetHeader->treeId], smbContext);
                         smbContext->requestedTrees.erase(packetHeader->messageId);
                     } else {
-                        std::shared_ptr<TreeConnectRequest> treeConnectRequest =
+                        const std::shared_ptr<TreeConnectRequest> treeConnectRequest =
                             std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
                         smbContext->requestedTrees[packetHeader->messageId] = treeConnectRequest->pathName;
                         message = treeConnectRequest;
@@ -57,13 +57,13 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
                 case Smb2Commands::SMB2_CREATE:
                     if (isResponse) {
-                        std::shared_ptr<CreateResponse> createResponse = std::make_shared<CreateResponse>(&data[64], len - 64);
+                        const std::shared_ptr<CreateResponse> createResponse = std::make_shared<CreateResponse>(&data[64], len - 64);
                         if (smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
                             !smbContext->createRequestFileNames.at(packetHeader->messageId).empty())
                             SmbManager::getInstance().updateSmbFiles(createResponse, smbContext, packetHeader->messageId);
                         message = createResponse;
                     } else {
-                        std::shared_ptr<CreateRequest> createRequest = std::make_shared<CreateRequest>(&data[64], len - 64);
+                        const std::shared_ptr<CreateRequest> createRequest = std::make_shared<CreateRequest>(&data[64], len - 64);
                         LOG_TRACE << "create request file: " << createRequest->filename;
                         smbContext->createRequestFileNames[packetHeader->messageId] = createRequest->filename;
                         message = createRequest;
@@ -89,11 +89,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         if (smbContext->createServerFiles &&
                             smbContext->readRequestData.find(packetHeader->messageId) != smbContext->readRequestData.end() &&
                             smbContext->readRequestData[packetHeader->messageId]) {
-                            const std::shared_ptr<ReadResponse> readResponse = std::make_shared<ReadResponse>(&data[64], len - 64);
 
+                            const std::shared_ptr<ReadResponse> readResponse = std::make_shared<ReadResponse>(&data[64], len - 64);
                             if (readResponse->dataLength != 0)
                                 SmbManager::getInstance().updateSmbFiles(readResponse, smbContext, packetHeader->messageId);
-
                             message = readResponse;
                         } else {
                             message = std::make_shared<ReadResponse>(&data[64], len - 64);
@@ -112,11 +111,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse)
                         message = std::make_shared<WriteResponse>(&data[64], len - 64);
                     else {
-                        std::shared_ptr<WriteRequest> writeRequest = std::make_shared<WriteRequest>(&data[64], len - 64);
+                        const std::shared_ptr<WriteRequest> writeRequest = std::make_shared<WriteRequest>(&data[64], len - 64);
                         // we don't care whether the write was successful at the end or not
                         if (smbContext->createServerFiles && writeRequest->writeLength != 0)
                             SmbManager::getInstance().updateSmbFiles(writeRequest, smbContext);
-
                         message = writeRequest;
                     }
                     break;
@@ -150,9 +148,9 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         } else
                             if (smbContext->queryDirectoryRequestData.find(packetHeader->messageId) != smbContext->queryDirectoryRequestData.end() &&
                                 smbContext->queryDirectoryRequestData[packetHeader->messageId]) {
-                                std::shared_ptr<QueryDirectoryResponse> queryDirectoryResponse =
-                                    std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
-                                        smbContext->queryDirectoryRequestData[packetHeader->messageId]->fileInfoClass);
+                                const std::shared_ptr<QueryDirectoryResponse> queryDirectoryResponse =
+                                        std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
+                                            smbContext->queryDirectoryRequestData[packetHeader->messageId]->fileInfoClass);
 
                                 if (smbContext->createServerFiles && !queryDirectoryResponse->fileInfos.empty())
                                     SmbManager::getInstance().updateSmbFiles(queryDirectoryResponse->fileInfos, smbContext, packetHeader->messageId);
@@ -160,14 +158,11 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                                 smbContext->queryDirectoryRequestData.erase(packetHeader->messageId);
                                 message = queryDirectoryResponse;
                             } else {
-                                message = std::make_shared<QueryDirectoryResponse>(&data[64], len - 64,
-                                    FileInfoClass::FILE_UNKNOWN_INFORMATION);
+                                message = std::make_shared<QueryDirectoryResponse>(&data[64], len - 64, FileInfoClass::FILE_UNKNOWN_INFORMATION);
                             }
                     } else {
-                        std::shared_ptr<QueryDirectoryRequest> queryDirectoryRequest =
-                            std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
-                        std::shared_ptr<QueryDirectoryRequestData> queryDirectoryRequestData =
-                            std::make_shared<QueryDirectoryRequestData>();
+                        const std::shared_ptr<QueryDirectoryRequest> queryDirectoryRequest = std::make_shared<QueryDirectoryRequest>(&data[64], len - 64);
+                        const std::shared_ptr<QueryDirectoryRequestData> queryDirectoryRequestData = std::make_shared<QueryDirectoryRequestData>();
                         LOG_TRACE << "requested information: " << fileInfoClassStrings.at(queryDirectoryRequest->fileInfoClass);
                         queryDirectoryRequestData->fileInfoClass = queryDirectoryRequest->fileInfoClass;
                         queryDirectoryRequestData->fileId = queryDirectoryRequest->fileId;
@@ -201,9 +196,9 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         } else {
                             if (smbContext->queryInfoRequestData.find(packetHeader->messageId) != smbContext->queryInfoRequestData.end() &&
                                 smbContext->queryInfoRequestData[packetHeader->messageId]) {
-                                std::shared_ptr<QueryInfoResponse> queryInfoResponse =
-                                    std::make_shared<QueryInfoResponse>(&data[64], len - 64,
-                                        smbContext->queryInfoRequestData[packetHeader->messageId]);
+                                const std::shared_ptr<QueryInfoResponse> queryInfoResponse =
+                                        std::make_shared<QueryInfoResponse>(&data[64], len - 64,
+                                            smbContext->queryInfoRequestData[packetHeader->messageId]);
 
                                 if (queryInfoResponse->metaData)
                                     SmbManager::getInstance().updateSmbFiles(queryInfoResponse, smbContext, packetHeader->messageId);
@@ -215,8 +210,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             }
                         }
                     } else {
-                        std::shared_ptr<QueryInfoRequest> queryInfoRequest = std::make_shared<QueryInfoRequest>(&data[64], len - 64);
-                        std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
+                        const std::shared_ptr<QueryInfoRequest> queryInfoRequest = std::make_shared<QueryInfoRequest>(&data[64], len - 64);
+                        const std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
                         LOG_TRACE << "requested information: " << queryInfoTypeStrings.at(queryInfoRequest->infoType);
                         queryInfoRequestData->infoType = queryInfoRequest->infoType;
                         queryInfoRequestData->fileInfoClass = queryInfoRequest->fileInfoClass;
@@ -293,7 +288,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
         const SmbCompressionTransformHeader compressionTransformHeader(data);
         if (compressionTransformHeader.flags == CompressionFlags::SMB2_COMPRESSION_FLAG_NONE) {
-            std::shared_ptr<SmbCompressionTransformHeaderUnchained> compressionTransformHeaderUnchained =
+            const std::shared_ptr<SmbCompressionTransformHeaderUnchained> compressionTransformHeaderUnchained =
                     std::make_shared<SmbCompressionTransformHeaderUnchained>(data);
             if (16 + compressionTransformHeaderUnchained->offset > len)
                 throw SmbError("Invalid SMB2 Compression Transform Header");
@@ -304,7 +299,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
             headerType = HeaderType::SMB2_COMPRESSION_TRANSFORM_HEADER_UNCHAINED;
 
         } else if (compressionTransformHeader.flags == CompressionFlags::SMB2_COMPRESSION_FLAG_CHAINED) {
-            std::shared_ptr<SmbCompressionTransformHeaderChained> compressionTransformHeaderChained =
+            const std::shared_ptr<SmbCompressionTransformHeaderChained> compressionTransformHeaderChained =
                     std::make_shared<SmbCompressionTransformHeaderChained>(data);
 
             if (16 + compressionTransformHeaderChained->length > len)
@@ -329,7 +324,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
         if (len < 32)
             throw SmbError("Invalid SMB Packet Header");
 
-        std::shared_ptr<Smb1Header> packetHeader = std::make_shared<Smb1Header>(data);
+        const std::shared_ptr<Smb1Header> packetHeader = std::make_shared<Smb1Header>(data);
         isResponse = packetHeader->flags & Smb1HeaderFlags::SMB_FLAGS_REPLY;
         header = packetHeader;
         headerType = HeaderType::SMB1_PACKET_HEADER;

@@ -29,7 +29,7 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
 }
 
 
-void pcapfs::SmbFile::initializeFilePtr(smb::SmbContextPtr &smbContext, const std::string &filePath,
+void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath,
                                                 const smb::FileMetaDataPtr &metaData) {
     Fragment fragment;
     fragment.id = smbContext->offsetFile->getIdInIndex();

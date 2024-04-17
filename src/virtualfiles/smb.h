@@ -15,7 +15,7 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
-        void initializeFilePtr(smb::SmbContextPtr &smbContext, const std::string &filePath,
+        void initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath,
                                 const smb::FileMetaDataPtr &metaData);
 
         void setFileVersion(uint64_t num) { fileVersion = num; };
