@@ -67,6 +67,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
             if (currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION && queryInfoResponse->filename != "") {
                 // filename can be determined when we have FILE_ALL_INFORMATION
                 filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + queryInfoResponse->filename;
+                // update fileId-filename mapping
+                fileHandles[endpointTree][currentQueryInfoRequestData->fileId] = filePath;
 
             } else if (!smbContext->createRequestFileNames.empty() &&  !smbContext->createRequestFileNames.rbegin()->second.empty() &&
                     currentQueryInfoRequestData->fileId == CHAINED_FILEID) {
@@ -83,10 +85,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
                 // filePath for fileId can't be derived
                 return;
             }
-
-            // update fileId-filename mapping
-            fileHandles[endpointTree][currentQueryInfoRequestData->fileId] = filePath;
-
         }
 
         if (!smbContext->createServerFiles)
