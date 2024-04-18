@@ -31,14 +31,13 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateRespons
         smbFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
     } else {
         // server file is already known; update metadata if the current timestamp is newer
-        // for NTFS timestamps, changeTime is the most sensitive one
-        const TimePoint lastChangeTime = winFiletimeToTimePoint(createResponse->metaData->changeTime);
-        if (lastChangeTime > smbFilePtr->getChangeTime()) {
+        const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
+        if (lastAccessTime > smbFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
-            smbFilePtr->setTimestamp(lastChangeTime);
-            smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastAccessTime));
+            smbFilePtr->setTimestamp(lastAccessTime);
+            smbFilePtr->setAccessTime(lastAccessTime);
             smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
-            smbFilePtr->setChangeTime(lastChangeTime);
+            smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(createResponse->metaData->changeTime));
         }
     }
 
@@ -98,13 +97,13 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
             smbFilePtr->initializeFilePtr(smbContext, filePath, queryInfoResponse->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastChangeTime = winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime);
-            if (lastChangeTime > smbFilePtr->getChangeTime()) {
+            const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
+            if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                smbFilePtr->setTimestamp(lastChangeTime);
-                smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime));
+                smbFilePtr->setTimestamp(lastAccessTime);
+                smbFilePtr->setAccessTime(lastAccessTime);
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
-                smbFilePtr->setChangeTime(lastChangeTime);
+                smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime));
             }
         }
 
@@ -182,13 +181,13 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             smbFilePtr->initializeFilePtr(smbContext, filePath, fileInfo->metaData);
         } else {
             // server file is already known; update metadata if the current timestamp is newer
-            const TimePoint lastChangeTime = winFiletimeToTimePoint(fileInfo->metaData->changeTime);
-            if (lastChangeTime > smbFilePtr->getChangeTime()) {
+            const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
+            if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                smbFilePtr->setTimestamp(lastChangeTime);
-                smbFilePtr->setAccessTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime));
+                smbFilePtr->setTimestamp(lastAccessTime);
+                smbFilePtr->setAccessTime(lastAccessTime);
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
-                smbFilePtr->setChangeTime(lastChangeTime);
+                smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(fileInfo->metaData->changeTime));
             }
         }
 
@@ -377,19 +376,68 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 }
 
 
-std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles() {
+std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const Index &idx) {
     std::vector<FilePtr> resultVector;
+    std::map<std::string, std::vector<SmbFilePtr>> fileVersions;
+
+    LOG_DEBUG << "Collecting all SMB files...";
     for (const auto &endpt : serverFiles) {
         for (auto &fileEntry: endpt.second) {
-            if (fileEntry.second->getFileVersion() != 0) {
-                const std::string currFilename = fileEntry.second->getFilename();
-                if (currFilename.rfind('@') == std::string::npos) {
-                    // add version tag for newest file version
-                    fileEntry.second->setFilename(currFilename + "@" + std::to_string(fileEntry.second->getFileVersion()));
+            if (!fileEntry.second->flags.test(flags::IS_METADATA)) {
+                // pick files with multiple versions for extra check later
+                if (fileEntry.first.rfind('@') != std::string::npos) {
+                    fileVersions[std::string(fileEntry.first.begin(), fileEntry.first.begin()+fileEntry.first.rfind('@'))].push_back(fileEntry.second);
+                } else if (fileEntry.second->getFileVersion() != 0 && fileEntry.first.rfind('@') == std::string::npos) {
+                    // for newest version, we also need to set the version tag in the file name since we didn't do that before
+                    fileEntry.second->setFilename(fileEntry.second->getFilename() + "@" + std::to_string(fileEntry.second->getFileVersion()));
+                    fileVersions[fileEntry.first].push_back(fileEntry.second);
+                } else {
+                    // no versions detected -> add directly to resultVector
+                    resultVector.push_back(fileEntry.second);
                 }
+            } else {
+                resultVector.push_back(fileEntry.second);
             }
-            resultVector.push_back(fileEntry.second);
         }
     }
+
+    // deduplicate redundant successive versions
+    for (auto &entry : fileVersions) {
+        LOG_TRACE << "checking redundant successive versions of " << entry.first;
+        // sort versions in ascending order
+        std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getFileVersion() < b->getFileVersion(); });
+        uint64_t tmpFilesizeRaw = entry.second.at(0)->getFilesizeRaw();
+        Bytes buf;
+        Bytes cmpBuf(tmpFilesizeRaw);
+        entry.second.at(0)->read(0, tmpFilesizeRaw, idx, (char*) cmpBuf.data());
+        for (uint32_t i = 1; i < entry.second.size(); ++i) {
+            tmpFilesizeRaw = entry.second.at(i)->getFilesizeRaw();
+            buf.resize(tmpFilesizeRaw);
+            entry.second.at(i)->read(0, tmpFilesizeRaw, idx, (char*) buf.data());
+            if (buf == cmpBuf) {
+                LOG_TRACE << "Versions " << i-1 << " and " << i << " are the same -> deduplicate";
+                entry.second.erase(entry.second.begin()+i);
+            }
+            cmpBuf.assign(buf.begin(), buf.end());
+        }
+
+        // adjust file versions so that they are consecutive again
+        for (uint32_t j = 0; j < entry.second.size(); ++j) {
+            if (j != entry.second.at(j)->getFileVersion()) {
+                entry.second.at(j)->setFileVersion(j);
+                const std::string oldFilename = entry.second.at(j)->getFilename();
+                entry.second.at(j)->setFilename(std::string(oldFilename.begin(), oldFilename.begin()+oldFilename.rfind('@')+1) + std::to_string(j));
+            }
+        }
+
+        // remove tag in file name when the number of deduplcated versions reduced to 1
+        if (entry.second.size() == 1) {
+            const std::string oldFilename = entry.second.at(0)->getFilename();
+            entry.second.at(0)->setFilename(std::string(oldFilename.begin(), oldFilename.begin() + oldFilename.rfind('@')));
+        }
+
+        resultVector.insert(resultVector.end(), entry.second.begin(), entry.second.end());
+    }
+
     return resultVector;
 }

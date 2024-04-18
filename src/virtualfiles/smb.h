@@ -21,7 +21,7 @@ namespace pcapfs {
         void setFileVersion(uint64_t num) { fileVersion = num; };
         uint64_t getFileVersion() { return fileVersion; };
 
-        SmbFile* clone() { return new SmbFile(*this); };
+        std::shared_ptr<SmbFile> clone() { return std::make_shared<SmbFile>(*this); };
 
     private:
         uint64_t fileVersion = 0;
