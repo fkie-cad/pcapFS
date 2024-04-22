@@ -9,6 +9,7 @@ features that make it different from these tools—most notably:
 - support for multi/split PCAP and PCAPNG files
 - almost arbitrary sortable virtual directory hierarchy
 - on the fly decoding and decrypting
+- reconstruction of the server-side directory hierarchy for protocols like FTP and SMB2 including different file versions (see [below](#reconstruction-of-the-server-side-directory-hierarchy-for-ftp-and-smb2))
 
 Instead of extracting the payload (i.e. copying the data to disk), pcapFS provides direct access into the PCAP/PCAPNG files.
 To speed the access up, an index is created when a PCAP is mounted for the first time. This takes almost the same time
@@ -20,9 +21,9 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 
 - raw TCP and UDP
 - HTTP 1.1
-- FTP
 - TLS 1.0-1.2 (see [below](#decrypting-and-decoding-traffic))
-- SMB2 (still in development)
+- FTP
+- SMB2
 - SSH
 - DNS
 - DHCP
@@ -258,7 +259,7 @@ hand provides these properties leading to the `server.test` and `image` subdirec
 When you pass the option `--show-metadata` to pcapFS, additional files with useful metadata information are created. Depending on the protocol, different information is extracted for metadata files:
 - TLS: all certificates of the server-side certificate chain
 - HTTP: headers from requests and responses
-- SMB2: control files containing transferred commands and responses per connection
+- SMB2: control files containing transferred commands and responses per connection as well as empty files from the reconstructed server-side directory hierarchy
 - FTP: control files and credential files containing the client's login credentials
 
 ## Decrypting and Decoding Traffic
@@ -298,6 +299,13 @@ In order to successfully decrypt the C2 traffic, the team server's private RSA k
 The team server's private RSA key may be known when a cracked Cobalt Strike version is used. How the private key can be extracted in that case, is explained in a [blog post by Didier Stevens](https://blog.nviso.eu/2021/10/21/cobalt-strike-using-known-private-keys-to-decrypt-traffic-part-1/). You can exemplarily test the decryption and parsing capabilities of pcapFS with the pcap file referenced in [this post by Malware Traffic Analysis](https://www.malware-traffic-analysis.net/2021/02/02/index.html).
 
 With the command line option `--no-cs` set, pcapFS does not try to decrypt Cobalt Strike traffic which may improve the overall performance.
+
+## Reconstruction of the Server-Side Directory Hierarchy for FTP and SMB2
+When analyzing a capture file that contains FTP or SMB2 traffic, pcapFS attempts to reconstruct the directory hierarchy of the corresponding FTP or SMB2 server including all files as far as possible. For this, pcapFS follows per connection the current working directory and parses all messages which indicate which files are located there.
+
+For FTP traffic, the reconstructed directory hierarchy only includes downloaded files and empty files whose metadata is extracted from `MLSD` files.
+
+For SMB2 traffic, more information can be extracted, enabling a more detailed directory reconstruction. Files accessed directly via SMB2 Read/Write messages are populated with the corresponding file content that is read or written. Additionally, during the handling of SMB2 Read/Write messages, different file versions are created (indicated by the file name tag `@<file version number>`) each time the content changes. All other files, which are known to exist only from context, are created as empty files with the extracted metadata set. To also display these empty files, the `--show-metadata` option must be enabled.
 
 ## Configuration File
 pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file

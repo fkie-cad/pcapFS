@@ -8,7 +8,8 @@
 ### Added
 - Add SMB2 as supported protocol
 - Add option `--check-non-default-ports`
-- FTP: support `Entering Extended Passive Mode`
+- FTP: support `Entering Extended Passive Mode`, handle `MLSD` files
+- Server-side directory hierarchy reconstruction for FTP and SMB2
 - Cobalt Strike: support multiple possible AES keys per connection
 
 ### Changed
