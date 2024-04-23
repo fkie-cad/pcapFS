@@ -10,6 +10,7 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <pcapplusplus/SSLLayer.h>
+#include <pcapplusplus/SSLHandshake.h>
 
 #include "../file.h"
 #include "../keyfiles/tlskey.h"
@@ -59,6 +60,9 @@ namespace pcapfs {
 
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
                                         const FilePtr &fileptr, const Index &idx);
+
+        static std::string const calculateJa4(const pcpp::SSLClientHelloMessage::ClientHelloTLSFingerprint& fingerprint, const std::string &sni,
+                                                pcpp::SSLExtension* alpn, pcpp::SSLExtension* signatureAlgorithms, pcpp::SSLExtension* supportedVersions);
 
         static void createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
                                                         const TLSHandshakeDataPtr &handshakeData, const Index &idx);

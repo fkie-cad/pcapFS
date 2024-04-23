@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <set>
 #include <pcapplusplus/SSLLayer.h>
 #include "../commontypes.h"
 #include "../file.h"
@@ -13,6 +14,22 @@ namespace pcapfs {
 
         size_t const CLIENT_RANDOM_SIZE = 32;
         size_t const SERVER_RANDOM_SIZE = 32;
+
+        const std::unordered_map<uint16_t, std::string> tlsVersionMap = {
+                {pcpp::SSLVersion::SSL2, "s2"},
+                {pcpp::SSLVersion::SSL3, "s3"},
+                {pcpp::SSLVersion::TLS1_0, "10"},
+                {pcpp::SSLVersion::TLS1_1, "11"},
+                {pcpp::SSLVersion::TLS1_2, "12"},
+                {pcpp::SSLVersion::TLS1_3, "13"}
+        };
+
+        const std::set<uint16_t> tlsGreaseValues = {
+                0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a,
+                0x4a4a, 0x5a5a, 0x6a6a, 0x7a7a,
+                0x8a8a, 0x9a9a, 0xaaaa, 0xbaba,
+                0xcaca, 0xdada, 0xeaea, 0xfafa
+        };
 
         typedef struct TLSHandshakeData {
             TLSHandshakeData() : clientRandom(CLIENT_RANDOM_SIZE), serverRandom(SERVER_RANDOM_SIZE), rsaIdentifier(8),
@@ -41,6 +58,7 @@ namespace pcapfs {
             std::string serverName;
             std::string ja3;
             std::string ja3s;
+            std::string ja4;
         } TLSHandshakeData;
 
     }

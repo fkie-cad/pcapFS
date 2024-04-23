@@ -466,6 +466,14 @@ pcapfs::Bytes const pcapfs::crypto::calculateSha256(const Bytes &input) {
 }
 
 
+std::string const pcapfs::crypto::calculateSha256AsString(const std::string &input) {
+    std::ostringstream sout;
+    for(int  c: calculateSha256(Bytes(input.begin(), input.end())))
+        sout << std::hex << std::setw(2) << std::setfill('0') << c;
+    return sout.str();
+}
+
+
 std::string const pcapfs::crypto::calculateMD5(const std::string &input) {
     unsigned int digestLen = MD5_DIGEST_LENGTH;
     unsigned char digest[MD5_DIGEST_LENGTH];

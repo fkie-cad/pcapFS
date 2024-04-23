@@ -21,6 +21,7 @@ namespace pcapfs {
         int matchPrivateKey(const Bytes &rsaPrivateKey, const Bytes &serverCertificate);
 
         Bytes const calculateSha256(const Bytes &input);
+        std::string const calculateSha256AsString(const std::string &input);
 
         std::string const calculateMD5(const std::string &input);
 
