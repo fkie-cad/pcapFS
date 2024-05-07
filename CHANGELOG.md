@@ -6,6 +6,7 @@
 - several bugfixes
 
 ### Added
+- Add JA4 and JA4S as properties
 - Add SMB2 as supported protocol
 - Add option `--check-non-default-ports`
 - FTP: support `Entering Extended Passive Mode`, handle `MLSD` files

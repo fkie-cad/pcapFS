@@ -217,6 +217,8 @@ along with the protocol they origin from:
 | uri     | http     | The requested URI parsed from the HTTP request|
 | ja3     | tls (http) | MD5 hash of JA3 fingerprint |
 | ja3s    | tls (http) | MD5 hash of JA3S fingerprint |
+| ja4     | tls (http) | JA4 fingerprint |
+| ja4s    | tls (http) | JA4S fingerprint |
 | hassh   | ssh      | hassh fingerprint of SSH connection |
 | hasshServer | ssh   | hasshServer fingerprint of SSH connection |
 

@@ -5,6 +5,7 @@
 #include "../crypto/ciphersuites.h"
 #include "../crypto/handshakedata.h"
 #include "../crypto/cryptutils.h"
+#include "../crypto/ja4.h"
 
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/SSLHandshake.h>
@@ -147,7 +148,7 @@ void pcapfs::TlsFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
             }
             pcpp::SSLClientHelloMessage::ClientHelloTLSFingerprint fingerprint = clientHelloMessage->generateTLSFingerprint();
             handshakeData->ja3 = fingerprint.toMD5();
-            handshakeData->ja4 = calculateJa4(fingerprint, handshakeData->serverName, clientHelloMessage->getExtensionOfType(16),
+            handshakeData->ja4 = ja4::calculateJa4(fingerprint, handshakeData->serverName, clientHelloMessage->getExtensionOfType(16),
                                                 clientHelloMessage->getExtensionOfType(13), clientHelloMessage->getExtensionOfType(43));
 
             if (numHandshakeMessages == 1) {
@@ -193,7 +194,10 @@ void pcapfs::TlsFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
             } else
                 LOG_TRACE << "Extended Master Secret Extension is not enabled";
 
-            handshakeData->ja3s = serverHelloMessage->generateTLSFingerprint().toMD5();
+            pcpp::SSLServerHelloMessage::ServerHelloTLSFingerprint fingerprint = serverHelloMessage->generateTLSFingerprint();
+            handshakeData->ja3s = fingerprint.toMD5();
+            handshakeData->ja4s = ja4::calculateJa4S(fingerprint, serverHelloMessage->getExtensionOfType(16),
+                                                serverHelloMessage->getExtensionOfType(43));
 
             if (handshakeData->cipherSuite) {
                 if (handshakeData->cipherSuite->getKeyExchangeAlg() == pcpp::SSL_KEYX_RSA) {
@@ -319,101 +323,6 @@ void pcapfs::TlsFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 
 
 
-std::string const pcapfs::TlsFile::calculateJa4(const pcpp::SSLClientHelloMessage::ClientHelloTLSFingerprint& fingerprint, const std::string &sni,
-                                                 pcpp::SSLExtension* alpn, pcpp::SSLExtension* signatureAlgorithms, pcpp::SSLExtension* supportedVersions) {
-    // fingerprint begins with t for TCP, we don't support QUIC
-    std::string ja4 = "t";
-
-    if (supportedVersions) {
-        pcpp::SSLVersion::SSLVersionEnum maxSupportedVersion = pcpp::SSLVersion::Unknown;
-        const pcpp::SSLSupportedVersionsExtension* supportedVersionsExtension = dynamic_cast<pcpp::SSLSupportedVersionsExtension*>(supportedVersions);
-        for (auto entry : supportedVersionsExtension->getSupportedVersions()) {
-            if (crypto::tlsGreaseValues.find(entry.asUInt()) == crypto::tlsGreaseValues.end() && entry.asEnum() > maxSupportedVersion)
-                maxSupportedVersion = entry.asEnum();
-        }
-        if (crypto::tlsVersionMap.count(maxSupportedVersion))
-            ja4 += crypto::tlsVersionMap.at(maxSupportedVersion);
-        else
-            ja4 += "00";
-    } else {
-        if (crypto::tlsVersionMap.count(fingerprint.tlsVersion))
-            ja4 += crypto::tlsVersionMap.at(fingerprint.tlsVersion);
-        else
-            ja4 += "00";
-    }
-
-
-    ja4 += (sni != "") ? "d" : "i";
-    const size_t numCipherSuites = fingerprint.cipherSuites.size();
-    ja4 += numCipherSuites < 10 ? "0" + std::to_string(numCipherSuites) : std::to_string(numCipherSuites);
-    const size_t numExtensions = fingerprint.extensions.size();
-    ja4 += numExtensions < 10 ? "0" + std::to_string(numExtensions) : std::to_string(numExtensions);
-
-    if (alpn) {
-        const Bytes rawAlpnData(alpn->getData(), alpn->getData()+alpn->getLength());
-        const uint8_t firstEntryLength = rawAlpnData.at(2);
-        if (firstEntryLength > rawAlpnData.size() - 3)
-            ja4 += "00";
-        else
-            ja4 += std::string(rawAlpnData.begin()+3, rawAlpnData.begin()+3+firstEntryLength);
-    } else {
-        ja4 += "00";
-    }
-    ja4 += "_";
-
-    std::stringstream ss;
-    std::vector<uint16_t> cipherSuites = fingerprint.cipherSuites;
-    std::sort(cipherSuites.begin(), cipherSuites.end());
-    for (uint16_t i = 0; i < cipherSuites.size(); ++i) {
-        ss << std::setw(4) << std::setfill('0') << std::hex << cipherSuites.at(i);
-        if (i != cipherSuites.size() -1)
-            ss << ",";
-    }
-
-    const std::string cipherSuitesHash = crypto::calculateSha256AsString(ss.str());
-    if (cipherSuitesHash != "")
-        ja4 += std::string(cipherSuitesHash.begin(), cipherSuitesHash.begin()+12);
-    else
-        ja4 += "000000000000";
-
-    ja4 += "_";
-
-    // neglect sni and alpn extension
-    std::vector<uint16_t> tmpVector = fingerprint.extensions;
-    tmpVector.erase(std::remove(tmpVector.begin(), tmpVector.end(), 0), tmpVector.end());
-    tmpVector.erase(std::remove(tmpVector.begin(), tmpVector.end(), 16), tmpVector.end());
-
-    ss.str("");
-    std::sort(tmpVector.begin(), tmpVector.end());
-    for (uint16_t i = 0; i < tmpVector.size(); ++i) {
-        ss << std::setw(4) << std::setfill('0') << std::hex << tmpVector.at(i);
-        if (i != tmpVector.size() -1)
-            ss << ",";
-    }
-    std::string formattedExtensionsList = ss.str();
-
-    if (signatureAlgorithms) {
-        const Bytes rawSignAlgosData(signatureAlgorithms->getData()+2, signatureAlgorithms->getData()+signatureAlgorithms->getLength());
-        ss.str("");
-        for (uint16_t i = 0; i < rawSignAlgosData.size(); ++i) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << (int)rawSignAlgosData.at(i);
-            if (i % 2 != 0 && i != rawSignAlgosData.size() -1)
-                ss << ",";
-        }
-        formattedExtensionsList += "_" + ss.str();
-    }
-
-    const std::string extensionsHash = crypto::calculateSha256AsString(formattedExtensionsList);
-    if (extensionsHash != "")
-        ja4 += std::string(extensionsHash.begin(), extensionsHash.begin()+12);
-    else
-        ja4 += "000000000000";
-
-    return ja4;
-}
-
-
-
 size_t pcapfs::TlsFile::calculateProcessedCertSize(const Index &idx) {
     Bytes rawData;
     Fragment fragment = fragments.at(0);
@@ -457,6 +366,14 @@ void pcapfs::TlsFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
 	    certPtr->setProperty("protocol", "tls");
         if (!handshakeData->serverName.empty())
             certPtr->setProperty("domain", handshakeData->serverName);
+        if (!handshakeData->ja3.empty())
+            certPtr->setProperty("ja3", handshakeData->ja3);
+        if (!handshakeData->ja3s.empty())
+            certPtr->setProperty("ja3s", handshakeData->ja3s);
+        if (!handshakeData->ja4.empty())
+            certPtr->setProperty("ja4", handshakeData->ja4);
+        if (!handshakeData->ja4s.empty())
+            certPtr->setProperty("ja4s", handshakeData->ja4s);
         certPtr->flags.set(pcapfs::flags::IS_METADATA);
         certPtr->flags.set(pcapfs::flags::PROCESSED);
 
@@ -502,6 +419,8 @@ void pcapfs::TlsFile::initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, c
         resultPtr->setProperty("ja3s", handshakeData->ja3s);
     if (!handshakeData->ja4.empty())
         resultPtr->setProperty("ja4", handshakeData->ja4);
+    if (!handshakeData->ja4s.empty())
+        resultPtr->setProperty("ja4s", handshakeData->ja4s);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
     resultPtr->setTlsVersion(handshakeData->tlsVersion);
