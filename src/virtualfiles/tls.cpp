@@ -323,19 +323,20 @@ void pcapfs::TlsFile::processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshake
 
 
 
-size_t pcapfs::TlsFile::calculateProcessedCertSize(const Index &idx) {
+std::pair<size_t, std::string> pcapfs::TlsFile::calculateProcessedCertSize(const Index &idx) {
     Bytes rawData;
     Fragment fragment = fragments.at(0);
     rawData.resize(fragment.length);
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+    std::string ja4x = ja4::calculateJa4X(rawData);
     std::string pemString = crypto::convertToPem(rawData);
-    return pemString.size();
+    return std::make_pair(pemString.size(), ja4x);
 }
 
 
 void pcapfs::TlsFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
-                                                                    const TLSHandshakeDataPtr &handshakeData, const Index &idx) {
+                                        TLSHandshakeDataPtr &handshakeData, const Index &idx) {
     uint64_t offsetTemp = 0;
 
     offset += 7; //certificate message header length
@@ -377,8 +378,16 @@ void pcapfs::TlsFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
         certPtr->flags.set(pcapfs::flags::IS_METADATA);
         certPtr->flags.set(pcapfs::flags::PROCESSED);
 
-        certPtr->setFilesizeProcessed(certPtr->calculateProcessedCertSize(idx));
-
+        auto tmp = certPtr->calculateProcessedCertSize(idx);
+        certPtr->setFilesizeProcessed(tmp.first);
+        if (!tmp.second.empty()) {
+            certPtr->setProperty("ja4x", tmp.second);
+            if (i == 0) {
+                // take ja4x fingerprint of first certificate of the chain
+                // as corresponding property for the TLS connection
+                handshakeData->ja4x = tmp.second;
+            }
+        }
         handshakeData->certificates.push_back(certPtr);
         handshakeData->serverCertificate.insert(handshakeData->serverCertificate.end(),
                                                 certificate->getData(),
@@ -421,6 +430,8 @@ void pcapfs::TlsFile::initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, c
         resultPtr->setProperty("ja4", handshakeData->ja4);
     if (!handshakeData->ja4s.empty())
         resultPtr->setProperty("ja4s", handshakeData->ja4s);
+    if (!handshakeData->ja4x.empty())
+        resultPtr->setProperty("ja4x", handshakeData->ja4x);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
     resultPtr->setTlsVersion(handshakeData->tlsVersion);

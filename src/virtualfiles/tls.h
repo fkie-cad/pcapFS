@@ -56,13 +56,13 @@ namespace pcapfs {
             std::vector<Bytes> &outputPlainTextVector);
 
         size_t calculateProcessedSize(const Index& idx);
-        size_t calculateProcessedCertSize(const Index &idx);
+        std::pair<size_t, std::string> calculateProcessedCertSize(const Index &idx);
 
         static void processTLSHandshake(pcpp::SSLLayer *sslLayer, TLSHandshakeDataPtr &handshakeData, uint64_t &offset,
                                         const FilePtr &fileptr, const Index &idx);
 
         static void createCertFiles(const FilePtr &filePtr, uint64_t offset, const pcpp::SSLCertificateMessage* certificateMessage,
-                                                        const TLSHandshakeDataPtr &handshakeData, const Index &idx);
+                                    TLSHandshakeDataPtr &handshakeData, const Index &idx);
 
         static void initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, const FilePtr &filePtr,
                             const TLSHandshakeDataPtr &handshakeData, Index &idx);

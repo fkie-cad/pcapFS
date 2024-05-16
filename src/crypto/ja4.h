@@ -27,15 +27,17 @@ namespace pcapfs {
 
         std::string const calculateJa4(const pcpp::SSLClientHelloMessage::ClientHelloTLSFingerprint& fingerprint, const std::string &sni,
                                         pcpp::SSLExtension* alpn, pcpp::SSLExtension* signatureAlgorithms, pcpp::SSLExtension* supportedVersions);
-        
+
         std::string const calculateJa4S(const pcpp::SSLServerHelloMessage::ServerHelloTLSFingerprint& fingerprint, pcpp::SSLExtension* alpn,
                                         pcpp::SSLExtension* supportedVersions);
-        
+
         std::string const extractTlsVersion(pcpp::SSLExtension* supportedVersions, uint16_t tlsVersion);
         std::string const extractAlpn(pcpp::SSLExtension* alpn);
         std::string const getAsCommaSeparatedString(const std::vector<uint16_t> &values);
         std::string const getAsHashOfCommaSeparatedString(const std::vector<uint16_t> &values);
         std::string const getAsHashPart(const std::string &input);
+
+        std::string const calculateJa4X(const Bytes &rawCertData);
     }
 }
 

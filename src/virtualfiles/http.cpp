@@ -641,6 +641,8 @@ void pcapfs::HttpFile::fillFileProperties(const FilePtr &filePtr, bool isRequest
         setProperty("ja4", filePtr->getProperty("ja4"));
     if (!filePtr->getProperty("ja4s").empty())
         setProperty("ja4s", filePtr->getProperty("ja4s"));
+    if (!filePtr->getProperty("ja4x").empty())
+        setProperty("ja4x", filePtr->getProperty("ja4x"));
     if (filePtr->flags.test(pcapfs::flags::MISSING_DATA))
         flags.set(pcapfs::flags::MISSING_DATA);
 

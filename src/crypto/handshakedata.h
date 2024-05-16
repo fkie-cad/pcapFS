@@ -44,6 +44,7 @@ namespace pcapfs {
             std::string ja3s;
             std::string ja4;
             std::string ja4s;
+            std::string ja4x;
         } TLSHandshakeData;
 
     }
