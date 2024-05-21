@@ -86,6 +86,7 @@ namespace pcapfs {
                 if (dialect == Version::SMB_VERSION_3_1_1) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(60);
                     const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(6);
+                    // each negotiate context is at least 8 bytes long
                     if ((size_t)(negotiateContextOffset + (8*negotiateContextCount)  - 64) > len)
                         throw SmbError("Invalid negotiate context values in SMB2 Negotiate Response");
 
@@ -433,12 +434,12 @@ namespace pcapfs {
         class OplockBreakMessage : public SmbMessage {
         public:
             OplockBreakMessage(const uint8_t* data, size_t len) : SmbMessage(len) {
-                // includes Oplock Break Notification, Acknowledgement and Response
+                // includes Oplock/Lease Break Notification, Acknowledgement and Response
                 const uint16_t structureSize = *(uint16_t*) data;
-                if (structureSize != 24)
-                    throw SmbSizeError("Invalid StructureSize in SMB2 Oplock Break Message");
+                if (structureSize != 24 && structureSize != 36 && structureSize != 44)
+                    throw SmbSizeError("Invalid StructureSize in SMB2 Oplock/Lease Break Message");
 
-                totalSize = 24;
+                totalSize = structureSize;
             }
         };
 

@@ -242,6 +242,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->fragments.push_back(newFragment);
             smbFilePtr->setFilesizeRaw(currentReadRequestData->readOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+            smbFilePtr->flags.reset(flags::IS_METADATA);
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (currentReadRequestData->readOffset == 0) {
@@ -303,6 +304,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         smbFilePtr->fragments.push_back(newFragment);
         smbFilePtr->setFilesizeRaw(newFragment.length);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
+        smbFilePtr->flags.reset(flags::IS_METADATA);
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
