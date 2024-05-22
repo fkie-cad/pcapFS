@@ -1,5 +1,7 @@
 #include "ja4.h"
 #include "cryptutils.h"
+#include <algorithm>
+#include <numeric>
 #include <openssl/x509.h>
 
 
@@ -243,4 +245,161 @@ std::string const pcapfs::ja4::calculateJa4X(const Bytes &rawCertData) {
 
     X509_free(cert);
     return ja4x;
+}
+
+
+
+std::string const pcapfs::ja4::calculateJa4H(const pcpp::HttpRequestLayer& requestLayer, const std::string& requestMethod) {
+    std::string ja4h = "";
+
+    std::transform(requestMethod.begin(), requestMethod.begin()+2, std::back_inserter(ja4h),
+                    [](unsigned char c){ return std::tolower(c); });
+
+    const pcpp::HttpRequestFirstLine* firstLine = requestLayer.getFirstLine();
+    if (!firstLine)
+        return "";
+
+    switch (firstLine->getVersion()) {
+        case pcpp::HttpVersion::ZeroDotNine:
+            {
+                ja4h += "09";
+                break;
+            }
+        case pcpp::HttpVersion::OneDotZero:
+            {
+                ja4h += "10";
+                break;
+            }
+        case pcpp::HttpVersion::OneDotOne:
+            {
+                ja4h += "11";
+                break;
+            }
+        default:
+            return "";
+    }
+
+    int fieldCount = requestLayer.getFieldCount();
+    // getFieldByName is case-insensitive
+    const pcpp::HeaderField* cookieField = requestLayer.getFieldByName("Cookie");
+    if (cookieField) {
+        ja4h += "c";
+        fieldCount--;
+    } else
+        ja4h += "n";
+
+    if (requestLayer.getFieldByName("Referer")) {
+        ja4h += "r";
+        fieldCount--;
+    } else
+        ja4h += "n";
+
+    ja4h += fieldCount < 10 ? "0" + std::to_string(fieldCount) : std::to_string(fieldCount);
+
+    const pcpp::HeaderField* acceptLanguageField = requestLayer.getFieldByName("Accept-Language");
+    if (acceptLanguageField) {
+        const std::string acceptLanguage = acceptLanguageField->getFieldValue();
+        std::string langResult = "";
+        // remove hyphen, convert to lower case
+        std::remove_copy(acceptLanguage.begin(), acceptLanguage.end(), std::back_inserter(langResult), '-');
+        langResult = toLowerCase(langResult);
+
+        // only take first entry if comma-separated
+        size_t commaPos = langResult.find(',');
+        if (commaPos != std::string::npos)
+            langResult = langResult.substr(0, commaPos);
+
+        // pad with '0' to make length 4
+        if (langResult.length() < 4)
+            langResult += std::string(4 - langResult.length(), '0');
+
+        ja4h += langResult;
+
+    } else
+        ja4h += "0000";
+
+    ja4h += "_";
+
+    // collect all header field keys which are not cookie and referer
+    std::string headerString = "";
+    pcpp::HeaderField* headerField = requestLayer.getFirstField();
+    while(headerField) {
+        std::string fieldName = toLowerCase(headerField->getFieldName());
+        if (fieldName == "cookie" || fieldName == "referer") {
+            headerField = requestLayer.getNextField(headerField);
+            continue;
+        }
+
+        headerString += headerField->getFieldName();
+        headerField = requestLayer.getNextField(headerField);
+        if (headerField && !headerField->isEndOfHeader())
+            headerString += ",";
+        else
+            break;
+    }
+    // we have ending comma when last header field is cookie or referer
+    if (!headerString.empty() && headerString.at(headerString.size() - 1) == ',')
+        headerString.pop_back();
+
+    ja4h += getAsHashPart(headerString);
+
+    if (cookieField) {
+        std::vector<std::string> cookieFieldEntries;
+        std::vector<std::string> cookieValuesEntryKeys;
+
+        std::stringstream ss(cookieField->getFieldValue());
+        while(ss.good()) {
+            std::string substr;
+            std::getline(ss, substr, ';');
+            cookieFieldEntries.push_back(substr);
+        }
+
+        for (auto &val: cookieFieldEntries) {
+            std::size_t pos = val.find('=');
+            if (pos != std::string::npos) {
+                cookieValuesEntryKeys.push_back(val.substr(0, pos));
+            }
+            val.erase(0, val.find_first_not_of(' ')); // lstrip
+            val.erase(val.find_last_not_of(' ') + 1); // rstrip
+        }
+
+        std::sort(cookieFieldEntries.begin(), cookieFieldEntries.end());
+        std::sort(cookieValuesEntryKeys.begin(), cookieValuesEntryKeys.end());
+
+        std::string cookieFieldEntriesString;
+        std::string cookieValuesEntryKeysString;
+
+        if (!cookieFieldEntries.empty()) {
+            cookieFieldEntriesString = std::accumulate(std::next(cookieFieldEntries.begin()), cookieFieldEntries.end(),
+                                                     cookieFieldEntries[0], [](const std::string& a, const std::string& b) { return a + ',' + b; });
+        }
+        if (!cookieValuesEntryKeys.empty()) {
+            cookieValuesEntryKeysString = std::accumulate(std::next(cookieValuesEntryKeys.begin()), cookieValuesEntryKeys.end(),
+                                                     cookieValuesEntryKeys[0], [](const std::string& a, const std::string& b) { return a + ',' + b; });
+        }
+
+        ja4h += "_";
+        if (!cookieValuesEntryKeysString.empty())
+            ja4h += getAsHashPart(cookieValuesEntryKeysString);
+        else
+            ja4h += "000000000000";
+
+        ja4h += "_";
+        if (!cookieFieldEntriesString.empty())
+            ja4h += getAsHashPart(cookieFieldEntriesString);
+        else
+            ja4h += "000000000000";
+
+    } else
+        ja4h += "_000000000000_000000000000";
+
+    return ja4h;
+}
+
+
+
+std::string const pcapfs::ja4::toLowerCase(const std::string &input) {
+    std::string result = input;
+    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+    return result;
 }

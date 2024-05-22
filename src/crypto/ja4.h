@@ -5,6 +5,7 @@
 #include <set>
 #include <pcapplusplus/SSLLayer.h>
 #include <pcapplusplus/SSLHandshake.h>
+#include <pcapplusplus/HttpLayer.h>
 
 
 namespace pcapfs {
@@ -36,8 +37,10 @@ namespace pcapfs {
         std::string const getAsCommaSeparatedString(const std::vector<uint16_t> &values);
         std::string const getAsHashOfCommaSeparatedString(const std::vector<uint16_t> &values);
         std::string const getAsHashPart(const std::string &input);
+        std::string const toLowerCase(const std::string &input);
 
         std::string const calculateJa4X(const Bytes &rawCertData);
+        std::string const calculateJa4H(const pcpp::HttpRequestLayer& requestLayer, const std::string& requestMethod);
     }
 }
 

@@ -42,6 +42,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
     resultPtr->setProperty("protocol", "cobaltstrike");
     resultPtr->setProperty("domain", filePtr->getProperty("domain"));
     resultPtr->setProperty("uri", filePtr->getProperty("uri"));
+    resultPtr->setProperty("ja4h", filePtr->getProperty("ja4h"));
 
     std::stringstream ss;
     ss << std::chrono::duration_cast<std::chrono::milliseconds>(filePtr->getTimestamp().time_since_epoch()).count();

@@ -2,6 +2,7 @@
 #include "../filefactory.h"
 #include "../logging.h"
 #include "cobaltstrike/cs_manager.h"
+#include "../crypto/ja4.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/iostreams/copy.hpp>
@@ -29,6 +30,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
     std::string requestedFilename;
     std::string requestedHost;
     std::string requestedUri;
+    std::string ja4h;
     bool prevWasRequest = false;
     const size_t numElements = filePtr->connectionBreaks.size();
     pcpp::Packet tmpPacket;
@@ -55,6 +57,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             requestedFilename = "";
             requestedHost = "";
             requestedUri = "";
+            ja4h = "";
         }
 
         if (isHTTPRequest(data, offset, size)) {
@@ -78,6 +81,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 requestedHost = hostField->getFieldValue();
 
             const pcpp::HttpRequestFirstLine* firstLine = requestLayer.getFirstLine();
+            if (!firstLine)
+                continue;
             requestedUri = firstLine->getUri();
             requestedFilename = uriToFilename(requestedUri);
 
@@ -87,6 +92,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             LOG_TRACE << "fileSizeRaw: " << fragmentHeader.length;
 
             const std::string requestMethod = requestMethodToString(firstLine->getMethod());
+
+            ja4h = ja4::calculateJa4H(requestLayer, requestMethod);
 
             if (requestedFilename != "") {
                 resultHeaderPtr->setFilename(requestMethod + "-" + requestedFilename);
@@ -98,6 +105,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultHeaderPtr->fillFileProperties(filePtr, true);
             resultHeaderPtr->setProperty("domain", requestedHost);
             resultHeaderPtr->setProperty("uri", requestedUri);
+            resultHeaderPtr->setProperty("ja4h", ja4h);
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
 
             resultVector.push_back(resultHeaderPtr);
@@ -135,6 +143,7 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->fillFileProperties(filePtr, true);
             resultPtr->setProperty("domain", requestedHost);
             resultPtr->setProperty("uri", requestedUri);
+            resultPtr->setProperty("ja4h", ja4h);
 
             resultVector.push_back(resultPtr);
 
@@ -158,6 +167,10 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultHeaderPtr->fillFileProperties(filePtr, false);
             resultHeaderPtr->setProperty("domain", requestedHost);
             resultHeaderPtr->setProperty("uri", requestedUri);
+            if (!ja4h.empty()) {
+                resultHeaderPtr->setProperty("ja4h", ja4h);
+                resultPtr->setProperty("ja4h", ja4h);
+            }
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
 
             resultVector.push_back(resultHeaderPtr);

@@ -220,6 +220,7 @@ along with the protocol they origin from:
 | ja4     | tls (http) | JA4 fingerprint |
 | ja4s    | tls (http) | JA4S fingerprint |
 | ja4x    | tls (http) | JA4X fingerprint |
+| ja4h    | http | JA4H fingerprint |
 | hassh   | ssh      | hassh fingerprint of SSH connection |
 | hasshServer | ssh   | hasshServer fingerprint of SSH connection |
 
