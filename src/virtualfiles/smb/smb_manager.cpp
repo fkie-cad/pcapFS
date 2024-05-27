@@ -348,6 +348,43 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 }
 
 
+void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId) {
+    // update server files with file metadata obtained from set info message
+
+    const std::shared_ptr<SetInfoRequestData> setInfoRequestData = smbContext->setInfoRequestData[messageId];
+
+    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    if (fileHandles[endpointTree].find(setInfoRequestData->fileId) == fileHandles[endpointTree].end()) {
+        // fileId - filename mapping not known
+        return;
+    }
+
+    const std::string filePath = fileHandles[endpointTree].at(setInfoRequestData->fileId);
+    if (serverFiles[endpointTree].find(filePath) == serverFiles[endpointTree].end() || !serverFiles[endpointTree].at(filePath)) {
+        // should not happen
+        return;
+    }
+
+    LOG_TRACE << "updating SMB server file " << filePath << " with metadata from Set Info Request";
+
+    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+
+    // a value of zero means the SMB server must not change this attribute
+    if (setInfoRequestData->metaData->lastAccessTime != 0) {
+        const auto lastAccessTime = smb::winFiletimeToTimePoint(setInfoRequestData->metaData->lastAccessTime);
+        smbFilePtr->setTimestamp(lastAccessTime);
+        smbFilePtr->setAccessTime(lastAccessTime);
+    }
+    if (setInfoRequestData->metaData->lastWriteTime != 0)
+        smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(setInfoRequestData->metaData->lastWriteTime));
+    if (setInfoRequestData->metaData->changeTime != 0)
+        smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(setInfoRequestData->metaData->changeTime));
+
+    serverFiles[endpointTree][filePath] = smbFilePtr;
+
+}
+
+
 pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const SmbContextPtr &smbContext) {
     return fileHandles[smbContext->getServerEndpointTree()];
 }

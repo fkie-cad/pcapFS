@@ -82,6 +82,21 @@ namespace pcapfs {
             uint64_t readOffset = 0;
         };
 
+
+        struct FileMetaData{
+            bool isDirectory = false;
+            uint64_t creationTime = 0;
+            uint64_t lastAccessTime = 0;
+            uint64_t lastWriteTime = 0;
+            uint64_t changeTime = 0;
+        };
+        typedef std::shared_ptr<FileMetaData> FileMetaDataPtr;
+
+        struct SetInfoRequestData {
+            std::string fileId = "";
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
+        };
+
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
@@ -122,6 +137,9 @@ namespace pcapfs {
             // map messageId - ReadRequestData
             std::map<uint64_t, std::shared_ptr<ReadRequestData>> readRequestData;
 
+            // map messageId - SetInfoRequestData
+            std::map<uint64_t, std::shared_ptr<SetInfoRequestData>> setInfoRequestData;
+
             uint32_t currentTreeId = 0;
 
             // current offset into the underlying TCP file, needed for handling reads
@@ -133,15 +151,6 @@ namespace pcapfs {
             bool createServerFiles = false;
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
-
-        struct FileMetaData{
-            bool isDirectory = false;
-            uint64_t creationTime = 0;
-            uint64_t lastAccessTime = 0;
-            uint64_t lastWriteTime = 0;
-            uint64_t changeTime = 0;
-        };
-        typedef std::shared_ptr<FileMetaData> FileMetaDataPtr;
 
 
         // for extracting relevant file information out of query directory responses

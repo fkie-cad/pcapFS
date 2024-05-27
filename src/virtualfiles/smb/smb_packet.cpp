@@ -211,7 +211,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         }
                     } else {
                         const std::shared_ptr<QueryInfoRequest> queryInfoRequest = std::make_shared<QueryInfoRequest>(&data[64], len - 64);
-                        const std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
+                        std::shared_ptr<QueryInfoRequestData> queryInfoRequestData = std::make_shared<QueryInfoRequestData>();
                         LOG_TRACE << "requested information: " << queryInfoTypeStrings.at(queryInfoRequest->infoType);
                         queryInfoRequestData->infoType = queryInfoRequest->infoType;
                         queryInfoRequestData->fileInfoClass = queryInfoRequest->fileInfoClass;
@@ -222,10 +222,25 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_SET_INFO:
-                    if (isResponse)
+                    if (isResponse) {
+                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS &&
+                            smbContext->setInfoRequestData.find(packetHeader->messageId) != smbContext->setInfoRequestData.end() &&
+                            smbContext->setInfoRequestData[packetHeader->messageId]) {
+                                SmbManager::getInstance().updateSmbFiles(smbContext, packetHeader->messageId);
+                                smbContext->queryInfoRequestData.erase(packetHeader->messageId);
+                        }
                         message = std::make_shared<SetInfoResponse>(&data[64], len - 64);
-                    else
-                        message = std::make_shared<SetInfoRequest>(&data[64], len - 64);
+
+                    } else {
+                        const std::shared_ptr<SetInfoRequest> setInfoRequest = std::make_shared<SetInfoRequest>(&data[64], len - 64);
+                        if (setInfoRequest->fileInfoClass == FileInfoClass::FILE_BASIC_INFORMATION) {
+                            std::shared_ptr<SetInfoRequestData> setInfoRequestData = std::make_shared<SetInfoRequestData>();
+                            setInfoRequestData->fileId = setInfoRequest->fileId;
+                            setInfoRequestData->metaData = setInfoRequest->metaData;
+                            smbContext->setInfoRequestData[packetHeader->messageId] = setInfoRequestData;
+                        }
+                        message = setInfoRequest;
+                    }
                     break;
 
                 case Smb2Commands::SMB2_LOGOFF:

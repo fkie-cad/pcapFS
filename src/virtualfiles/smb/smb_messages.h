@@ -787,9 +787,19 @@ namespace pcapfs {
 
                 const uint8_t extractedInfoClass = rawData.at(3);
                 if (infoType == QueryInfoType::SMB2_0_INFO_FILE) {
-                    if (fileInfoClassStrings.find(extractedInfoClass) != fileInfoClassStrings.end())
+                    if (fileInfoClassStrings.find(extractedInfoClass) != fileInfoClassStrings.end()) {
+                        if (extractedInfoClass == FileInfoClass::FILE_BASIC_INFORMATION) {
+                            if (bufferLength < 40)
+                                throw SmbError("Invalid size of FILE_BASIC_INFORMATION in SMB2 Set Info Request");
+                            metaData->creationTime = *(uint64_t*) &rawData.at(bufferOffset - 64);
+                            metaData->lastAccessTime = *(uint64_t*) &rawData.at((bufferOffset - 64) + 8);
+                            metaData->lastWriteTime = *(uint64_t*) &rawData.at((bufferOffset - 64) + 16);
+                            metaData->changeTime = *(uint64_t*) &rawData.at((bufferOffset - 64) + 24);
+                            const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((bufferOffset - 64) + 32);
+                            metaData->isDirectory = extractedFileAttributes & 0x10;
+                        }
                         fileInfoClass = extractedInfoClass;
-                    else
+                    } else
                         fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
 
                 } else if (infoType == QueryInfoType::SMB2_0_INFO_FILESYSTEM) {
@@ -803,6 +813,7 @@ namespace pcapfs {
             }
             uint8_t infoType = QueryInfoType::SMB2_0_INFO_UNKNOWN;
             uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
             std::string fileId = "";
         };
 
