@@ -14,7 +14,6 @@ common_pkgs='
     boost-log
     gcc-c++
     cmake
-    cpptoml-devel
     fuse3
     fuse3-devel
     git
@@ -29,8 +28,15 @@ common_pkgs='
 '
 
 if [ "${distro}" = 'Fedora' ]; then
-    if [[ "${release_major}" =~ ^3[7-9] ]]; then
+    if [[ "${release_major}" =~ ^3[7-9]|40 ]]; then
         sudo dnf install -y ${common_pkgs}
+        if [[ "${release_major}" =~ ^3[7-9] ]]; then
+            sudo dnf install -y cpptoml-devel
+        else
+            sudo dnf install -y patch
+            ${here}/install-cpptoml.sh
+        fi
+
     else
         echo "Unsupported Fedora release ${release}." >&2
         exit 2
