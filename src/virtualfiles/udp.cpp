@@ -157,7 +157,7 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     std::shared_ptr<pcapfs::UdpFile> udpPointer = std::make_shared<pcapfs::UdpFile>();
                     udpPointer->setFirstPacketNumber(i);
                     udpPointer->setTimestamp(state.currentTimestamp);
-                    udpPointer->setFilename("UDPFILE" + std::to_string(state.nextUniqueId));
+                    udpPointer->setFilename("udp" + std::to_string(state.nextUniqueId));
                     udpPointer->setIdInIndex(state.nextUniqueId);
                     udpPointer->setOffsetType(pcapPtr->getFiletype()); //udp files point directly into the pcap
                     udpPointer->setFilesizeRaw(udpLayer->getLayerPayloadSize());
