@@ -2,6 +2,7 @@
 #include "smb/smb_packet.h"
 #include "smb/smb_structs.h"
 #include "smb/smb_constants.h"
+#include "smb/smb_utils.h"
 #include "../filefactory.h"
 #include <numeric>
 
@@ -13,8 +14,8 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
 
     size_t offsetAfterNbssSetup = 0;
     bool hasNbssSessionSetup = false;
-    if (!isSmbOverTcp(filePtr, data)) {
-        offsetAfterNbssSetup = getSmbOffsetAfterNbssSetup(filePtr, data);
+    if (!smb::isSmbOverTcp(filePtr, data, config.checkNonDefaultPorts)) {
+        offsetAfterNbssSetup = smb::getSmbOffsetAfterNbssSetup(filePtr, data, config.checkNonDefaultPorts);
         if (offsetAfterNbssSetup == (size_t)-1)
             return resultVector;
         else
@@ -161,29 +162,6 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
 }
 
 
-bool pcapfs::SmbControlFile::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data) {
-    if (filePtr->getProperty("protocol") == "tcp" &&
-        data.size() > 68 && data.at(0) == 0x00 && be32toh(*(uint32_t*) &data.at(0)) != 0 &&
-        (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0) &&
-        (config.checkNonDefaultPorts || (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445")))
-        return true;
-    else
-        return false;
-}
-
-
-size_t pcapfs::SmbControlFile::getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data) {
-    // returns offset where smb Traffic begins after Netbios Session Setup
-    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 && (config.checkNonDefaultPorts ||
-        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139"))) {
-        for (size_t pos = 0; pos < data.size() - 8; ++pos) {
-            if (data.at(pos) == 0x00 && be32toh(*(uint32_t*) &data.at(pos)) != 0 &&
-                (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
-                return pos;
-        }
-    }
-    return (size_t)-1;
-}
 
 
 void pcapfs::SmbControlFile::fillGlobalProperties(std::shared_ptr<SmbControlFile> &controlFilePtr, const FilePtr &filePtr) {

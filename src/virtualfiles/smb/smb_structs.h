@@ -102,25 +102,6 @@ namespace pcapfs {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
                     offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles) {}
 
-            void addTreeNameMapping(uint32_t treeId, uint64_t messageId) {
-                if (requestedTrees.find(messageId) == requestedTrees.end() || requestedTrees.at(messageId).empty()) {
-                    treeNames[treeId] = "treeId_" + std::to_string(treeId);
-                } else {
-                    const std::string sanitizedFilename = sanitizeFilename(requestedTrees.at(messageId));
-                    if (sanitizedFilename.empty())
-                        return;
-                    else
-                        treeNames[treeId] = sanitizedFilename;
-                }
-            }
-
-            ServerEndpointTree const getServerEndpointTree() {
-                if (treeNames.count(currentTreeId) == 0) {
-                    treeNames[currentTreeId] = "treeId_" + std::to_string(currentTreeId);
-                }
-                return ServerEndpointTree(serverEndpoint, treeNames[currentTreeId]);
-            }
-
             FilePtr offsetFile = nullptr;
             ServerEndpoint serverEndpoint;
             uint16_t dialect = 0;
@@ -147,7 +128,6 @@ namespace pcapfs {
 
             // map messageId - tree name
             std::map<uint64_t, std::string> requestedTrees;
-            SmbTreeNames treeNames;
             bool createServerFiles = false;
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;

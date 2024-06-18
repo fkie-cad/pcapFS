@@ -1,17 +1,187 @@
 #include "smb_manager.h"
-#include "smb_utils.h"
+#include "smb_packet.h"
 #include "../smb.h"
 
 
-void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, SmbContextPtr &smbContext, uint64_t messageId) {
+void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t len, uint16_t commandToParse, SmbContextPtr &smbContext) {
+    if (*(uint32_t*) data == ProtocolId::SMB2_PACKET_HEADER_ID) {
+        // classic SMB2 packet header
+        if (len < 64)
+            return;
+
+        const std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
+        if (packetHeader->command != commandToParse)
+            return ;
+
+        if (!(packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_ASYNC_COMMAND)) {
+            // TODO: could this lead to errors/bugs?
+            smbContext->currentTreeId = packetHeader->treeId;
+        }
+
+        bool isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
+        try {
+            switch (commandToParse) {
+                case Smb2Commands::SMB2_TREE_CONNECT:
+                    if (isResponse) {
+                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS) {
+                            if (smbContext->requestedTrees.find(packetHeader->messageId) == smbContext->requestedTrees.end() ||
+                                smbContext->requestedTrees.at(packetHeader->messageId).empty()) {
+                                treeNames[smbContext->serverEndpoint][packetHeader->treeId] = "treeId_" + std::to_string(packetHeader->treeId);
+                                LOG_TRACE << "add treeid - treename mapping: " << packetHeader->treeId << " - " << treeNames[smbContext->serverEndpoint][packetHeader->treeId];
+                            } else {
+                                const std::string sanitizedFilename = sanitizeFilename(smbContext->requestedTrees.at(packetHeader->messageId));
+                                if (!sanitizedFilename.empty()) {
+                                    treeNames[smbContext->serverEndpoint][packetHeader->treeId] = sanitizedFilename;
+                                    LOG_TRACE << "add treeid - treename mapping: " << packetHeader->treeId << " - " << sanitizedFilename;
+                                }
+                            }
+                            if (treeNames[smbContext->serverEndpoint].count(packetHeader->treeId)) {
+                                const std::string treeName = treeNames[smbContext->serverEndpoint][packetHeader->treeId];
+                                LOG_TRACE << "Add " << treeName << " as SMB file";
+                                getAsParentDirFile(treeName, smbContext);
+                            }
+                            smbContext->requestedTrees.erase(packetHeader->messageId);
+                        }
+                    } else {
+                        const std::shared_ptr<TreeConnectRequest> treeConnectRequest =
+                            std::make_shared<TreeConnectRequest>(&data[64], len - 64, Version::SMB_VERSION_UNKNOWN);
+                        smbContext->requestedTrees[packetHeader->messageId] = treeConnectRequest->pathName;
+                    }
+                    break;
+
+                case Smb2Commands::SMB2_CREATE:
+                    if (isResponse) {
+                        const std::shared_ptr<CreateResponse> createResponse = std::make_shared<CreateResponse>(&data[64], len - 64);
+                        if (smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
+                            !smbContext->createRequestFileNames.at(packetHeader->messageId).empty()) {
+                            const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
+                            const std::string filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" +
+                                                            smbContext->createRequestFileNames.at(packetHeader->messageId);
+                            // update fileId-filename mapping
+                            fileHandles[endpointTree][createResponse->fileId] = filePath;
+
+                            SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+                            if (!smbFilePtr) {
+                                // create empty SMB file
+                                // SMB files are already created here because otherwise, in certain scenarios with simultaneous SMB share accesses
+                                // in different connections, some SMB file (versions) might not be determined
+                                LOG_TRACE << "file " << filePath << " is added to the server files";
+                                smbFilePtr = std::make_shared<SmbFile>();
+                                smbFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
+                                serverFiles[endpointTree][filePath] = smbFilePtr;
+                            }
+                        }
+                    } else {
+                        const std::shared_ptr<CreateRequest> createRequest = std::make_shared<CreateRequest>(&data[64], len - 64);
+                        LOG_TRACE << "create request file: " << createRequest->filename;
+                        smbContext->createRequestFileNames[packetHeader->messageId] = createRequest->filename;
+                    }
+                    break;
+
+                default:
+                    return;
+            }
+        } catch (const SmbError &err) {
+            return;
+        }
+    }
+}
+
+
+void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile, const Bytes &data,
+                                                            size_t offsetAfterNbssSetup, uint16_t commandToParse) {
+    bool hasNbssSessionSetup = (offsetAfterNbssSetup != 0);
+    bool reachedOffsetAfterNbssSetup = false;
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(tcpFile, false);
+    size_t size = 0;
+    const size_t numElements = tcpFile->connectionBreaks.size();
+    for (unsigned int i = 0; i < numElements; ++i) {
+        uint64_t offset = tcpFile->connectionBreaks.at(i).first;
+
+        if (hasNbssSessionSetup && !reachedOffsetAfterNbssSetup) {
+            if (offset == offsetAfterNbssSetup)
+                reachedOffsetAfterNbssSetup = true;
+            else
+                continue;
+        }
+
+        if (i == numElements - 1) {
+        	size = tcpFile->getFilesizeProcessed() - offset;
+        } else {
+            size = tcpFile->connectionBreaks.at(i + 1).first - offset;
+        }
+
+        // We have a 4 byte NBSS header indicating the NBSS message type
+        // and the size of the following SMB data
+        if (data.at(offset) != 0) {
+            // message type has to be zero
+            continue;
+        }
+
+        size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
+        size_t currPos = 0;
+        while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {
+            // skip NBSS header
+            offset += 4;
+            currPos += 4;
+
+            parsePacketMinimally(data.data() + offset, smbDataSize, commandToParse, smbContext);
+            offset += smbDataSize;
+            currPos += smbDataSize;
+
+            // fully parsed this connection break
+            if (offset >= data.size())
+                break;
+
+            // get size of next SMB2 data
+            smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
+        }
+    }
+}
+
+
+void pcapfs::smb::SmbManager::extractMappings(const std::vector<FilePtr> &tcpFiles, const Index &idx, bool checkNonDefaultPorts) {
+    LOG_TRACE << "begin with extracting smb mappings";
+
+    std::vector<std::pair<FilePtr, size_t>> tcpFilesWithSmb;
+
+    for (const auto& tcpFile : tcpFiles) {
+        tcpFile->fillBuffer(idx);
+        const Bytes data = tcpFile->getBuffer();
+
+        size_t offsetAfterNbssSetup = 0;
+        if (!smb::isSmbOverTcp(tcpFile, data, checkNonDefaultPorts)) {
+            offsetAfterNbssSetup = smb::getSmbOffsetAfterNbssSetup(tcpFile, data, checkNonDefaultPorts);
+            if (offsetAfterNbssSetup == (size_t)-1)
+                continue;
+        }
+
+        tcpFilesWithSmb.push_back(std::make_pair(tcpFile, offsetAfterNbssSetup));
+
+        parseSmbConnectionMinimally(tcpFile, data, offsetAfterNbssSetup, Smb2Commands::SMB2_TREE_CONNECT);
+    }
+
+    for (const auto& tcpFileWithSmb: tcpFilesWithSmb) {
+        parseSmbConnectionMinimally(tcpFileWithSmb.first, tcpFileWithSmb.first->getBuffer(),
+                                    tcpFileWithSmb.second, Smb2Commands::SMB2_CREATE);
+    }
+}
+
+
+pcapfs::smb::ServerEndpointTree const pcapfs::smb::SmbManager::getServerEndpointTree(const SmbContextPtr &smbContext) {
+    if (treeNames[smbContext->serverEndpoint].count(smbContext->currentTreeId) == 0) {
+        treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] = "treeId_" + std::to_string(smbContext->currentTreeId);
+    }
+    return ServerEndpointTree(smbContext->serverEndpoint, treeNames[smbContext->serverEndpoint][smbContext->currentTreeId]);
+}
+
+
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from create messages
     LOG_TRACE << "updating SMB server files with create response infos";
 
-    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
-    const std::string filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.at(messageId);
-
-    // update fileId-filename mapping
-    fileHandles[endpointTree][createResponse->fileId] = filePath;
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
+    const std::string filePath = fileHandles[endpointTree].at(createResponse->fileId);
 
     if (!createResponse->metaData->isDirectory) {
         // this prevents possible wrong file path compositions in the other updateSmbFiles functions in the case that
@@ -20,11 +190,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateRespons
         smbContext->createRequestFileNames.at(messageId) = "";
     }
 
-    if (!smbContext->createServerFiles)
-        return;
-
     SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
     if (!smbFilePtr) {
+        // Normally, this shouldn't be the case because new SMB files obtained from Create messages are already created at the beginning through extractMappings()
         // server file not present in map -> create new one
         LOG_TRACE << "file " << filePath << " is new and added to the server files";
         smbFilePtr = std::make_shared<SmbFile>();
@@ -56,7 +224,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
         currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_BASIC_INFORMATION ||
         currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_NETWORK_OPEN_INFORMATION)) {
 
-        const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+        const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
         std::string filePath = "";
         if (fileHandles[endpointTree].find(currentQueryInfoRequestData->fileId) != fileHandles[endpointTree].end()) {
             // filePath already present in fileHandles-map of smbContext
@@ -65,7 +233,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
             // filePath not present in fileHandles-map of smbContext
             if (currentQueryInfoRequestData->fileInfoClass == FileInfoClass::FILE_ALL_INFORMATION && queryInfoResponse->filename != "") {
                 // filename can be determined when we have FILE_ALL_INFORMATION
-                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + queryInfoResponse->filename;
+                filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" + queryInfoResponse->filename;
                 // update fileId-filename mapping
                 fileHandles[endpointTree][currentQueryInfoRequestData->fileId] = filePath;
 
@@ -75,11 +243,11 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
                 // (then, the fileId gets known "too late" for us)
                 // => take latest createRequestFileName as file
                 // it is ensured that currentCreateRequestFile is a directory
-                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second;
+                filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second;
             } else if (queryInfoResponse->filename.empty() && queryInfoResponse->metaData->isDirectory) {
                 // probably root directory of the tree
                 // can be wrong
-                filePath = smbContext->treeNames[smbContext->currentTreeId];
+                filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId];
             } else {
                 // filePath for fileId can't be derived
                 return;
@@ -116,7 +284,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
     // update server files with file infos obtained from query directory messages
     LOG_TRACE << "updating SMB server files with query directory response infos";
 
-    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
     const std::shared_ptr<QueryDirectoryRequestData> currentQueryDirectoryRequestData = smbContext->queryDirectoryRequestData.at(messageId);
     bool directoryNameKnown = (fileHandles[endpointTree].find(currentQueryDirectoryRequestData->fileId) != fileHandles[endpointTree].end());
 
@@ -130,7 +298,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
                 // this case can occur when we have a create request and query directory request for the same file are chained together
                 // (then, the fileId gets known "too late" for us)
                 // => take latest createRequestFileName
-                filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second;
+                filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second;
             } else {
                 // real file path of "." or ".." could not be determined
                 continue;
@@ -163,11 +331,12 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             // (then, the fileId gets known "too late" for us)
             // => take latest createRequestFileName as parent directory
             // it is ensured that currentCreateRequestFile is a directory
-            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second + "\\" + fileInfo->filename;
+            filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" + smbContext->createRequestFileNames.rbegin()->second +
+                        "\\" + fileInfo->filename;
         } else if (!smbContext->createRequestFileNames.empty() && smbContext->createRequestFileNames.rbegin()->second.empty()) {
             // probably root directory of the tree
             // this could produce wrong result
-            filePath = smbContext->treeNames[smbContext->currentTreeId] + "\\" + fileInfo->filename;
+            filePath = treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] + "\\" + fileInfo->filename;
         } else {
             // filePath for fileId can't be derived
             continue;
@@ -199,7 +368,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
 void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, const SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file infos obtained from read messages
 
-    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
     const std::shared_ptr<ReadRequestData> currentReadRequestData = smbContext->readRequestData.at(messageId);
     if (fileHandles[endpointTree].find(currentReadRequestData->fileId) == fileHandles[endpointTree].end()) {
         // fileId - filename mapping not known
@@ -276,7 +445,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, const SmbContextPtr &smbContext) {
     // update server files with file infos obtained from write messages
 
-    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
     if (fileHandles[endpointTree].find(writeRequest->fileId) == fileHandles[endpointTree].end()) {
         // fileId - filename mapping not known
         return;
@@ -353,7 +522,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 
     const std::shared_ptr<SetInfoRequestData> setInfoRequestData = smbContext->setInfoRequestData[messageId];
 
-    const ServerEndpointTree endpointTree = smbContext->getServerEndpointTree();
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
     if (fileHandles[endpointTree].find(setInfoRequestData->fileId) == fileHandles[endpointTree].end()) {
         // fileId - filename mapping not known
         return;
@@ -386,12 +555,12 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 
 
 pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const SmbContextPtr &smbContext) {
-    return fileHandles[smbContext->getServerEndpointTree()];
+    return fileHandles[getServerEndpointTree(smbContext)];
 }
 
 
 pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext) {
-    const ServerEndpointTree endpt = smbContext->getServerEndpointTree();
+    const ServerEndpointTree endpt = getServerEndpointTree(smbContext);
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
         LOG_DEBUG << "parent directory is already known as an SmbFile";
         return serverFiles[endpt][filePath];
@@ -417,10 +586,10 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const Index &idx) {
     std::vector<FilePtr> resultVector;
-    std::map<std::string, std::vector<SmbFilePtr>> fileVersions;
 
     LOG_DEBUG << "Collecting all SMB files...";
     for (const auto &endpt : serverFiles) {
+        std::map<std::string, std::vector<SmbFilePtr>> fileVersions;
         for (auto &fileEntry: endpt.second) {
             if (!fileEntry.second->flags.test(flags::IS_METADATA)) {
                 // pick files with multiple versions for extra check later
@@ -438,44 +607,44 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
                 resultVector.push_back(fileEntry.second);
             }
         }
-    }
 
-    // deduplicate redundant successive versions
-    for (auto &entry : fileVersions) {
-        LOG_TRACE << "checking redundant successive versions of " << entry.first;
-        // sort versions in ascending order
-        std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getFileVersion() < b->getFileVersion(); });
-        uint64_t tmpFilesizeRaw = entry.second.at(0)->getFilesizeRaw();
-        Bytes buf;
-        Bytes cmpBuf(tmpFilesizeRaw);
-        entry.second.at(0)->read(0, tmpFilesizeRaw, idx, (char*) cmpBuf.data());
-        for (uint32_t i = 1; i < entry.second.size(); ++i) {
-            tmpFilesizeRaw = entry.second.at(i)->getFilesizeRaw();
-            buf.resize(tmpFilesizeRaw);
-            entry.second.at(i)->read(0, tmpFilesizeRaw, idx, (char*) buf.data());
-            if (buf == cmpBuf) {
-                LOG_TRACE << "Versions " << i-1 << " and " << i << " are the same -> deduplicate";
-                entry.second.erase(entry.second.begin()+i);
+        // deduplicate redundant successive versions
+        for (auto &entry : fileVersions) {
+            LOG_TRACE << "deduplicating redundant successive versions of " << entry.first;
+            // sort versions in ascending order
+            std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getFileVersion() < b->getFileVersion(); });
+
+            auto newEnd = std::unique(entry.second.begin(), entry.second.end(),
+                                        [idx](const SmbFilePtr& a, const SmbFilePtr& b) {
+                                            const uint64_t filesizeRawA = a->getFilesizeRaw();
+                                            const uint64_t filesizeRawB = b->getFilesizeRaw();
+                                            Bytes bufA(filesizeRawA);
+                                            Bytes bufB(filesizeRawB);
+                                            a->read(0, filesizeRawA, idx, (char*) bufA.data());
+                                            b->read(0, filesizeRawB, idx, (char*) bufB.data());
+                                            return bufA == bufB;
+                                        });
+
+            // Erase the non-unique elements at the end of the vector
+            entry.second.erase(newEnd, entry.second.end());
+
+            // adjust file versions so that they are consecutive again
+            for (uint32_t j = 0; j < entry.second.size(); ++j) {
+                if (j != entry.second.at(j)->getFileVersion()) {
+                    entry.second.at(j)->setFileVersion(j);
+                    const std::string oldFilename = entry.second.at(j)->getFilename();
+                    entry.second.at(j)->setFilename(std::string(oldFilename.begin(), oldFilename.begin()+oldFilename.rfind('@')+1) + std::to_string(j));
+                }
             }
-            cmpBuf.assign(buf.begin(), buf.end());
-        }
 
-        // adjust file versions so that they are consecutive again
-        for (uint32_t j = 0; j < entry.second.size(); ++j) {
-            if (j != entry.second.at(j)->getFileVersion()) {
-                entry.second.at(j)->setFileVersion(j);
-                const std::string oldFilename = entry.second.at(j)->getFilename();
-                entry.second.at(j)->setFilename(std::string(oldFilename.begin(), oldFilename.begin()+oldFilename.rfind('@')+1) + std::to_string(j));
+            // remove tag in file name when the number of deduplicated versions reduced to 1
+            if (entry.second.size() == 1) {
+                const std::string oldFilename = entry.second.at(0)->getFilename();
+                entry.second.at(0)->setFilename(std::string(oldFilename.begin(), oldFilename.begin() + oldFilename.rfind('@')));
             }
-        }
 
-        // remove tag in file name when the number of deduplcated versions reduced to 1
-        if (entry.second.size() == 1) {
-            const std::string oldFilename = entry.second.at(0)->getFilename();
-            entry.second.at(0)->setFilename(std::string(oldFilename.begin(), oldFilename.begin() + oldFilename.rfind('@')));
+            resultVector.insert(resultVector.end(), entry.second.begin(), entry.second.end());
         }
-
-        resultVector.insert(resultVector.end(), entry.second.begin(), entry.second.end());
     }
 
     return resultVector;

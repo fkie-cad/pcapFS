@@ -1,4 +1,5 @@
 #include "smb_utils.h"
+#include "smb_constants.h"
 #include "../../exceptions.h"
 
 #include <sstream>
@@ -6,6 +7,31 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+
+
+bool pcapfs::smb::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts) {
+    if (filePtr->getProperty("protocol") == "tcp" &&
+        data.size() > 68 && data.at(0) == 0x00 && be32toh(*(uint32_t*) &data.at(0)) != 0 &&
+        (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0) &&
+        (checkNonDefaultPorts || (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445")))
+        return true;
+    else
+        return false;
+}
+
+
+size_t pcapfs::smb::getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts) {
+    // returns offset where smb Traffic begins after Netbios Session Setup
+    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 && (checkNonDefaultPorts ||
+        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139"))) {
+        for (size_t pos = 0; pos < data.size() - 8; ++pos) {
+            if (data.at(pos) == 0x00 && be32toh(*(uint32_t*) &data.at(pos)) != 0 &&
+                (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
+                return pos;
+        }
+    }
+    return (size_t)-1;
+}
 
 
 size_t pcapfs::smb::calculate311NegotiateMessageLength(const Bytes &rawData, uint32_t negotiateContextOffset,

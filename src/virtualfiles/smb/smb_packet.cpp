@@ -39,26 +39,17 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_TREE_CONNECT:
-                    if (isResponse) {
-                        // TODO: what to do with ASYNC messages?
+                    if (isResponse)
                         message = std::make_shared<TreeConnectResponse>(&data[64], len - 64);
-                        smbContext->addTreeNameMapping(packetHeader->treeId, packetHeader->messageId);
-                        // add tree name as SmbFile
-                        if (smbContext->createServerFiles && smbContext->treeNames.count(packetHeader->treeId))
-                            SmbManager::getInstance().getAsParentDirFile(smbContext->treeNames[packetHeader->treeId], smbContext);
-                        smbContext->requestedTrees.erase(packetHeader->messageId);
-                    } else {
-                        const std::shared_ptr<TreeConnectRequest> treeConnectRequest =
-                            std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
-                        smbContext->requestedTrees[packetHeader->messageId] = treeConnectRequest->pathName;
-                        message = treeConnectRequest;
-                    }
+                    else
+                        message = std::make_shared<TreeConnectRequest>(&data[64], len - 64, smbContext->dialect);
                     break;
 
                 case Smb2Commands::SMB2_CREATE:
                     if (isResponse) {
                         const std::shared_ptr<CreateResponse> createResponse = std::make_shared<CreateResponse>(&data[64], len - 64);
-                        if (smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
+                        if (smbContext->createServerFiles &&
+                            smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
                             !smbContext->createRequestFileNames.at(packetHeader->messageId).empty())
                             SmbManager::getInstance().updateSmbFiles(createResponse, smbContext, packetHeader->messageId);
                         message = createResponse;

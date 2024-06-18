@@ -2,6 +2,7 @@
 #define PCAPFS_SMB_UTILS_H
 
 #include "../../commontypes.h"
+#include "../virtualfile.h"
 
 namespace pcapfs {
     namespace smb {
@@ -12,6 +13,9 @@ namespace pcapfs {
         uint16_t strToUint16(const std::string& str);
         TimePoint winFiletimeToTimePoint(uint64_t winFiletime);
         std::string const sanitizeFilename(const std::string &inFilename);
+
+        bool isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts);
+        size_t getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts);
     }
 }
 

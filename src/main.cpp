@@ -156,6 +156,9 @@ int main(int argc, const char *argv[]) {
             index.insert(tcpFiles);
             std::vector<pcapfs::FilePtr> udpFiles = pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(pcapFiles);
             index.insert(udpFiles);
+
+            // extract mappings for files and trees of possible SMB connections
+            pcapfs::smb::SmbManager::getInstance().extractMappings(tcpFiles, index, config.checkNonDefaultPorts);
         } catch (const std::runtime_error &err) {
             std::cerr << "Error: " << err.what() << std::endl;
             return 2;

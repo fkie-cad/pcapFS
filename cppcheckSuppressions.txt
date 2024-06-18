@@ -12,6 +12,5 @@ unreadVariable:src/virtualfiles/dhcp.cpp
 unreadVariable:src/virtualfiles/dns.cpp
 unusedStructMember:src/virtualfiles/udp.h
 useStlAlgorithm:src/virtualfiles/cobaltstrike/cs_manager.cpp
-stlFindInsert:src/virtualfiles/smb/smb_structs.h
 uninitDerivedMemberVar:src/virtualfiles/serverfile.h
 uninitMemberVar:src/virtualfiles/serverfile.h
