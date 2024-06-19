@@ -118,6 +118,8 @@ void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile
             continue;
         }
 
+        smbContext->currentTimestamp = tcpFile->connectionBreaks.at(i).second;
+
         size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         size_t currPos = 0;
         while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {
@@ -202,7 +204,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateRespons
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
         if (lastAccessTime > smbFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
-            smbFilePtr->setTimestamp(lastAccessTime);
             smbFilePtr->setAccessTime(lastAccessTime);
             smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
             smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(createResponse->metaData->changeTime));
@@ -268,7 +269,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
             if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                smbFilePtr->setTimestamp(lastAccessTime);
                 smbFilePtr->setAccessTime(lastAccessTime);
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime));
@@ -353,7 +353,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
             if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
-                smbFilePtr->setTimestamp(lastAccessTime);
                 smbFilePtr->setAccessTime(lastAccessTime);
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(fileInfo->metaData->changeTime));
@@ -395,6 +394,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
     if (smbFilePtr->getFilesizeRaw() == 0 && currentReadRequestData->readOffset == 0) {
         // no fragments with file content are saved yet and we have readOffset 0
         LOG_TRACE << "no fragments are saved yet, readOffset == 0";
+
+        smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+
         smbFilePtr->fragments.push_back(newFragment);
         smbFilePtr->setFilesizeRaw(newFragment.length);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -432,6 +434,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
+
+            smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -483,6 +488,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         if (writeRequest->writeOffset == smbFilePtr->getFilesizeRaw()) {
             // append fragment to file
             LOG_TRACE << "some fragments are already saved, append new fragment";
+
+            smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+
             smbFilePtr->fragments.push_back(newFragment);
             smbFilePtr->setFilesizeRaw(writeRequest->writeOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -507,6 +515,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
+
+            smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -541,7 +552,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
     // a value of zero means the SMB server must not change this attribute
     if (setInfoRequestData->metaData->lastAccessTime != 0) {
         const auto lastAccessTime = smb::winFiletimeToTimePoint(setInfoRequestData->metaData->lastAccessTime);
-        smbFilePtr->setTimestamp(lastAccessTime);
         smbFilePtr->setAccessTime(lastAccessTime);
     }
     if (setInfoRequestData->metaData->lastWriteTime != 0)
@@ -612,7 +622,7 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
         for (auto &entry : fileVersions) {
             LOG_TRACE << "deduplicating redundant successive versions of " << entry.first;
             // sort versions in ascending order
-            std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getFileVersion() < b->getFileVersion(); });
+            std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getTimestamp() < b->getTimestamp(); });
 
             auto newEnd = std::unique(entry.second.begin(), entry.second.end(),
                                         [idx](const SmbFilePtr& a, const SmbFilePtr& b) {

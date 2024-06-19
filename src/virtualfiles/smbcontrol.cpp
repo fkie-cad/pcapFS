@@ -55,6 +55,9 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
             // message type has to be zero
             continue;
         }
+
+        smbContext->currentTimestamp = filePtr->connectionBreaks.at(i).second;
+
         size_t smbDataSize = be32toh(*(uint32_t*) &data.at(offset));
         size_t currPos = 0;
         while (smbDataSize != 0 && smbDataSize <= (size - currPos)) {

@@ -129,6 +129,8 @@ namespace pcapfs {
             // map messageId - tree name
             std::map<uint64_t, std::string> requestedTrees;
             bool createServerFiles = false;
+
+            TimePoint currentTimestamp;
         };
         typedef std::shared_ptr<SmbContext> SmbContextPtr;
 

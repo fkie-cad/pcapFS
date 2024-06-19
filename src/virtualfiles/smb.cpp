@@ -63,7 +63,7 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
         parentDir = nullptr;
     }
 
-    setTimestamp(changeTime);
+    setTimestamp(smbContext->currentTimestamp);
     setProperty("protocol", "smb");
     setFiletype("smb");
     setOffsetType(smbContext->offsetFile->getFiletype());
