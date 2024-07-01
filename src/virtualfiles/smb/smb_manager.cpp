@@ -401,6 +401,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         smbFilePtr->setFilesizeRaw(newFragment.length);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
         smbFilePtr->flags.reset(flags::IS_METADATA);
+
+        smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
@@ -414,6 +417,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->setFilesizeRaw(currentReadRequestData->readOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
+
+            smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (currentReadRequestData->readOffset == 0) {
@@ -436,6 +442,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->fragments.push_back(newFragment);
 
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+            smbFilePtr->setAccessTime(smbContext->currentTimestamp);
 
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
@@ -479,6 +486,10 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         smbFilePtr->setFilesizeRaw(newFragment.length);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
         smbFilePtr->flags.reset(flags::IS_METADATA);
+
+        smbFilePtr->setModifyTime(smbContext->currentTimestamp);
+        smbFilePtr->setChangeTime(smbContext->currentTimestamp);
+
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
@@ -495,6 +506,10 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->setFilesizeRaw(writeRequest->writeOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
+
+            smbFilePtr->setModifyTime(smbContext->currentTimestamp);
+            smbFilePtr->setChangeTime(smbContext->currentTimestamp);
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (writeRequest->writeOffset == 0) {
@@ -517,6 +532,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->fragments.push_back(newFragment);
 
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+            smbFilePtr->setModifyTime(smbContext->currentTimestamp);
+            smbFilePtr->setChangeTime(smbContext->currentTimestamp);
 
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
