@@ -69,6 +69,8 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
                                 smbFilePtr = std::make_shared<SmbFile>();
                                 smbFilePtr->initializeFilePtr(smbContext, filePath, createResponse->metaData);
                                 serverFiles[endpointTree][filePath] = smbFilePtr;
+                            } else {
+                                smbFilePtr->addClientIP(smbContext->clientIP);
                             }
                         }
                     } else {
@@ -273,6 +275,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime));
             }
+            smbFilePtr->addClientIP(smbContext->clientIP);
         }
 
         serverFiles[endpointTree][filePath] = smbFilePtr;
@@ -357,6 +360,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
                 smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
                 smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(fileInfo->metaData->changeTime));
             }
+            smbFilePtr->addClientIP(smbContext->clientIP);
         }
 
         serverFiles[endpointTree][filePath] = smbFilePtr;
@@ -402,6 +406,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
         smbFilePtr->flags.reset(flags::IS_METADATA);
 
+        smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
+
         smbFilePtr->setAccessTime(smbContext->currentTimestamp);
 
         serverFiles[endpointTree][filePath] = smbFilePtr;
@@ -417,7 +423,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->setFilesizeRaw(currentReadRequestData->readOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
-
             smbFilePtr->setAccessTime(smbContext->currentTimestamp);
 
             serverFiles[endpointTree][filePath] = smbFilePtr;
@@ -443,6 +448,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
             smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+
+            smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
@@ -490,6 +497,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         smbFilePtr->setModifyTime(smbContext->currentTimestamp);
         smbFilePtr->setChangeTime(smbContext->currentTimestamp);
 
+        smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
+
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
@@ -535,6 +544,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->setModifyTime(smbContext->currentTimestamp);
             smbFilePtr->setChangeTime(smbContext->currentTimestamp);
 
+            smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
+
             smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -565,6 +576,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
     LOG_TRACE << "updating SMB server file " << filePath << " with metadata from Set Info Request";
 
     SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    smbFilePtr->addClientIP(smbContext->clientIP);
 
     // a value of zero means the SMB server must not change this attribute
     if (setInfoRequestData->metaData->lastAccessTime != 0) {
@@ -590,6 +602,7 @@ pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::
     const ServerEndpointTree endpt = getServerEndpointTree(smbContext);
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
         LOG_DEBUG << "parent directory is already known as an SmbFile";
+        serverFiles[endpt][filePath]->addClientIP(smbContext->clientIP);
         return serverFiles[endpt][filePath];
     } else {
         LOG_DEBUG << "parent directory not known as SmbFile yet, create parent dir file on the fly";
@@ -642,14 +655,20 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
             std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getTimestamp() < b->getTimestamp(); });
 
             auto newEnd = std::unique(entry.second.begin(), entry.second.end(),
-                                        [idx](const SmbFilePtr& a, const SmbFilePtr& b) {
+                                        [idx](SmbFilePtr& a, const SmbFilePtr& b) {
                                             const uint64_t filesizeRawA = a->getFilesizeRaw();
                                             const uint64_t filesizeRawB = b->getFilesizeRaw();
                                             Bytes bufA(filesizeRawA);
                                             Bytes bufB(filesizeRawB);
                                             a->read(0, filesizeRawA, idx, (char*) bufA.data());
                                             b->read(0, filesizeRawB, idx, (char*) bufB.data());
-                                            return bufA == bufB;
+                                            if (bufA == bufB) {
+                                                for (const auto &ip: b->getClientIPs())
+                                                    a->addClientIP(ip);
+                                                return true;
+                                            } else {
+                                                return false;
+                                            }
                                         });
 
             // Erase the non-unique elements at the end of the vector

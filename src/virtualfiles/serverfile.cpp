@@ -1,5 +1,5 @@
 #include "serverfile.h"
-
+#include <boost/serialization/set.hpp>
 
 std::vector<std::shared_ptr<pcapfs::ServerFile>> pcapfs::ServerFile::getAllParentDirs() {
     std::vector<std::shared_ptr<ServerFile>> result;
@@ -24,6 +24,7 @@ void pcapfs::ServerFile::serialize(boost::archive::text_oarchive &archive) {
     archive << boost::serialization::make_binary_object(&birthTime, sizeof(birthTime));
     archive << (isDirectory ? 1 : 0);
     archive << parentDirId;
+    archive << clientIPs;
 }
 
 
@@ -37,4 +38,5 @@ void pcapfs::ServerFile::deserialize(boost::archive::text_iarchive &archive) {
     archive >> i;
     isDirectory = i ? true : false;
     archive >> parentDirId;
+    archive >> clientIPs;
 }

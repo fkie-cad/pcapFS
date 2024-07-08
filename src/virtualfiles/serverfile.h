@@ -2,6 +2,7 @@
 #define PCAPFS_VIRTUAL_FILES_SERVERFILE_H
 
 #include "virtualfile.h"
+#include <set>
 
 
 namespace pcapfs {
@@ -18,11 +19,17 @@ namespace pcapfs {
         TimePoint const getBirthTime() { return birthTime; };
         uint64_t getParentDirId() { return parentDirId; };
         FilePtr const getParentDir() { return parentDir; };
+        std::set<std::string> const getClientIPs() { return clientIPs; };
 
         void setAccessTime(const TimePoint &inTime) { accessTime = inTime; };
         void setModifyTime(const TimePoint &inTime) { modifyTime = inTime; };
         void setChangeTime(const TimePoint &inTime) { changeTime = inTime; };
         void setParentDir(const FilePtr &serverFile) { parentDir = serverFile; };
+        void addClientIP(const std::string &ip) { clientIPs.insert(ip); };
+        void clearAndAddClientIP(const std::string &ip) {
+            clientIPs.clear();
+            clientIPs.insert(ip);
+        }
 
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
@@ -36,6 +43,7 @@ namespace pcapfs {
         TimePoint modifyTime = TimePoint{};
         TimePoint changeTime = TimePoint{};
         TimePoint birthTime = TimePoint{};
+        std::set<std::string> clientIPs;
         uint64_t parentDirId = 0;
         FilePtr parentDir = nullptr;
     };

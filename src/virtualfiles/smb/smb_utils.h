@@ -13,6 +13,7 @@ namespace pcapfs {
         uint16_t strToUint16(const std::string& str);
         TimePoint winFiletimeToTimePoint(uint64_t winFiletime);
         std::string const sanitizeFilename(const std::string &inFilename);
+        std::string const determineClientIP(const FilePtr &filePtr);
 
         bool isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts);
         size_t getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts);

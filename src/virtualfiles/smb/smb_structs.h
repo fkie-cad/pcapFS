@@ -100,7 +100,8 @@ namespace pcapfs {
         // holds information to be memorized along one SMB TCP connection
         struct SmbContext {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
-                    offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles) {}
+                    offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles),
+                    clientIP(determineClientIP(filePtr)) {}
 
             FilePtr offsetFile = nullptr;
             ServerEndpoint serverEndpoint;
@@ -129,6 +130,8 @@ namespace pcapfs {
             // map messageId - tree name
             std::map<uint64_t, std::string> requestedTrees;
             bool createServerFiles = false;
+
+            std::string clientIP;
 
             TimePoint currentTimestamp;
         };

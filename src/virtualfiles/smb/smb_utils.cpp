@@ -95,3 +95,9 @@ std::string const pcapfs::smb::sanitizeFilename(const std::string &inFilename) {
     const auto it2 = std::find_if(temp.begin(), temp.end(), [](const unsigned char c){ return c != 0x5C; });
     return std::string(it2, temp.end());
 }
+
+
+std::string const pcapfs::smb::determineClientIP(const FilePtr &filePtr) {
+    const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
+    return srcPort == 445 || srcPort == 139 ? filePtr->getProperty("dstIP") : filePtr->getProperty("srcIP");
+}

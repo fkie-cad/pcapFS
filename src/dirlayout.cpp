@@ -92,9 +92,77 @@ namespace pcapfs_filesystem {
     }
 
 
+    DirTreeNode* DirectoryLayout::handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs) {
+        // advance all the way to parent dir of server file and create new tree nodes on the fly if necessary
+        current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
+                                    { return getOrCreateSubdirForServerFile(curr, parentDirFile); });
+
+        if (serverFilePtr->isDirectory && current->subdirs.count(serverFilePtr->getFilename()) == 0) {
+            // serverfile is a directory. Add it as new DirTreeNode if not already present in subdirs of current node
+            current = getOrCreateSubdirForServerFile(current, serverFilePtr);
+            LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " as directory to tree node " << current->dirname;
+        } else if (!serverFilePtr->isDirectory) {
+            // add server file as regular file
+            current->dirfiles.emplace(serverFilePtr->getFilename(), serverFilePtr);
+            LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " to DirTreeNode " << current->dirname;
+        }
+
+        // update timestamps for serverfile dirs
+        if (!parentDirs.empty()) {
+            const std::string rootDirName = parentDirs.front()->getFilename();
+            if (current->accessTime < serverFilePtr->getAccessTime()) {
+                current->accessTime = serverFilePtr->getAccessTime();
+                DirTreeNode *temp = current;
+                while (temp != ROOT) {
+                    if (temp->parent->accessTime < temp->accessTime) {
+                        temp->parent->accessTime = temp->accessTime;
+                        if (temp->parent->dirname == rootDirName)
+                            break;
+                        temp = temp->parent;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            if (current->modifyTime < serverFilePtr->getModifyTime()) {
+                current->modifyTime = serverFilePtr->getModifyTime();
+                DirTreeNode *temp = current;
+                while (temp != ROOT) {
+                    if (temp->parent->modifyTime < temp->modifyTime) {
+                        temp->parent->modifyTime = temp->modifyTime;
+                        if (temp->parent->dirname == rootDirName)
+                            break;
+                        temp = temp->parent;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            if (current->changeTime < serverFilePtr->getChangeTime()) {
+                current->changeTime = serverFilePtr->getChangeTime();
+                DirTreeNode *temp = current;
+                while (temp != ROOT) {
+                    if (temp->parent->changeTime < temp->changeTime) {
+                        temp->parent->changeTime = temp->changeTime;
+                        if (temp->parent->dirname == rootDirName)
+                            break;
+                        temp = temp->parent;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return current;
+    }
+
+
     int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index) {
         initRoot();
         auto files = index.getFiles();
+
+        bool earlyBreak = false;
 
         for (auto &file : files) {
             if (!file->showFile()) {
@@ -119,81 +187,50 @@ namespace pcapfs_filesystem {
                     current = std::accumulate(path_v.begin(), path_v.end(), current,
                                                 [](DirTreeNode* curr, const std::string &dir ){ return getOrCreateSubdir(curr, dir); });
                 } else {
-                    std::string property = file->getProperty(category);
+                    const std::string property = file->getProperty(category);
                     LOG_TRACE << category << " and creating dir for " << file->getProperty(category);
                     if (property == "") {
                         current = getOrCreateSubdir(current, "PCAPFS_PROP_NOT_AVAIL");
+                    } else if (file->flags.test(pcapfs::flags::IS_SERVERFILE) && category == "srcIP") {
+                        pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
+                        std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
+
+                        // we need to branch out of directory hierarchy and add the file to all folders corresponding
+                        // to the clientIPs
+                        std::set<std::string> ips = serverFilePtr->getClientIPs();
+                        for (const auto &ip: ips) {
+                            DirTreeNode *temp = current;
+                            temp = getOrCreateSubdir(temp, ip);
+                            // create subdirs for following properties
+                            for (auto pos = std::find(dirSortby.begin(), dirSortby.end(), category) + 1; pos != dirSortby.end(); ++pos) {
+                                std::string tmpProp = file->getProperty(*pos);
+                                if (tmpProp == "")
+                                    tmpProp = "PCAPFS_PROP_NOT_AVAIL";
+                                temp = getOrCreateSubdir(temp, tmpProp);
+                            }
+
+
+                            temp = handleServerFile(temp, serverFilePtr, parentDirs);
+                        }
+                        earlyBreak = true;
+                        break;
+
                     } else {
                         current = getOrCreateSubdir(current, property);
                     }
                 }
             }
 
+            if (earlyBreak) {
+                earlyBreak = false;
+                continue;
+            }
+
+
             if (file->flags.test(pcapfs::flags::IS_SERVERFILE)) {
                 pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
                 std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
-
-                // advance all the way from root dir to parent dir of server file and create new tree nodes on the fly if necessary
-                current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
-                                            { return getOrCreateSubdirForServerFile(curr, parentDirFile); });
-
-                if (serverFilePtr->isDirectory && current->subdirs.count(serverFilePtr->getFilename()) == 0) {
-                    // serverfile is a directory. Add it as new DirTreeNode if not already present in subdirs of current node
-                    current = getOrCreateSubdirForServerFile(current, serverFilePtr);
-                    LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " as directory to tree node " << current->dirname;
-                } else if (!serverFilePtr->isDirectory) {
-                    // add server file as regular file
-                    current->dirfiles.emplace(serverFilePtr->getFilename(), serverFilePtr);
-                    LOG_TRACE << "added server file " << serverFilePtr->getFilename() << " to DirTreeNode " << current->dirname;
-                }
-
-                // update timestamps for serverfile dirs
-                if (!parentDirs.empty()) {
-                    const std::string rootDirName = parentDirs.front()->getFilename();
-                    if (current->accessTime < serverFilePtr->getAccessTime()) {
-                        current->accessTime = serverFilePtr->getAccessTime();
-                        DirTreeNode *temp = current;
-                        while (temp != ROOT) {
-                            if (temp->parent->accessTime < temp->accessTime) {
-                                temp->parent->accessTime = temp->accessTime;
-                                if (temp->parent->dirname == rootDirName)
-                                    break;
-                                temp = temp->parent;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    if (current->modifyTime < serverFilePtr->getModifyTime()) {
-                        current->modifyTime = serverFilePtr->getModifyTime();
-                        DirTreeNode *temp = current;
-                        while (temp != ROOT) {
-                            if (temp->parent->modifyTime < temp->modifyTime) {
-                                temp->parent->modifyTime = temp->modifyTime;
-                                if (temp->parent->dirname == rootDirName)
-                                    break;
-                                temp = temp->parent;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    if (current->changeTime < serverFilePtr->getChangeTime()) {
-                        current->changeTime = serverFilePtr->getChangeTime();
-                        DirTreeNode *temp = current;
-                        while (temp != ROOT) {
-                            if (temp->parent->changeTime < temp->changeTime) {
-                                temp->parent->changeTime = temp->changeTime;
-                                if (temp->parent->dirname == rootDirName)
-                                    break;
-                                temp = temp->parent;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                }
-
+                current = handleServerFile(current, serverFilePtr, parentDirs);
             } else {
                 //TODO: implement new map for mapping from file path -> IndexPosition
                 current->dirfiles.emplace(file->getFilename(), file);

@@ -44,6 +44,8 @@ namespace pcapfs_filesystem {
         static DirTreeNode *ROOT;
         static std::vector<std::string> dirSortby;
 
+        static DirTreeNode *handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs);
+
         static int fillDirTreeSortby(const pcapfs::Index &index);
 
         static DirTreeNode *getOrCreateSubdir(DirTreeNode *current, const std::string &dirname);
