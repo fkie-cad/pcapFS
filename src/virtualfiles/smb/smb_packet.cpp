@@ -18,6 +18,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
             // TODO: could this lead to errors/bugs?
             smbContext->currentTreeId = packetHeader->treeId;
         }
+
+        smbContext->serverEndpoint.sessionId = packetHeader->sessionId;
         isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
         LOG_TRACE << "found SMB2 packet with message type " << packetHeader->command << (isResponse ? " (Response)" : " (Request)");
         try {

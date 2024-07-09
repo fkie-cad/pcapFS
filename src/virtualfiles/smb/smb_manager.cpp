@@ -18,6 +18,7 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
             smbContext->currentTreeId = packetHeader->treeId;
         }
 
+        smbContext->serverEndpoint.sessionId = packetHeader->sessionId;
         bool isResponse = packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_SERVER_TO_REDIR;
         try {
             switch (commandToParse) {
@@ -667,6 +668,15 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
                                                     a->addClientIP(ip);
                                                 return true;
                                             } else {
+                                                TimePoint t = a->getAccessTime();
+                                                if (b->getAccessTime() < t)
+                                                    b->setAccessTime(t);
+                                                t = a->getChangeTime();
+                                                if (b->getChangeTime() < t)
+                                                    b->setChangeTime(t);
+                                                t = a->getModifyTime();
+                                                if (b->getModifyTime() < t)
+                                                    b->setModifyTime(t);
                                                 return false;
                                             }
                                         });

@@ -32,6 +32,7 @@ namespace pcapfs {
             }
             pcpp::IPAddress ipAddress;
             uint16_t port = 0;
+            uint64_t sessionId = 0;
 
             bool operator==(const ServerEndpoint &endp) const {
                 return endp.ipAddress == ipAddress && endp.port == port;
@@ -39,7 +40,10 @@ namespace pcapfs {
 
             bool operator<(const ServerEndpoint &endp) const {
                 if (ipAddress == endp.ipAddress)
-                    return port < endp.port;
+                    if (port == endp.port)
+                        return sessionId < endp.sessionId;
+                    else
+                        return port < endp.port;
                 else
                     return ipAddress < endp.ipAddress;
             };
