@@ -1,16 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0]
 ### Fixed
 - Support spaces in file names
 - several bugfixes
 
 ### Added
-- Add JA4, JA4S, JA4X and JA4H as properties
 - Add SMB2 as supported protocol
+- Server-side directory hierarchy reconstruction for FTP and SMB2, including different file versions
+- Add JA4, JA4S, JA4X and JA4H as properties
 - Add option `--check-non-default-ports`
 - FTP: support `Entering Extended Passive Mode`, handle `MLSD` files
-- Server-side directory hierarchy reconstruction for FTP and SMB2
 - Cobalt Strike: support multiple possible AES keys per connection
 
 ### Changed
