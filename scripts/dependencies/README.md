@@ -8,7 +8,7 @@ without checking whether what they do is okay for you and your system!
 The `install-some-package.sh` scripts are less risky to use---they download and install the corresponding packages
 to `3rdparty` (downloads) and `dependencies` (install prefix) in the root directory of your cloned repository.
 
-If you have Ubuntu, Kali or Fedora, you can just run [install-all-dependencies.sh](install-all-dependencies.sh) and all necessary dependencies are installed automatically.
+If you have Ubuntu, Kali, Fedora or CentOS, you can just run [install-all-dependencies.sh](install-all-dependencies.sh) and all necessary dependencies are installed automatically.
 
 ## Disclaimer
 Use these scripts at your own risk!

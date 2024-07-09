@@ -42,6 +42,9 @@ Vagrant.configure("2") do |config|
   config.vm.define "ubuntu-22.04" do |jammy|
       jammy.vm.box = "ubuntu/jammy64"
   end
+  config.vm.define "ubuntu-24.04" do |jammy|
+    jammy.vm.box = "bento/ubuntu-24.04"
+  end
 
   if Vagrant.has_plugin?("vagrant-proxyconf")
     if ENV["http_proxy"]

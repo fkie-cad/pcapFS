@@ -37,13 +37,13 @@ if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
         ${here}/install-cpptoml.sh
         ${here}/install-openssl.sh
         ${here}/install-fuse.sh
-    elif [[ "${release}" =~ ^2[0-2]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
+    elif [[ "${release}" =~ ^2[0-4]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
                     ${boost_pkgs} \
                     cmake \
                     meson \
                     ninja-build
-        if [[ "${release}" = '22.04'|| "${distro}" = 'Kali' ]]; then
+        if [[ "${release}" =~ ^2[2-4]\.04 || "${distro}" = 'Kali' ]]; then
             sudo DEBIAN_FRONTEND=noninteractive apt install -y \
                     fuse3 \
                     libfuse3-dev \

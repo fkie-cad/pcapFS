@@ -18,6 +18,7 @@ PLATFORMS = {
     "ubuntu-18.04": "Ubuntu 18.04",
     "ubuntu-20.04": "Ubuntu 20.04",
     "ubuntu-22.04": "Ubuntu 22.04",
+    "ubuntu-24.04": "Ubuntu 24.04",
     "kali": "Kali",
     "centos-7": "CentOS 7",
 }
@@ -117,11 +118,29 @@ def run_system_tests(platform, log):
             stdout=log,
             stderr=log,
         )
-        subprocess.check_call(
-            ["vagrant", "ssh", platform, "-c", "pip install pytest virtualenv"],
-            stdout=log,
-            stderr=log,
-        )
+        if platform == "ubuntu-24.04":
+            subprocess.check_call(
+                [
+                    "vagrant",
+                    "ssh",
+                    platform,
+                    "-c",
+                    "sudo apt -y install python3-pytest",
+                ],
+                stdout=log,
+                stderr=log,
+            )
+            subprocess.check_call(
+                ["vagrant", "ssh", platform, "-c", "pip install virtualenv"],
+                stdout=log,
+                stderr=log,
+            )
+        else:
+            subprocess.check_call(
+                ["vagrant", "ssh", platform, "-c", "pip install pytest virtualenv"],
+                stdout=log,
+                stderr=log,
+            )
     except subprocess.CalledProcessError:
         pass
     test_command = [

@@ -7,7 +7,7 @@ if [[ -n "${lsb_release}" ]]; then
     if [[ "${distro}" = 'Fedora' ]]; then
         sudo dnf install -y catch2-devel
         exit 0
-    elif [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
+    elif [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]] && "$(lsb_release -rs)" != "24.04"; then
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y catch2
         exit 0
     fi
