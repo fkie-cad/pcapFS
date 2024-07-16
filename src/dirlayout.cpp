@@ -7,6 +7,7 @@
 
 #include "offsets.h"
 #include "logging.h"
+#include "virtualfiles/smb.h"
 
 
 namespace pcapfs_filesystem {
@@ -158,11 +159,94 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index) {
+    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, const pcapfs::TimePoint &snapshot) {
         initRoot();
         auto files = index.getFiles();
 
         bool earlyBreak = false;
+
+        std::vector<pcapfs::FilePtr> filesToAdd;
+        bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
+        pcapfs::SmbTimestamps targetTimestamps;
+        const pcapfs::TimePoint zeroTimePoint;
+        for (int i = files.size() - 1; i >= 0; --i) {
+            if (files.at(i)->isFiletype("smb")) {
+                pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(files.at(i));
+                if (!smbFilePtr->showFile())
+                    continue;
+
+                if (snapshotSpecified) {
+                    if (smbFilePtr->isDirectory) {
+                        if (smbFilePtr->getAccessTime() == zeroTimePoint || smbFilePtr->getChangeTime() == zeroTimePoint ||
+                            smbFilePtr->getModifyTime() == zeroTimePoint || smbFilePtr->getAccessTime() > snapshot ||
+                            smbFilePtr->getChangeTime() > snapshot || smbFilePtr->getModifyTime() > snapshot) {
+                            files.erase(files.begin()+i);
+                        }
+                        continue;
+                    }
+
+                    auto currVersion = smbFilePtr->fileVersions.begin();
+                    while (currVersion != smbFilePtr->fileVersions.end() && currVersion->first <= snapshot)
+                        currVersion++;
+
+                    bool smbTimestampsSet = false;
+                    for(const auto &smbTimestamps: smbFilePtr->getTimestampList()) {
+                        if ((smbTimestamps.accessTime != zeroTimePoint && smbTimestamps.accessTime <= snapshot) &&
+                            (smbTimestamps.changeTime != zeroTimePoint && smbTimestamps.changeTime <= snapshot) &&
+                            (smbTimestamps.modifyTime != zeroTimePoint && smbTimestamps.modifyTime <= snapshot)) {
+                                targetTimestamps = smbTimestamps;
+                                smbTimestampsSet = true;
+                        }
+                    }
+
+                    if (currVersion == smbFilePtr->fileVersions.begin()) {
+                        // timestamp of oldest file version is newer than requested snapshot time
+                        // we can't be sure if the file existed with this version content to that time, so we don't set fragments
+                        // however, when  one of the timestamps matches, we take that and make it an empty file
+                        if (smbTimestampsSet) {
+                            smbFilePtr->setAccessTime(targetTimestamps.accessTime);
+                            smbFilePtr->setChangeTime(targetTimestamps.changeTime);
+                            smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
+                            smbFilePtr->fragments.clear(),
+                            smbFilePtr->setFilesizeRaw(0);
+                            smbFilePtr->setFilesizeProcessed(0);
+                            smbFilePtr->flags.set(pcapfs::flags::IS_METADATA);
+                            files[i] = smbFilePtr;
+                        } else {
+                            files.erase(files.begin()+i);
+                        }
+                    } else {
+                        currVersion--;
+                        if (smbTimestampsSet) {
+                            smbFilePtr->setAccessTime(targetTimestamps.accessTime);
+                            smbFilePtr->setChangeTime(targetTimestamps.changeTime);
+                            smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
+                            smbFilePtr->fragments = currVersion->second.fragments;
+                            smbFilePtr->setClientIPs(currVersion->second.clientIPs);
+                            const size_t calculatedFilesize = std::accumulate(smbFilePtr->fragments.begin(), smbFilePtr->fragments.end(), 0,
+                                                                        [](size_t counter, const auto &frag){ return counter + frag.length; });
+                            smbFilePtr->setFilesizeRaw(calculatedFilesize);
+                            smbFilePtr->setFilesizeProcessed(calculatedFilesize);
+                        } else {
+                            // no matching timestamps found
+                            smbFilePtr->setAccessTime(currVersion->first);
+                            smbFilePtr->setChangeTime(currVersion->first);
+                            smbFilePtr->setModifyTime(currVersion->first);
+                        }
+                        files[i] = smbFilePtr;
+                    }
+
+                } else if (!smbFilePtr->isDirectory) {
+                    // no snapshot time specified -> create separate smb file for each version
+                    std::vector<pcapfs::SmbFilePtr> smbFileVersions = smbFilePtr->constructSmbVersionFiles();
+                    filesToAdd.insert(filesToAdd.end(), smbFileVersions.begin(), smbFileVersions.end());
+                    if (smbFileVersions.size() != 0)
+                        files.erase(files.begin()+i);
+                }
+            }
+        }
+
+        files.insert(files.end(), filesToAdd.begin(), filesToAdd.end());
 
         for (auto &file : files) {
             if (!file->showFile()) {
@@ -208,7 +292,6 @@ namespace pcapfs_filesystem {
                                     tmpProp = "PCAPFS_PROP_NOT_AVAIL";
                                 temp = getOrCreateSubdir(temp, tmpProp);
                             }
-
 
                             temp = handleServerFile(temp, serverFilePtr, parentDirs);
                         }
@@ -267,9 +350,9 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby) {
+    int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby, const pcapfs::TimePoint &snapshot) {
         dirSortby = pathVector(sortby);
-        fillDirTreeSortby(index);
+        fillDirTreeSortby(index, snapshot);
         pcapfs_filesystem::index = index;
         return 0;
     }

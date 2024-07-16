@@ -205,11 +205,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<CreateRespons
     } else {
         // server file is already known; update metadata if the current timestamp is newer
         const TimePoint lastAccessTime = winFiletimeToTimePoint(createResponse->metaData->lastAccessTime);
+        const TimePoint lastWriteTime = winFiletimeToTimePoint(createResponse->metaData->lastWriteTime);
+        const TimePoint changeTime = winFiletimeToTimePoint(createResponse->metaData->changeTime);
+        const TimePoint birthTime = winFiletimeToTimePoint(createResponse->metaData->creationTime);
+        smbFilePtr->addTimestampToList(SmbTimestamps(lastAccessTime, lastWriteTime, changeTime, birthTime));
         if (lastAccessTime > smbFilePtr->getAccessTime()) {
             LOG_TRACE << "file " << filePath << " is already known and updated";
             smbFilePtr->setAccessTime(lastAccessTime);
-            smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(createResponse->metaData->lastWriteTime));
-            smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(createResponse->metaData->changeTime));
+            smbFilePtr->setModifyTime(lastWriteTime);
+            smbFilePtr->setChangeTime(changeTime);
         }
     }
 
@@ -270,11 +274,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
         } else {
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastAccessTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastAccessTime);
+            const TimePoint lastWriteTime = winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime);
+            const TimePoint changeTime = winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime);
+            const TimePoint birthTime = winFiletimeToTimePoint(queryInfoResponse->metaData->creationTime);
+            smbFilePtr->addTimestampToList(SmbTimestamps(lastAccessTime, lastWriteTime, changeTime, birthTime));
             if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
                 smbFilePtr->setAccessTime(lastAccessTime);
-                smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->lastWriteTime));
-                smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(queryInfoResponse->metaData->changeTime));
+                smbFilePtr->setModifyTime(lastWriteTime);
+                smbFilePtr->setChangeTime(changeTime);
             }
             smbFilePtr->addClientIP(smbContext->clientIP);
         }
@@ -355,11 +363,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
         } else {
             // server file is already known; update metadata if the current timestamp is newer
             const TimePoint lastAccessTime = winFiletimeToTimePoint(fileInfo->metaData->lastAccessTime);
+            const TimePoint lastWriteTime = winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime);
+            const TimePoint changeTime = winFiletimeToTimePoint(fileInfo->metaData->changeTime);
+            const TimePoint birthTime = winFiletimeToTimePoint(fileInfo->metaData->creationTime);
+            smbFilePtr->addTimestampToList(SmbTimestamps(lastAccessTime, lastWriteTime, changeTime, birthTime));
             if (lastAccessTime > smbFilePtr->getAccessTime()) {
                 LOG_TRACE << "file " << filePath << " is already known and updated";
                 smbFilePtr->setAccessTime(lastAccessTime);
-                smbFilePtr->setModifyTime(smb::winFiletimeToTimePoint(fileInfo->metaData->lastWriteTime));
-                smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(fileInfo->metaData->changeTime));
+                smbFilePtr->setModifyTime(lastWriteTime);
+                smbFilePtr->setChangeTime(changeTime);
             }
             smbFilePtr->addClientIP(smbContext->clientIP);
         }
@@ -400,8 +412,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         // no fragments with file content are saved yet and we have readOffset 0
         LOG_TRACE << "no fragments are saved yet, readOffset == 0";
 
-        smbFilePtr->setTimestamp(smbContext->currentTimestamp);
-
         smbFilePtr->fragments.push_back(newFragment);
         smbFilePtr->setFilesizeRaw(newFragment.length);
         smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -410,6 +420,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
         smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+        smbFilePtr->updateTimestampList();
+        smbFilePtr->setTimestamp(smbContext->currentTimestamp);
 
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
@@ -420,28 +432,21 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         if (currentReadRequestData->readOffset == smbFilePtr->getFilesizeRaw()) {
             // append fragment to file
             LOG_TRACE << "some fragments are already saved, append new fragment";
+            smbFilePtr->setTimestamp(smbContext->currentTimestamp);
+
             smbFilePtr->fragments.push_back(newFragment);
             smbFilePtr->setFilesizeRaw(currentReadRequestData->readOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
             smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+            smbFilePtr->updateTimestampList();
 
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (currentReadRequestData->readOffset == 0) {
             // create new file version (backup old file version)
             LOG_TRACE << "create new file version";
-
-            // backup current file version
-            SmbFilePtr oldVersion(smbFilePtr->clone());
-            // we need to change IdInIndex s.t. it becomes a uniquely indexable file
-            oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
-            // update filename and filePath
-            const std::string tag = "@" + std::to_string(oldVersion->getFileVersion());
-            oldVersion->setFilename(oldVersion->getFilename() + tag);
-            oldVersion->flags.reset(flags::IS_METADATA);
-            const std::string newFilePath = filePath + tag;
-            serverFiles[endpointTree][newFilePath] = oldVersion;
+            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs());
 
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
@@ -449,10 +454,10 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
             smbFilePtr->setAccessTime(smbContext->currentTimestamp);
+            smbFilePtr->updateTimestampList();
 
             smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
-            smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
@@ -497,6 +502,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 
         smbFilePtr->setModifyTime(smbContext->currentTimestamp);
         smbFilePtr->setChangeTime(smbContext->currentTimestamp);
+        smbFilePtr->updateTimestampList();
+        smbFilePtr->setTimestamp(smbContext->currentTimestamp);
 
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
@@ -519,23 +526,14 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 
             smbFilePtr->setModifyTime(smbContext->currentTimestamp);
             smbFilePtr->setChangeTime(smbContext->currentTimestamp);
+            smbFilePtr->updateTimestampList();
 
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (writeRequest->writeOffset == 0) {
             // create new file version (backup old file version)
             LOG_TRACE << "create new file version";
-
-            // backup current file version
-            SmbFilePtr oldVersion(smbFilePtr->clone());
-            // we need to change IdInIndex s.t. it becomes a uniquely indexable file
-            oldVersion->setIdInIndex(smb::SmbManager::getInstance().getNewId());
-            // update filename and filePath
-            const std::string tag = "@" + std::to_string(oldVersion->getFileVersion());
-            oldVersion->setFilename(oldVersion->getFilename() + tag);
-            oldVersion->flags.reset(flags::IS_METADATA);
-            const std::string newFilePath = filePath + tag;
-            serverFiles[endpointTree][newFilePath] = oldVersion;
+            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs());
 
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
@@ -544,10 +542,10 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
             smbFilePtr->setModifyTime(smbContext->currentTimestamp);
             smbFilePtr->setChangeTime(smbContext->currentTimestamp);
+            smbFilePtr->updateTimestampList();
 
             smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
-            smbFilePtr->setFileVersion(smbFilePtr->getFileVersion()+1); // increase file version
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
@@ -589,6 +587,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
     if (setInfoRequestData->metaData->changeTime != 0)
         smbFilePtr->setChangeTime(smb::winFiletimeToTimePoint(setInfoRequestData->metaData->changeTime));
 
+    smbFilePtr->updateTimestampList();
     serverFiles[endpointTree][filePath] = smbFilePtr;
 
 }
@@ -630,76 +629,9 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
 
     LOG_DEBUG << "Collecting all SMB files...";
     for (const auto &endpt : serverFiles) {
-        std::map<std::string, std::vector<SmbFilePtr>> fileVersions;
         for (auto &fileEntry: endpt.second) {
-            if (!fileEntry.second->flags.test(flags::IS_METADATA)) {
-                // pick files with multiple versions for extra check later
-                if (fileEntry.first.rfind('@') != std::string::npos) {
-                    fileVersions[std::string(fileEntry.first.begin(), fileEntry.first.begin()+fileEntry.first.rfind('@'))].push_back(fileEntry.second);
-                } else if (fileEntry.second->getFileVersion() != 0 && fileEntry.first.rfind('@') == std::string::npos) {
-                    // for newest version, we also need to set the version tag in the file name since we didn't do that before
-                    fileEntry.second->setFilename(fileEntry.second->getFilename() + "@" + std::to_string(fileEntry.second->getFileVersion()));
-                    fileVersions[fileEntry.first].push_back(fileEntry.second);
-                } else {
-                    // no versions detected -> add directly to resultVector
-                    resultVector.push_back(fileEntry.second);
-                }
-            } else {
-                resultVector.push_back(fileEntry.second);
-            }
-        }
-
-        // deduplicate redundant successive versions
-        for (auto &entry : fileVersions) {
-            LOG_TRACE << "deduplicating redundant successive versions of " << entry.first;
-            // sort versions in ascending order
-            std::sort(entry.second.begin(), entry.second.end(), [](const auto &a, const auto &b){ return a->getTimestamp() < b->getTimestamp(); });
-
-            auto newEnd = std::unique(entry.second.begin(), entry.second.end(),
-                                        [idx](SmbFilePtr& a, const SmbFilePtr& b) {
-                                            const uint64_t filesizeRawA = a->getFilesizeRaw();
-                                            const uint64_t filesizeRawB = b->getFilesizeRaw();
-                                            Bytes bufA(filesizeRawA);
-                                            Bytes bufB(filesizeRawB);
-                                            a->read(0, filesizeRawA, idx, (char*) bufA.data());
-                                            b->read(0, filesizeRawB, idx, (char*) bufB.data());
-                                            if (bufA == bufB) {
-                                                for (const auto &ip: b->getClientIPs())
-                                                    a->addClientIP(ip);
-                                                return true;
-                                            } else {
-                                                TimePoint t = a->getAccessTime();
-                                                if (b->getAccessTime() < t)
-                                                    b->setAccessTime(t);
-                                                t = a->getChangeTime();
-                                                if (b->getChangeTime() < t)
-                                                    b->setChangeTime(t);
-                                                t = a->getModifyTime();
-                                                if (b->getModifyTime() < t)
-                                                    b->setModifyTime(t);
-                                                return false;
-                                            }
-                                        });
-
-            // Erase the non-unique elements at the end of the vector
-            entry.second.erase(newEnd, entry.second.end());
-
-            // adjust file versions so that they are consecutive again
-            for (uint32_t j = 0; j < entry.second.size(); ++j) {
-                if (j != entry.second.at(j)->getFileVersion()) {
-                    entry.second.at(j)->setFileVersion(j);
-                    const std::string oldFilename = entry.second.at(j)->getFilename();
-                    entry.second.at(j)->setFilename(std::string(oldFilename.begin(), oldFilename.begin()+oldFilename.rfind('@')+1) + std::to_string(j));
-                }
-            }
-
-            // remove tag in file name when the number of deduplicated versions reduced to 1
-            if (entry.second.size() == 1) {
-                const std::string oldFilename = entry.second.at(0)->getFilename();
-                entry.second.at(0)->setFilename(std::string(oldFilename.begin(), oldFilename.begin() + oldFilename.rfind('@')));
-            }
-
-            resultVector.insert(resultVector.end(), entry.second.begin(), entry.second.end());
+            fileEntry.second->deduplicateVersions(idx);
+            resultVector.push_back(fileEntry.second);
         }
     }
 

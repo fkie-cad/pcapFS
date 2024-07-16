@@ -23,6 +23,7 @@ namespace pcapfs {
             std::string sortby;
             std::string pcapSuffix;
             logging::severity verbosity = logging::severity::debug;
+            TimePoint snapshot = TimePoint::min();
             bool rewrite = false;
             bool noMount = false;
             bool showMetadata = false;

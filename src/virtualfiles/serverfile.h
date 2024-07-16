@@ -25,11 +25,12 @@ namespace pcapfs {
         void setModifyTime(const TimePoint &inTime) { modifyTime = inTime; };
         void setChangeTime(const TimePoint &inTime) { changeTime = inTime; };
         void setParentDir(const FilePtr &serverFile) { parentDir = serverFile; };
+        void setClientIPs(const std::set<std::string> &inClientIPs) {clientIPs = inClientIPs; };
         void addClientIP(const std::string &ip) { clientIPs.insert(ip); };
         void clearAndAddClientIP(const std::string &ip) {
             clientIPs.clear();
             clientIPs.insert(ip);
-        }
+        };
 
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;

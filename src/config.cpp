@@ -252,7 +252,8 @@ namespace {
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
-                    ("version,V", "show version information and exit");
+                    ("version,V", "show version information and exit")
+                    ("snapshot", po::value<std::string>(), "unix timestamp of point in time where to reconstruct SMB share");
 
             po::typed_value<std::string, char>* verbosity;
             #if(DEBUG)
@@ -333,6 +334,18 @@ namespace {
                 }
                 opts.config.keyFiles.insert(opts.config.keyFiles.end(), configFileOptions.keyFiles.cbegin(),
                                             configFileOptions.keyFiles.cend());
+            }
+
+            if (vm.count("snapshot")) {
+                try {
+                    long long timestamp = std::stoll(vm["snapshot"].as<std::string>());
+                    if (timestamp < 0)
+                        std::cerr << "Warning: Invalid snapshot timestamp: negative value" << std::endl;
+                    else
+                        opts.config.snapshot = std::chrono::system_clock::from_time_t(static_cast<std::time_t>(timestamp));
+                } catch (const std::logic_error&) {
+                    std::cerr << "Warning: Invalid snapshot timestamp, won't consider it" << std::endl;
+                }
             }
 
             // Prepare the options to be forwarded to FUSE:
