@@ -53,9 +53,11 @@ namespace pcapfs {
 
     struct SmbFileSnapshot {
         SmbFileSnapshot() {}
-        SmbFileSnapshot(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs) : fragments(inFragments), clientIPs(inClientIPs) {}
+        SmbFileSnapshot(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
+                        : fragments(inFragments), clientIPs(inClientIPs), readOperation(inReadOperation) {}
         std::vector<Fragment> fragments;
         std::set<std::string> clientIPs;
+        bool readOperation = false;
 
         /*template<class Archive>
         void serialize(Archive &archive, const unsigned int) {
@@ -95,6 +97,8 @@ namespace pcapfs {
         //void deserialize(boost::archive::text_iarchive &archive) override;
 
         std::map<TimePoint, SmbFileSnapshot> fileVersions;
+
+        bool isCurrentlyReadOperation = false;
 
     private:
         Bytes const getContentForFragments(const Index &idx, const std::vector<Fragment> &inFragments);

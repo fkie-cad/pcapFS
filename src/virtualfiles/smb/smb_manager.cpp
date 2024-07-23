@@ -2,6 +2,8 @@
 #include "smb_packet.h"
 #include "../smb.h"
 
+#include <numeric>
+
 
 void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t len, uint16_t commandToParse, SmbContextPtr &smbContext) {
     if (*(uint32_t*) data == ProtocolId::SMB2_PACKET_HEADER_ID) {
@@ -423,6 +425,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         smbFilePtr->updateTimestampList();
         smbFilePtr->setTimestamp(smbContext->currentTimestamp);
 
+        smbFilePtr->isCurrentlyReadOperation = true;
+
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
@@ -441,13 +445,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->setAccessTime(smbContext->currentTimestamp);
             smbFilePtr->updateTimestampList();
 
+            smbFilePtr->isCurrentlyReadOperation = true;
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (currentReadRequestData->readOffset == 0) {
             // create new file version (backup old file version)
             LOG_TRACE << "create new file version";
-            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs());
-
+            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs(),
+                                                                                    smbFilePtr->isCurrentlyReadOperation);
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
@@ -461,6 +467,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
+
+            smbFilePtr->isCurrentlyReadOperation = true;
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
         }
     }
@@ -507,6 +516,8 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
+        smbFilePtr->isCurrentlyReadOperation = false;
+
         serverFiles[endpointTree][filePath] = smbFilePtr;
 
     } else if (smbFilePtr->getFilesizeRaw() != 0) {
@@ -528,13 +539,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->setChangeTime(smbContext->currentTimestamp);
             smbFilePtr->updateTimestampList();
 
+            smbFilePtr->isCurrentlyReadOperation = false;
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
         } else if (writeRequest->writeOffset == 0) {
             // create new file version (backup old file version)
             LOG_TRACE << "create new file version";
-            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs());
-
+            smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs(),
+                                                                                    smbFilePtr->isCurrentlyReadOperation);
             // add new Fragment for current file
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
@@ -549,6 +562,9 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
+
+            smbFilePtr->isCurrentlyReadOperation = false;
+
             serverFiles[endpointTree][filePath] = smbFilePtr;
         }
     }
@@ -590,6 +606,106 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
     smbFilePtr->updateTimestampList();
     serverFiles[endpointTree][filePath] = smbFilePtr;
 
+}
+
+
+void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot) {
+    std::vector<pcapfs::FilePtr> filesToAdd;
+    pcapfs::SmbTimestamps targetTimestamps;
+    const pcapfs::TimePoint zeroTimePoint;
+    bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
+
+    for (int i = indexFiles.size() - 1; i >= 0; --i) {
+        FilePtr currFile = indexFiles.at(i);
+        if (currFile->showFile() && currFile->isFiletype("smb")) {
+            pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(indexFiles.at(i));
+
+            if (snapshotSpecified) {
+
+                // advance to file version corresponding to the specified snapshot time
+                auto currVersion = smbFilePtr->fileVersions.begin();
+                while (currVersion != smbFilePtr->fileVersions.end() && currVersion->first <= snapshot)
+                    currVersion++;
+
+                // select matching timestamps corresponding to the specified snapshot time
+                bool smbTimestampsSet = false;
+                for(const auto &smbTimestamps: smbFilePtr->getTimestampList()) {
+                    if ((smbTimestamps.accessTime != zeroTimePoint && smbTimestamps.accessTime <= snapshot) &&
+                        (smbTimestamps.changeTime != zeroTimePoint && smbTimestamps.changeTime <= snapshot) &&
+                        (smbTimestamps.modifyTime != zeroTimePoint && smbTimestamps.modifyTime <= snapshot)) {
+                            targetTimestamps = smbTimestamps;
+                            smbTimestampsSet = true;
+                    }
+                }
+
+                if (currVersion == smbFilePtr->fileVersions.begin()) {
+                    // at this point, the timestamp for the oldest file version is newer than the requested snapshot time
+                    // or no file versions are saved
+
+                    // when we have saved file versions, the file operation corresponding to the oldest file version is READ and we have
+                    // a saved timestamp which is older than the snapshot time, then we take the file content from the oldest file version.
+
+                    // otherwise, we can't be sure if the file existed with this version content to that time, so we don't set fragments.
+                    // But, when one of the timestamps matches, we take that and make it an empty file.
+                    // When we don't have timstamp matched, the file won't be displayed.
+
+                    if (smbTimestampsSet) {
+                        if (smbFilePtr->fileVersions.size() > 0 && targetTimestamps.changeTime <= snapshot && currVersion->second.readOperation) {
+                            smbFilePtr->fragments = currVersion->second.fragments;
+                            smbFilePtr->setClientIPs(currVersion->second.clientIPs);
+                            const size_t calculatedFilesize = std::accumulate(smbFilePtr->fragments.begin(), smbFilePtr->fragments.end(), 0,
+                                                                        [](size_t counter, const auto &frag){ return counter + frag.length; });
+                            smbFilePtr->setFilesizeRaw(calculatedFilesize);
+                            smbFilePtr->setFilesizeProcessed(calculatedFilesize);
+                        } else {
+                            smbFilePtr->fragments.clear(),
+                            smbFilePtr->setFilesizeRaw(0);
+                            smbFilePtr->setFilesizeProcessed(0);
+                            smbFilePtr->flags.set(pcapfs::flags::IS_METADATA);
+                        }
+                        smbFilePtr->setAccessTime(targetTimestamps.accessTime);
+                        smbFilePtr->setChangeTime(targetTimestamps.changeTime);
+                        smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
+                        indexFiles[i] = smbFilePtr;
+                    } else {
+                        indexFiles.erase(indexFiles.begin()+i);
+                    }
+                } else {
+                    // found matching file version
+                    currVersion--;
+
+                    smbFilePtr->fragments = currVersion->second.fragments;
+                    smbFilePtr->setClientIPs(currVersion->second.clientIPs);
+                    const size_t calculatedFilesize = std::accumulate(smbFilePtr->fragments.begin(), smbFilePtr->fragments.end(), 0,
+                                                                [](size_t counter, const auto &frag){ return counter + frag.length; });
+                    smbFilePtr->setFilesizeRaw(calculatedFilesize);
+                    smbFilePtr->setFilesizeProcessed(calculatedFilesize);
+                    if (smbTimestampsSet) {
+                        smbFilePtr->setAccessTime(targetTimestamps.accessTime);
+                        smbFilePtr->setChangeTime(targetTimestamps.changeTime);
+                        smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
+                    } else {
+                        // no matching timestamps found
+                        smbFilePtr->setAccessTime(currVersion->first);
+                        smbFilePtr->setChangeTime(currVersion->first);
+                        smbFilePtr->setModifyTime(currVersion->first);
+                    }
+                    indexFiles[i] = smbFilePtr;
+                }
+
+            } else if (!smbFilePtr->isDirectory) {
+                // no snapshot time specified -> create separate smb file for each version
+                std::vector<pcapfs::SmbFilePtr> smbFileVersions = smbFilePtr->constructSmbVersionFiles();
+                filesToAdd.insert(filesToAdd.end(), smbFileVersions.begin(), smbFileVersions.end());
+                if (smbFileVersions.size() != 0) {
+                    // old smb file is not needed anymore since we now have all versions of it as separate files
+                    indexFiles.erase(indexFiles.begin()+i);
+                }
+            }
+        }
+    }
+
+    indexFiles.insert(indexFiles.end(), filesToAdd.begin(), filesToAdd.end());
 }
 
 

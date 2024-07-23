@@ -38,6 +38,8 @@ namespace pcapfs {
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
+            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot);
+
             std::vector<FilePtr> const getSmbFiles(const Index &idx);
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext);
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);

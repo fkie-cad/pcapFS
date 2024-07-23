@@ -50,7 +50,7 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         return;
 
     // add current saved fragments as newest version
-    fileVersions.emplace(timestamp, SmbFileSnapshot(fragments, clientIPs));
+    fileVersions.emplace(timestamp, SmbFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation));
 
     if (fileVersions.size() <= 1)
         return;
