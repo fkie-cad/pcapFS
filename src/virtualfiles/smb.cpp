@@ -4,6 +4,7 @@
 #include "../index.h"
 
 #include <numeric>
+#include <boost/serialization/set.hpp>
 
 
 std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx) {
@@ -188,22 +189,18 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
 }
 
 
-
-/*void pcapfs::SmbFile::serialize(boost::archive::text_oarchive &archive) {
+void pcapfs::SmbFile::serialize(boost::archive::text_oarchive &archive) {
     ServerFile::serialize(archive);
     archive << timestampList;
-    //archive << fileVersions;
-    // TODO: serialize fileVersions
+    archive << fileVersions;
 }
 
 
 void pcapfs::SmbFile::deserialize(boost::archive::text_iarchive &archive) {
     ServerFile::deserialize(archive);
     archive >> timestampList;
-    //archive >> fileVersions;
-    // TODO
-}*/
-
+    archive >> fileVersions;
+}
 
 
 bool pcapfs::SmbFile::registeredAtFactory =

@@ -5,7 +5,6 @@
 #include "../filefactory.h"
 #include "smb/smb_structs.h"
 
-//#include <boost/serialization/set.hpp>
 
 
 namespace pcapfs {
@@ -34,21 +33,13 @@ namespace pcapfs {
                     changeTime == tp.changeTime && birthTime == tp.birthTime;
         };
 
-        /*template<class Archive>
-        void serialize(Archive &archive, const unsigned int) {
-            archive << boost::serialization::make_binary_object(&accessTime, sizeof(accessTime));
-            archive << boost::serialization::make_binary_object(&modifyTime, sizeof(modifyTime));
-            archive << boost::serialization::make_binary_object(&changeTime, sizeof(changeTime));
-            archive << boost::serialization::make_binary_object(&birthTime, sizeof(birthTime));
-        }
-
         template<class Archive>
-        void deserialize(Archive &archive, const unsigned int) {
-            archive >> boost::serialization::make_binary_object(&accessTime, sizeof(accessTime));
-            archive >> boost::serialization::make_binary_object(&modifyTime, sizeof(modifyTime));
-            archive >> boost::serialization::make_binary_object(&changeTime, sizeof(changeTime));
-            archive >> boost::serialization::make_binary_object(&birthTime, sizeof(birthTime));
-        }*/
+        void serialize(Archive &archive, const unsigned int) {
+            archive & accessTime;
+            archive & modifyTime;
+            archive & changeTime;
+            archive & birthTime;
+        }
     };
 
     struct SmbFileSnapshot {
@@ -59,17 +50,11 @@ namespace pcapfs {
         std::set<std::string> clientIPs;
         bool readOperation = false;
 
-        /*template<class Archive>
-        void serialize(Archive &archive, const unsigned int) {
-            archive << fragments;
-            archive << clientIPs;
-        }
-
         template<class Archive>
-        void deserialize(Archive &archive, const unsigned int) {
-            archive >> fragments;
-            archive >> clientIPs;
-        }*/
+        void serialize(Archive &archive, const unsigned int) {
+            archive & fragments;
+            archive & clientIPs;
+        }
     };
 
     class SmbFile : public ServerFile {
@@ -93,8 +78,8 @@ namespace pcapfs {
 
         std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles();
 
-        //void serialize(boost::archive::text_oarchive &archive) override;
-        //void deserialize(boost::archive::text_iarchive &archive) override;
+        void serialize(boost::archive::text_oarchive &archive) override;
+        void deserialize(boost::archive::text_iarchive &archive) override;
 
         std::map<TimePoint, SmbFileSnapshot> fileVersions;
 
