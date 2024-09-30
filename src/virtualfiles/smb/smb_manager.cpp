@@ -476,16 +476,16 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 }
 
 
-void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, const SmbContextPtr &smbContext) {
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestData> &writeRequestData, const SmbContextPtr &smbContext) {
     // update server files with file infos obtained from write messages
 
     const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
-    if (fileHandles[endpointTree].find(writeRequest->fileId) == fileHandles[endpointTree].end()) {
+    if (fileHandles[endpointTree].find(writeRequestData->fileId) == fileHandles[endpointTree].end()) {
         // fileId - filename mapping not known
         return;
     }
 
-    const std::string filePath = fileHandles[endpointTree].at(writeRequest->fileId);
+    const std::string filePath = fileHandles[endpointTree].at(writeRequestData->fileId);
     if (serverFiles[endpointTree].find(filePath) == serverFiles[endpointTree].end() || !serverFiles[endpointTree].at(filePath)) {
         // should not happen
         return;
@@ -496,12 +496,12 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 
     Fragment newFragment;
     newFragment.id = smbContext->offsetFile->getIdInIndex();
-    newFragment.start = smbContext->currentOffset + writeRequest->dataOffset;
-    newFragment.length = writeRequest->writeLength;
+    newFragment.start = writeRequestData->globalOffset + writeRequestData->dataOffset;
+    newFragment.length = writeRequestData->writeLength;
 
     SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
 
-    if (smbFilePtr->getFilesizeRaw() == 0 && writeRequest->writeOffset == 0) {
+    if (smbFilePtr->getFilesizeRaw() == 0 && writeRequestData->writeOffset == 0) {
         // no fragments with file content are saved yet and we have writeOffset 0
         LOG_TRACE << "no fragments are saved yet, writeOffset == 0";
         smbFilePtr->fragments.push_back(newFragment);
@@ -524,14 +524,14 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
         // we have already some saved fragments for that file
         // (we only allow following adjacent fragments or fragments at the beginning of the file)
 
-        if (writeRequest->writeOffset == smbFilePtr->getFilesizeRaw()) {
+        if (writeRequestData->writeOffset == smbFilePtr->getFilesizeRaw()) {
             // append fragment to file
             LOG_TRACE << "some fragments are already saved, append new fragment";
 
             smbFilePtr->setTimestamp(smbContext->currentTimestamp);
 
             smbFilePtr->fragments.push_back(newFragment);
-            smbFilePtr->setFilesizeRaw(writeRequest->writeOffset + newFragment.length);
+            smbFilePtr->setFilesizeRaw(writeRequestData->writeOffset + newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
             smbFilePtr->flags.reset(flags::IS_METADATA);
 
@@ -543,7 +543,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequest>
 
             serverFiles[endpointTree][filePath] = smbFilePtr;
 
-        } else if (writeRequest->writeOffset == 0) {
+        } else if (writeRequestData->writeOffset == 0) {
             // create new file version (backup old file version)
             LOG_TRACE << "create new file version";
             smbFilePtr->fileVersions[smbFilePtr->getTimestamp()] = SmbFileSnapshot(smbFilePtr->fragments, smbFilePtr->getClientIPs(),

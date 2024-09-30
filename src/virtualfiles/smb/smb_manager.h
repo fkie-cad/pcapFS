@@ -34,7 +34,7 @@ namespace pcapfs {
             // SMB2_READ Response
             void updateSmbFiles(const std::shared_ptr<ReadResponse> &readResponse, const SmbContextPtr &smbContext, uint64_t messageId);
             // SMB2_WRITE Request
-            void updateSmbFiles(const std::shared_ptr<WriteRequest> &writeRequest, const SmbContextPtr &smbContext);
+            void updateSmbFiles(const std::shared_ptr<WriteRequestData> &writeRequestData, const SmbContextPtr &smbContext);
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 

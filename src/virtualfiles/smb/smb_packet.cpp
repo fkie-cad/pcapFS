@@ -79,7 +79,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
                 case Smb2Commands::SMB2_READ:
                     if (isResponse) {
-                        if (smbContext->createServerFiles &&
+                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS && smbContext->createServerFiles &&
                             smbContext->readRequestData.find(packetHeader->messageId) != smbContext->readRequestData.end() &&
                             smbContext->readRequestData[packetHeader->messageId]) {
 
@@ -87,6 +87,7 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                             if (readResponse->dataLength != 0)
                                 SmbManager::getInstance().updateSmbFiles(readResponse, smbContext, packetHeader->messageId);
                             message = readResponse;
+                            smbContext->readRequestData.erase(packetHeader->messageId);
                         } else {
                             message = std::make_shared<ReadResponse>(&data[64], len - 64);
                         }
@@ -101,13 +102,25 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_WRITE:
-                    if (isResponse)
+                    if (isResponse) {
                         message = std::make_shared<WriteResponse>(&data[64], len - 64);
-                    else {
+
+                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS && smbContext->createServerFiles &&
+                            smbContext->writeRequestData.find(packetHeader->messageId) != smbContext->writeRequestData.end()) {
+                                const std::shared_ptr<WriteRequestData> matchingWriteRequestData = smbContext->writeRequestData[packetHeader->messageId];
+                                if (matchingWriteRequestData && matchingWriteRequestData->writeLength != 0)
+                                    SmbManager::getInstance().updateSmbFiles(matchingWriteRequestData, smbContext);
+                            }
+                            smbContext->writeRequestData.erase(packetHeader->messageId);
+                    } else {
                         const std::shared_ptr<WriteRequest> writeRequest = std::make_shared<WriteRequest>(&data[64], len - 64);
-                        // we don't care whether the write was successful at the end or not
-                        if (smbContext->createServerFiles && writeRequest->writeLength != 0)
-                            SmbManager::getInstance().updateSmbFiles(writeRequest, smbContext);
+                        std::shared_ptr<WriteRequestData> newWriteRequestData = std::make_shared<WriteRequestData>();
+                        newWriteRequestData->fileId = writeRequest->fileId;
+                        newWriteRequestData->dataOffset = writeRequest->dataOffset;
+                        newWriteRequestData->globalOffset = smbContext->currentOffset;
+                        newWriteRequestData->writeOffset = writeRequest->writeOffset;
+                        newWriteRequestData->writeLength = writeRequest->writeLength;
+                        smbContext->writeRequestData[packetHeader->messageId] = newWriteRequestData;
                         message = writeRequest;
                     }
                     break;

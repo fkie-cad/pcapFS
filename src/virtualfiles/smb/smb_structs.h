@@ -86,6 +86,15 @@ namespace pcapfs {
             uint64_t readOffset = 0;
         };
 
+        struct WriteRequestData {
+            std::string fileId = "";
+            uint64_t writeOffset = 0;
+            uint32_t writeLength = 0;
+            uint16_t dataOffset = 0;
+            // globalOffset is the offset into the pcap file, where the write payload is located
+            uint64_t globalOffset = 0;
+        };
+
 
         struct FileMetaData{
             bool isDirectory = false;
@@ -122,6 +131,9 @@ namespace pcapfs {
 
             // map messageId - ReadRequestData
             std::map<uint64_t, std::shared_ptr<ReadRequestData>> readRequestData;
+
+            // map messageId - WriteRequestData
+            std::map<uint64_t, std::shared_ptr<WriteRequestData>> writeRequestData;
 
             // map messageId - SetInfoRequestData
             std::map<uint64_t, std::shared_ptr<SetInfoRequestData>> setInfoRequestData;
