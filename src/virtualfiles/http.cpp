@@ -382,10 +382,15 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
         int zlib_return = inflate(&zs, Z_SYNC_FLUSH);
         while (zlib_return == Z_OK && zs.avail_out == 0) {
-            zs.avail_out = outlen * 2;
-            inflated = static_cast<Bytef *>(realloc(inflated, outlen * 3));
+            uInt new_outlen = outlen * 3;
+            Bytef *new_inflated = new Bytef[new_outlen];
+            memcpy(new_inflated, inflated, outlen);
+            delete[] inflated;
+            inflated = new_inflated;
+
             zs.next_out = inflated + outlen;
-            outlen *= 3;
+            zs.avail_out = new_outlen - outlen;
+            outlen = new_outlen;
             zlib_return = inflate(&zs, Z_SYNC_FLUSH);
         }
         if (zlib_return == Z_DATA_ERROR) {
@@ -402,10 +407,15 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
             zlib_return = inflate(&zs, Z_SYNC_FLUSH);
             while (zlib_return == Z_OK && zs.avail_out == 0) {
-                zs.avail_out = outlen * 2;
-                inflated = static_cast<Bytef *>(realloc(inflated, outlen * 3));
+                uInt new_outlen = outlen * 3;
+                Bytef *new_inflated = new Bytef[new_outlen];
+                memcpy(new_inflated, inflated, outlen);
+                delete[] inflated;
+                inflated = new_inflated;
+
                 zs.next_out = inflated + outlen;
-                outlen *= 3;
+                zs.avail_out = new_outlen - outlen;
+                outlen = new_outlen;
                 zlib_return = inflate(&zs, Z_SYNC_FLUSH);
             }
         }
@@ -513,11 +523,17 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
     int zlib_return = inflate(&zs, Z_SYNC_FLUSH);
     while (zlib_return == Z_OK && zs.avail_out == 0) {
-        zs.avail_out = outlen * 2;
-        inflated = static_cast<Bytef *>(realloc(inflated, outlen * 3));
+        uInt new_outlen = outlen * 3;
+        Bytef *new_inflated = new Bytef[new_outlen];
+        memcpy(new_inflated, inflated, outlen);
+        delete[] inflated;
+        inflated = new_inflated;
+
         zs.next_out = inflated + outlen;
-        outlen *= 3;
+        zs.avail_out = new_outlen - outlen;
+        outlen = new_outlen;
         zlib_return = inflate(&zs, Z_SYNC_FLUSH);
+
     }
     if (zlib_return == Z_DATA_ERROR) {
         if (inflateReset2(&zs, -MAX_WBITS) != Z_OK) {
@@ -533,10 +549,15 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
         zlib_return = inflate(&zs, Z_SYNC_FLUSH);
         while (zlib_return == Z_OK && zs.avail_out == 0) {
-            zs.avail_out = outlen * 2;
-            inflated = static_cast<Bytef *>(realloc(inflated, outlen * 3));
+            uInt new_outlen = outlen * 3;
+            Bytef *new_inflated = new Bytef[new_outlen];
+            memcpy(new_inflated, inflated, outlen);
+            delete[] inflated;
+            inflated = new_inflated;
+
             zs.next_out = inflated + outlen;
-            outlen *= 3;
+            zs.avail_out = new_outlen - outlen;
+            outlen = new_outlen;
             zlib_return = inflate(&zs, Z_SYNC_FLUSH);
         }
     }
