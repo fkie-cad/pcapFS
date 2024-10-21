@@ -246,14 +246,16 @@ namespace {
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
                     ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
+                    ("no-fstimestamps", "for SMB files, set network timestamps instead of filesystem timestamps from the SMB share")
                     ("no-mount,n", "only create an index file, don't mount the PCAP(s)")
                     ("rewrite,r", "overwrite a possibly existing index file")
                     ("show-all", "also show file which have been parsed already")
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
+                    ("snapshot", po::value<std::string>(), "unix timestamp of point in time where to reconstruct SMB share")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
-                    ("version,V", "show version information and exit")
-                    ("snapshot", po::value<std::string>(), "unix timestamp of point in time where to reconstruct SMB share");
+                    ("version,V", "show version information and exit");
+
 
             po::typed_value<std::string, char>* verbosity;
             #if(DEBUG)
@@ -310,6 +312,7 @@ namespace {
             if (vm.count("show-all")) { opts.config.showAll = true; }
             if (vm.count("show-metadata")) { opts.config.showMetadata = true; }
             if (vm.count("no-cs")) { opts.config.noCS = true; }
+            if (vm.count("no-fstimestamps")) { opts.config.noFsTimestamps = true; }
             if (vm.count("check-non-default-ports")) { opts.config.checkNonDefaultPorts = true; }
             if (vm.count("verbosity")) {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());

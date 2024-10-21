@@ -225,7 +225,7 @@ int main(int argc, const char *argv[]) {
         LOG_INFO << "Exiting because no-mount option was given";
         return EXIT_SUCCESS;
     } else {
-        pcapfs_filesystem::DirectoryLayout::initFilesystem(index, config.sortby, config.snapshot);
+        pcapfs_filesystem::DirectoryLayout::initFilesystem(index, config.sortby, config.snapshot, config.noFsTimestamps);
         pcapfs::PcapFs fs(index);
         //TODO: LOG levels don't seem to be the same... output of LOG_TRACE here is not there
         LOG_INFO << "Mounting PCAP file(s)";

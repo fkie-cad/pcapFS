@@ -93,7 +93,8 @@ namespace pcapfs_filesystem {
     }
 
 
-    DirTreeNode* DirectoryLayout::handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs) {
+    DirTreeNode* DirectoryLayout::handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs,
+                                                    bool snapshotAndFsTimestamps) {
         // advance all the way to parent dir of server file and create new tree nodes on the fly if necessary
         current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
                                     { return getOrCreateSubdirForServerFile(curr, parentDirFile); });
@@ -109,6 +110,10 @@ namespace pcapfs_filesystem {
         }
 
         // update timestamps for serverfile dirs
+        // when the snapshot option is set, this artificial timestamp settings for the parent dirs is not ok
+        if (snapshotAndFsTimestamps && serverFilePtr->isFiletype("smb"))
+            return current;
+
         if (!parentDirs.empty()) {
             const std::string rootDirName = parentDirs.front()->getFilename();
             if (current->accessTime < serverFilePtr->getAccessTime()) {
@@ -159,10 +164,11 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, const pcapfs::TimePoint &snapshot) {
+    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, const pcapfs::TimePoint &snapshot, bool noFsTimestamps) {
         initRoot();
         auto files = index.getFiles();
-        pcapfs::smb::SmbManager::getInstance().adjustSmbFilesForDirLayout(files, snapshot);
+        pcapfs::smb::SmbManager::getInstance().adjustSmbFilesForDirLayout(files, snapshot, noFsTimestamps);
+        bool snapshotAndFsTimestamps = (snapshot != pcapfs::TimePoint::min() && !noFsTimestamps);
 
         bool earlyBreak = false;
 
@@ -211,7 +217,7 @@ namespace pcapfs_filesystem {
                                 temp = getOrCreateSubdir(temp, tmpProp);
                             }
 
-                            temp = handleServerFile(temp, serverFilePtr, parentDirs);
+                            temp = handleServerFile(temp, serverFilePtr, parentDirs, snapshotAndFsTimestamps);
                         }
                         earlyBreak = true;
                         break;
@@ -230,7 +236,7 @@ namespace pcapfs_filesystem {
             if (file->flags.test(pcapfs::flags::IS_SERVERFILE)) {
                 pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
                 std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
-                current = handleServerFile(current, serverFilePtr, parentDirs);
+                current = handleServerFile(current, serverFilePtr, parentDirs, snapshotAndFsTimestamps);
             } else {
                 //TODO: implement new map for mapping from file path -> IndexPosition
                 current->dirfiles.emplace(file->getFilename(), file);
@@ -267,9 +273,10 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby, const pcapfs::TimePoint &snapshot) {
+    int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby,
+                                        const pcapfs::TimePoint &snapshot, bool noFsTimestamps) {
         dirSortby = pathVector(sortby);
-        fillDirTreeSortby(index, snapshot);
+        fillDirTreeSortby(index, snapshot, noFsTimestamps);
         pcapfs_filesystem::index = index;
         return 0;
     }

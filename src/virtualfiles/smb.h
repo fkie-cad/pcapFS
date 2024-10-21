@@ -9,10 +9,33 @@
 
 namespace pcapfs {
 
+    struct SmbTimePair {
+        SmbTimePair(){}
+        SmbTimePair(const TimePoint &inFsTime, const TimePoint &inNetworkTime) : fsTime(inFsTime), networkTime(inNetworkTime) {}
+        TimePoint fsTime = TimePoint{};
+        TimePoint networkTime = TimePoint{};
+
+        bool operator<(const SmbTimePair &tp) const {
+            return (fsTime == tp.fsTime) ? networkTime < tp.networkTime : fsTime < tp.fsTime;
+        };
+
+        bool operator==(const SmbTimePair &tp) const {
+            return fsTime == tp.fsTime && networkTime == tp.networkTime;
+        };
+
+        template<class Archive>
+        void serialize(Archive &archive, const unsigned int) {
+            archive & fsTime;
+            archive & networkTime;
+        }
+    };
+
     struct SmbTimestamps {
         SmbTimestamps() {}
-        SmbTimestamps(const TimePoint &inAccessTime, const TimePoint &inModifyTime, const TimePoint &inChangeTime, const TimePoint &inBirthTime) :
-                        accessTime(inAccessTime), modifyTime(inModifyTime), changeTime(inChangeTime), birthTime(inBirthTime) {}
+        SmbTimestamps(const TimePoint &inAccessTime, const TimePoint &inModifyTime, const TimePoint &inChangeTime,
+                        const TimePoint &inBirthTime) :
+                        accessTime(inAccessTime), modifyTime(inModifyTime), changeTime(inChangeTime),
+                        birthTime(inBirthTime) {}
         TimePoint accessTime = TimePoint{};
         TimePoint modifyTime = TimePoint{};
         TimePoint changeTime = TimePoint{};
@@ -21,7 +44,7 @@ namespace pcapfs {
         bool operator<(const SmbTimestamps &tp) const {
             if (accessTime == tp.accessTime)
                 if (modifyTime == tp.modifyTime)
-                    return changeTime < tp.changeTime;
+                        return changeTime < tp.changeTime;
                 else
                     return modifyTime < tp.modifyTime;
             else
@@ -67,28 +90,47 @@ namespace pcapfs {
         void initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath,
                                 const smb::FileMetaDataPtr &metaData);
 
-        void updateTimestampList() { timestampList.insert(SmbTimestamps(accessTime, modifyTime, changeTime, birthTime)); };
-        void addTimestampToList(const SmbTimestamps &tp) { timestampList.insert(tp); };
+        void addTimestampToList(const TimePoint &networkTime, const smb::FileMetaDataPtr &metaData) {
+            timestampList[networkTime] = SmbTimestamps(
+                                                        smb::winFiletimeToTimePoint(metaData->lastAccessTime),
+                                                        smb::winFiletimeToTimePoint(metaData->lastWriteTime),
+                                                        smb::winFiletimeToTimePoint(metaData->changeTime),
+                                                        smb::winFiletimeToTimePoint(metaData->creationTime)
+                                                    );
+        };
 
         void deduplicateVersions(const Index &idx);
 
-        std::set<SmbTimestamps> const getTimestampList() { return timestampList; };
+        std::map<TimePoint, SmbTimestamps> const getTimestampList() { return timestampList; };
 
         std::shared_ptr<SmbFile> clone() { return std::make_shared<SmbFile>(*this); };
 
         std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles();
 
+        void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, bool writeOperation);
+
+        void addAsNewFileVersion() {
+            fileVersions[timestampsOfCurrVersion] = SmbFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation);
+        }
+
+        std::map<SmbTimePair, SmbFileSnapshot> const getFileVersions() { return fileVersions; };
+
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
-
-        std::map<TimePoint, SmbFileSnapshot> fileVersions;
 
         bool isCurrentlyReadOperation = false;
 
     private:
         Bytes const getContentForFragments(const Index &idx, const std::vector<Fragment> &inFragments);
 
-        std::set<SmbTimestamps> timestampList;
+        // map network time - fs time
+        std::map<TimePoint, SmbTimestamps> timestampList;
+
+        std::map<SmbTimePair, SmbFileSnapshot> fileVersions;
+
+        // only needed for parsing
+        SmbTimePair timestampsOfCurrVersion;
+
     protected:
         static bool registeredAtFactory;
     };

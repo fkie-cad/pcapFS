@@ -52,8 +52,13 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         const std::shared_ptr<CreateResponse> createResponse = std::make_shared<CreateResponse>(&data[64], len - 64);
                         if (smbContext->createServerFiles &&
                             smbContext->createRequestFileNames.find(packetHeader->messageId) != smbContext->createRequestFileNames.end() &&
-                            !smbContext->createRequestFileNames.at(packetHeader->messageId).empty())
-                            SmbManager::getInstance().updateSmbFiles(createResponse, smbContext, packetHeader->messageId);
+                            !smbContext->createRequestFileNames.at(packetHeader->messageId).empty() && !createResponse->metaData->isDirectory) {
+                                // this prevents possible wrong file path compositions in updateSmbFiles functions in the case that
+                                // currentCreateRequestFile is chosen as parent directory path of the respective server files although
+                                // it isn't even a directory
+                                smbContext->createRequestFileNames.at(packetHeader->messageId) = "";
+                            }
+
                         message = createResponse;
                     } else {
                         const std::shared_ptr<CreateRequest> createRequest = std::make_shared<CreateRequest>(&data[64], len - 64);

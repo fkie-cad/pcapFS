@@ -28,6 +28,7 @@ namespace pcapfs {
             bool noMount = false;
             bool showMetadata = false;
             bool noCS = false;
+            bool noFsTimestamps = false;
             bool checkNonDefaultPorts = false;
             bool showAll = false;
             bool indexInMemory = false;

@@ -32,7 +32,7 @@ namespace pcapfs_filesystem {
 
     class DirectoryLayout {
     public:
-        static int initFilesystem(const pcapfs::Index &index, const std::string &sortby, const pcapfs::TimePoint &snapshot);
+        static int initFilesystem(const pcapfs::Index &index, const std::string &sortby, const pcapfs::TimePoint &snapshot, bool noFsTimestamps);
 
         static DirTreeNode *findDirectory(const std::vector<std::string> &path_v);
 
@@ -44,9 +44,10 @@ namespace pcapfs_filesystem {
         static DirTreeNode *ROOT;
         static std::vector<std::string> dirSortby;
 
-        static DirTreeNode *handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs);
+        static DirTreeNode *handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs,
+                                                bool snapshotAndFsTimestamps);
 
-        static int fillDirTreeSortby(const pcapfs::Index &index, const pcapfs::TimePoint &snapshot);
+        static int fillDirTreeSortby(const pcapfs::Index &index, const pcapfs::TimePoint &snapshot, bool noFsTimestamps);
 
         static DirTreeNode *getOrCreateSubdir(DirTreeNode *current, const std::string &dirname);
         static DirTreeNode *getOrCreateSubdirForServerFile(DirTreeNode *current, const pcapfs::ServerFilePtr &serverFile);

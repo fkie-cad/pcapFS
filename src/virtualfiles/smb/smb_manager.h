@@ -25,8 +25,6 @@ namespace pcapfs {
 
             void extractMappings(const std::vector<FilePtr> &tcpFiles, const Index &idx, bool checkNonDefaultPorts);
 
-            // SMB2_CREATE Response
-            void updateSmbFiles(const std::shared_ptr<CreateResponse> &createResponse, const SmbContextPtr &smbContext, uint64_t messageId);
             // SMB2_QUERY_INFO Response
             void updateSmbFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, const SmbContextPtr &smbContext, uint64_t messageId);
             // SMB2_QUERY_DIRECTORY Response
@@ -38,7 +36,7 @@ namespace pcapfs {
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
-            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot);
+            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot, bool noFsTimestamps);
 
             std::vector<FilePtr> const getSmbFiles(const Index &idx);
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext);
