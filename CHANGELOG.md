@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+### Fixed
+- Mismatched Allocation warning for newer GCC versions
+
+### Added
+- SMB: snapshot option
+- SMB: option `--no-fstimestamps`
+
+### Changed
+- SMB: distinguish between network timestamps and filesystem timestamps. By default, filesystem timestamps are considered
+
+
 ## [0.6.0]
 ### Fixed
 - Support spaces in file names

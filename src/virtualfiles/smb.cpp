@@ -57,6 +57,7 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
     if (fileVersions.size() <= 1)
         return;
 
+    LOG_TRACE << "deduplicating file versions of " << filename;
     std::vector<std::map<SmbTimePair, SmbFileSnapshot>::iterator> toBeErased;
     auto currVersion = fileVersions.begin();
     while (currVersion != fileVersions.end()) {
@@ -69,6 +70,7 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         const Bytes b = this->getContentForFragments(idx, cmpVersion->second.fragments);
         if (a == b) {
             LOG_TRACE << "found duplicate versions";
+            // copy clientIPs to version that is kept
             for (const auto &ip: currVersion->second.clientIPs) {
                 cmpVersion->second.clientIPs.insert(ip);
             }

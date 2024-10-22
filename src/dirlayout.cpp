@@ -95,7 +95,7 @@ namespace pcapfs_filesystem {
 
     DirTreeNode* DirectoryLayout::handleServerFile(DirTreeNode *current, pcapfs::ServerFilePtr &serverFilePtr, std::vector<pcapfs::ServerFilePtr> &parentDirs,
                                                     bool snapshotAndFsTimestamps) {
-        // advance all the way to parent dir of server file and create new tree nodes on the fly if necessary
+        // advance all the way to parent dir of server file and create new tree nodes on the way if necessary
         current = std::accumulate(parentDirs.begin(), parentDirs.end(), current, [](DirTreeNode* curr, const auto &parentDirFile )
                                     { return getOrCreateSubdirForServerFile(curr, parentDirFile); });
 
@@ -110,7 +110,7 @@ namespace pcapfs_filesystem {
         }
 
         // update timestamps for serverfile dirs
-        // when the snapshot option is set, this artificial timestamp settings for the parent dirs is not ok
+        // when the snapshot option is set, this artificial timestamp settings for the parent dirs is not done
         if (snapshotAndFsTimestamps && serverFilePtr->isFiletype("smb"))
             return current;
 

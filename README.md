@@ -311,6 +311,12 @@ For FTP traffic, the reconstructed directory hierarchy only includes downloaded 
 
 For SMB2 traffic, more information can be extracted, enabling a more detailed directory reconstruction. Files accessed directly via SMB2 Read/Write messages are populated with the corresponding file content that is read or written. Additionally, during the handling of SMB2 Read/Write messages, different file versions are created (indicated by the file name tag `@<file version number>`) each time the content changes. All other files, which are known to exist only from context, are created as empty files with the extracted metadata set. To also display these empty files, the `--show-metadata` option must be enabled.
 
+### Network Timestamps vs. Filesystem Timestamps for SMB2 files
+The virtual files created by pcapFS typically use network timestamps, which have been recorded for each packet in the capture file. However, when reconstructing SMB shares, the default behavior is to take the actual timestamps from the SMB shares themselves. These filesystem timestamps have been communicated via the SMB2 packets in the capture file and often differ from the network timestamps. This approach of taking the filesystem timestamps ensures that the SMB shares are reconstructed as accurately as possible, reflecting also their original timestamps. If you prefer the SMB files to use network timestamps instead, simply enable the `--no-fstimestamps` option.
+
+### Option `--snapshot` for SMB2 files
+Apart from seeing all versions of reconstructed files from an SMB share captured over time, it is also possible to display the SMB share state at a specific point in time. To do this, use the `--snapshot`  option and provide the Unix timestamp for the desired point in time. By default, you need to specify the timestamp based on the filesystem timestamps from the SMB share, not the packet timestamps from the capture file. If the option `--no-fstimestamps` is set additionally, then the SMB files are equipped with the network timestamps instead and the timestamp specified via `--snapshot` will be treated as a network timestamp. This distinction between network and filesystem timestamps is important when there is a time discrepancy between the recording device and the SMB share.
+
 ## Configuration File
 pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file
 looks like this:
