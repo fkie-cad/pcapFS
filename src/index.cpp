@@ -19,6 +19,7 @@
 #include "capturefiles/capturefile.h"
 #include "versions.h"
 #include "virtualfiles/serverfile.h"
+#include "virtualfiles/smb/smb_manager.h"
 
 
 namespace {
@@ -153,6 +154,9 @@ void pcapfs::Index::write(const pcapfs::Path &path) const {
     boost::archive::text_oarchive archive(indexOutput);
     IndexHeader header;
     archive << header;
+
+    smb::SmbManager::getInstance().serialize(archive, 0);
+
     const uint64_t numberOfFiles = files.size();
     archive << numberOfFiles;
     for (const auto &file: files) {
@@ -187,6 +191,8 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
     archive >> header;
     assertIndexHeaderIsCompatible(header);
 
+    smb::SmbManager::getInstance().deserialize(archive, 0);
+
     uint64_t numberOfFiles;
     archive >> numberOfFiles;
 
@@ -208,11 +214,7 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         files.insert({indexFilename, currentPtr});
     }
 
-    setParentDirForServerFiles();
-}
-
-
-void pcapfs::Index::setParentDirForServerFiles() {
+    // set parent dirs for serverfiles
     for (const auto &entry : files) {
         if (entry.second->flags.test(flags::IS_SERVERFILE)) {
             ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);

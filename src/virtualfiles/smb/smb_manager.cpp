@@ -698,3 +698,15 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
 
     return resultVector;
 }
+
+
+void pcapfs::smb::SmbManager::serialize(boost::archive::text_oarchive &archive, const unsigned int&) {
+    archive << treeNames;
+    archive << fileHandles;
+}
+
+
+void pcapfs::smb::SmbManager::deserialize(boost::archive::text_iarchive &archive, const unsigned int&) {
+    archive >> treeNames;
+    archive >> fileHandles;
+}

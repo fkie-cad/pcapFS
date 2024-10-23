@@ -8,6 +8,23 @@
 #include <memory>
 #include <cstring>
 #include <pcapplusplus/IpAddress.h>
+#include <boost/serialization/map.hpp>
+#include <boost/serialization/unordered_map.hpp>
+
+
+namespace boost {
+    namespace serialization {
+        template<class Archive>
+        void serialize(Archive & ar, pcpp::IPAddress& ip, const unsigned int) {
+            std::string ipString = ip.toString();
+            ar & ipString;
+            if (Archive::is_loading::value) {
+                ip = pcpp::IPAddress(ipString);
+            }
+        }
+    }
+}
+
 
 namespace pcapfs {
     namespace smb {
@@ -17,6 +34,7 @@ namespace pcapfs {
 
         // Identifier for an SMB server, used as part of ServerEndpointTree
         struct ServerEndpoint {
+            ServerEndpoint() = default;
             explicit ServerEndpoint(const FilePtr &filePtr) {
                 const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
                 if (srcPort == 445 || srcPort == 139) {
@@ -48,10 +66,18 @@ namespace pcapfs {
                     return ipAddress < endp.ipAddress;
             };
 
+            template<class Archive>
+            void serialize(Archive &archive, const unsigned int) {
+                archive & ipAddress;
+                archive & port;
+                archive & sessionId;
+            }
+
         };
 
         // Identifier for an SMB server tree, used as key for managing the extracted file information in SmbManager
         struct ServerEndpointTree {
+            ServerEndpointTree() = default;
             ServerEndpointTree(const ServerEndpoint &endp, const std::string &inTreeName) : serverEndpoint(endp), treeName(inTreeName) {}
             ServerEndpoint serverEndpoint;
             std::string treeName = "";
@@ -66,6 +92,12 @@ namespace pcapfs {
                 else
                     return serverEndpoint < endpt.serverEndpoint;
             };
+
+            template<class Archive>
+            void serialize(Archive &archive, const unsigned int) {
+                archive & serverEndpoint;
+                archive & treeName;
+            }
         };
 
         // for memorizing requested file information between query info request and response

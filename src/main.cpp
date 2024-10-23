@@ -211,8 +211,6 @@ int main(int argc, const char *argv[]) {
         try {
             index.read(config.indexFilePath);
             index.assertCorrectPcaps(pcapFiles);
-            // TODO extra extractMappings for SmbManager here -> get all TCP files and extract mappings
-            // -> implement index.getTcpFiles()
         } catch (const pcapfs::IndexError &err) {
             LOG_ERROR << err.what() << std::endl;
             return 5;

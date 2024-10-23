@@ -43,6 +43,9 @@ namespace pcapfs {
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
             uint64_t getNewId();
 
+            void serialize(boost::archive::text_oarchive &archive, const unsigned int&);
+            void deserialize(boost::archive::text_iarchive &archive, const unsigned int&);
+
         private:
             SmbManager() {}
 
