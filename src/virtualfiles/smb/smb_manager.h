@@ -36,8 +36,8 @@ namespace pcapfs {
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
+            void setTimeOfNegResponse(uint64_t inTime, TimePoint networkTime);
             void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot, bool noFsTimestamps);
-
             std::vector<FilePtr> const getSmbFiles(const Index &idx);
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext);
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
@@ -58,6 +58,14 @@ namespace pcapfs {
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
             std::map<ServerEndpoint, SmbTreeNames> treeNames;
             uint64_t idCounter = 0;
+
+            // first connectionBreak
+            TimePoint oldestNetworkTimestamp = TimePoint::max();
+            // last connectionBreak
+            TimePoint newestNetworkTimestamp = TimePoint{};
+            // networkTime , fsTime
+            // (required for calculation of allowed snapshot range w.r.t. the fsTime)
+            std::pair<TimePoint, TimePoint> timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(TimePoint::max(), TimePoint::max());
         };
     }
 }

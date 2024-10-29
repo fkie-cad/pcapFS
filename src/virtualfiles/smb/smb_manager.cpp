@@ -101,6 +101,15 @@ void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile
     smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(tcpFile, false);
     size_t size = 0;
     const size_t numElements = tcpFile->connectionBreaks.size();
+    if (numElements > 0 && commandToParse == Smb2Commands::SMB2_CREATE) {
+        const TimePoint oldest = tcpFile->connectionBreaks.at(0).second;
+        if (oldest < oldestNetworkTimestamp)
+            oldestNetworkTimestamp = oldest;
+        const TimePoint newest = tcpFile->connectionBreaks.at(numElements - 1).second;
+        if (newest > newestNetworkTimestamp)
+            newestNetworkTimestamp = newest;
+    }
+
     for (unsigned int i = 0; i < numElements; ++i) {
         uint64_t offset = tcpFile->connectionBreaks.at(i).first;
 
@@ -519,6 +528,24 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
     pcapfs::SmbTimestamps targetTimestamps;
     const pcapfs::TimePoint zeroTimePoint;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
+    if (snapshotSpecified) {
+        // check if specified snapshot time is in allowed range
+        if (noFsTimestamps && (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
+            LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
+            LOG_ERROR << "Falling back to default mode ...";
+            snapshotSpecified = false;
+        } else if (!noFsTimestamps) {
+            // FsTime(oldestNegReponse) - (networkTime(oldestNegReponse) - oldestNetworkTimestamp) + 1
+            const TimePoint oldestFsTimestamp = timeOfOldestNegResponse.second - (timeOfOldestNegResponse.first - oldestNetworkTimestamp) + std::chrono::seconds(1);
+            const TimePoint newestFsTimestamp = oldestFsTimestamp + (newestNetworkTimestamp - oldestNetworkTimestamp);
+            if (snapshot < oldestFsTimestamp || snapshot > newestFsTimestamp) {
+                LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval according to the filesystem time of the SMB share";
+                LOG_ERROR << "Falling back to default mode ...";
+                snapshotSpecified = false;
+            }
+        }
+    }
+
     LOG_DEBUG << "preparing smb files for dir layout";
 
     for (int i = indexFiles.size() - 1; i >= 0; --i) {
@@ -567,16 +594,21 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                             // we have an empty metadata file
                             const auto timestampList = smbFilePtr->getTimestampList();
                             auto entry = timestampList.begin();
-
-                            while (entry != timestampList.end())
+                            while (entry != timestampList.end() && entry->first <= snapshot)
                                 ++entry;
 
                             if (entry != timestampList.begin())
                                 --entry;
 
-                            smbFilePtr->setAccessTime(entry->first);
-                            smbFilePtr->setChangeTime(entry->first);
-                            smbFilePtr->setModifyTime(entry->first);
+                            if (entry->first > snapshot) {
+                                // network timestamp for the oldest file version is newer than the requested snapshot time
+                                // -> do not display file
+                                indexFiles.erase(indexFiles.begin()+i);
+                            } else {
+                                smbFilePtr->setAccessTime(entry->first);
+                                smbFilePtr->setChangeTime(entry->first);
+                                smbFilePtr->setModifyTime(entry->first);
+                            }
 
                         } else {
                             LOG_DEBUG << "didn't find matching timestamp for " << smbFilePtr->getFilename();
@@ -700,13 +732,27 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
 }
 
 
+void pcapfs::smb::SmbManager::setTimeOfNegResponse(uint64_t inTime, TimePoint networkTime) {
+    if (networkTime < timeOfOldestNegResponse.first) {
+        const TimePoint fsTp = winFiletimeToTimePoint(inTime);
+        timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(networkTime, fsTp);
+    }
+}
+
+
 void pcapfs::smb::SmbManager::serialize(boost::archive::text_oarchive &archive, const unsigned int&) {
     archive << treeNames;
     archive << fileHandles;
+    archive << oldestNetworkTimestamp;
+    archive << newestNetworkTimestamp;
+    archive << timeOfOldestNegResponse;
 }
 
 
 void pcapfs::smb::SmbManager::deserialize(boost::archive::text_iarchive &archive, const unsigned int&) {
     archive >> treeNames;
     archive >> fileHandles;
+    archive >> oldestNetworkTimestamp;
+    archive >> newestNetworkTimestamp;
+    archive >> timeOfOldestNegResponse;
 }

@@ -82,6 +82,7 @@ namespace pcapfs {
                 if (structureSize != 65)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Negotiate Response");
 
+                systemTime = *(uint64_t*) &rawData.at(40);
                 dialect = *(uint16_t*) &rawData.at(4);
                 if (dialect == Version::SMB_VERSION_3_1_1) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(60);
@@ -101,6 +102,7 @@ namespace pcapfs {
                 }
             }
             uint16_t dialect;
+            uint64_t systemTime;
         };
 
 

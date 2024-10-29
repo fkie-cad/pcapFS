@@ -28,6 +28,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse) {
                         const std::shared_ptr<NegotiateResponse> negResponse = std::make_shared<NegotiateResponse>(&data[64], len - 64);
                         smbContext->dialect = negResponse->dialect;
+                        if (smbContext->createServerFiles)
+                            SmbManager::getInstance().setTimeOfNegResponse(negResponse->systemTime, smbContext->currentTimestamp);
                         message = negResponse;
                     } else
                         message = std::make_shared<NegotiateRequest>(&data[64], len - 64);
