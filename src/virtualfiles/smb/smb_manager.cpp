@@ -523,7 +523,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 }
 
 
-void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, const TimePoint &snapshot, bool noFsTimestamps) {
+void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, bool noFsTimestamps) {
     std::vector<pcapfs::FilePtr> filesToAdd;
     pcapfs::SmbTimestamps targetTimestamps;
     const pcapfs::TimePoint zeroTimePoint;
@@ -534,6 +534,7 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
             LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
             LOG_ERROR << "Falling back to default mode ...";
             snapshotSpecified = false;
+            snapshot = TimePoint::min();
         } else if (!noFsTimestamps) {
             // FsTime(oldestNegReponse) - (networkTime(oldestNegReponse) - oldestNetworkTimestamp) + 1
             const TimePoint oldestFsTimestamp = timeOfOldestNegResponse.second - (timeOfOldestNegResponse.first - oldestNetworkTimestamp) + std::chrono::seconds(1);
@@ -542,6 +543,7 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                 LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval according to the filesystem time of the SMB share";
                 LOG_ERROR << "Falling back to default mode ...";
                 snapshotSpecified = false;
+                snapshot = TimePoint::min();
             }
         }
     }
