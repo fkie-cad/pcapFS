@@ -317,6 +317,10 @@ The virtual files created by pcapFS typically use network timestamps, which have
 ### Option `--snapshot` for SMB2 files
 Apart from seeing all versions of reconstructed files from an SMB share captured over time, it is also possible to display the SMB share state at a specific point in time. To do this, use the `--snapshot`  option and provide the Unix timestamp for the desired point in time. By default, you need to specify the timestamp based on the filesystem timestamps from the SMB share, not the packet timestamps from the capture file. If the option `--no-fstimestamps` is set additionally, then the SMB files are equipped with the network timestamps instead and the timestamp specified via `--snapshot` will be treated as a network timestamp. This distinction between network and filesystem timestamps is important when there is a time discrepancy between the recording device and the SMB share. Note that the specified snapshot time must be within the time interval in which the capture file was recorded.
 
+## Option `--snip`
+To consider only a specific portion of the provided capture file(s) and ignore all other recorded traffic, the `--snip` option can be used. With `--snip`, two comma-separated Unix timestamps need to be specified that define the time interval of the traffic to be included (`--snip <startTime>,<endTime>`). For example, to consider all traffic from timestamp 1730289978 onwards, use `--snip 1730289978,`.
+
+
 ## Configuration File
 pcapFS uses [TOML](https://github.com/toml-lang/toml) as the format for its configuration file. A sample config file
 looks like this:

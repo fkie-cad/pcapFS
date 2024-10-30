@@ -7,6 +7,7 @@
 ### Added
 - SMB: snapshot option
 - SMB: option `--no-fstimestamps`
+- option `--snip`
 
 ### Changed
 - SMB: distinguish between network timestamps and filesystem timestamps. By default, filesystem timestamps are considered
