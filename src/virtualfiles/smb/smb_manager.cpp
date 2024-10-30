@@ -526,7 +526,6 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, bool noFsTimestamps) {
     std::vector<pcapfs::FilePtr> filesToAdd;
     pcapfs::SmbTimestamps targetTimestamps;
-    const pcapfs::TimePoint zeroTimePoint;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
     if (snapshotSpecified) {
         // check if specified snapshot time is in allowed range
@@ -552,8 +551,10 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
 
     for (int i = indexFiles.size() - 1; i >= 0; --i) {
         FilePtr currFile = indexFiles.at(i);
-        if (currFile->showFile() && currFile->isFiletype("smb")) {
+        if (currFile->isFiletype("smb")) {
             pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(indexFiles.at(i));
+            if (!smbFilePtr->processFileForDirLayout())
+                continue;
             const auto fileVersions = smbFilePtr->getFileVersions();
 
             if (snapshotSpecified) {
@@ -571,9 +572,9 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
 
                     // select matching timestamps corresponding to the specified snapshot time
                     for(const auto &entry: smbFilePtr->getTimestampList()) {
-                        if ((entry.second.accessTime != zeroTimePoint && entry.second.accessTime <= snapshot) &&
-                            (entry.second.changeTime != zeroTimePoint && entry.second.changeTime <= snapshot) &&
-                            (entry.second.modifyTime != zeroTimePoint && entry.second.modifyTime <= snapshot)) {
+                        if ((entry.second.accessTime != ZERO_TIME_POINT && entry.second.accessTime <= snapshot) &&
+                            (entry.second.changeTime != ZERO_TIME_POINT && entry.second.changeTime <= snapshot) &&
+                            (entry.second.modifyTime != ZERO_TIME_POINT && entry.second.modifyTime <= snapshot)) {
                                 targetTimestamps = entry.second;
                                 smbTimestampsSet = true;
                         }
@@ -652,8 +653,6 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                     smbFilePtr->setFilesizeProcessed(calculatedFilesize);
 
                     if (noFsTimestamps) {
-                        // TODO: check if snapshot time >> currVersion->first.networkTime
-                        // Then, erase file
                         smbFilePtr->setAccessTime(currVersion->first.networkTime);
                         smbFilePtr->setChangeTime(currVersion->first.networkTime);
                         smbFilePtr->setModifyTime(currVersion->first.networkTime);
@@ -664,9 +663,9 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                             smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
                         } else {
                             // no matching timestamps found
-                            smbFilePtr->setAccessTime(TimePoint{});
-                            smbFilePtr->setChangeTime(TimePoint{});
-                            smbFilePtr->setModifyTime(TimePoint{});
+                            smbFilePtr->setAccessTime(ZERO_TIME_POINT);
+                            smbFilePtr->setChangeTime(ZERO_TIME_POINT);
+                            smbFilePtr->setModifyTime(ZERO_TIME_POINT);
                         }
                     }
                     indexFiles[i] = smbFilePtr;

@@ -24,6 +24,7 @@ namespace pcapfs {
             std::string pcapSuffix;
             logging::severity verbosity = logging::severity::debug;
             TimePoint snapshot = TimePoint::min();
+            std::pair<TimePoint, TimePoint> snip = std::pair<TimePoint, TimePoint>(TimePoint{}, TimePoint{});
             bool rewrite = false;
             bool noMount = false;
             bool showMetadata = false;

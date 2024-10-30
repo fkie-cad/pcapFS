@@ -87,6 +87,8 @@ namespace pcapfs {
         static std::vector<FilePtr> parse(FilePtr filePtr, Index &idx);
         size_t read(uint64_t startOffset, size_t length, const Index &idx, char *buf) override;
 
+        bool showFile() override;
+
         void initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath,
                                 const smb::FileMetaDataPtr &metaData);
 
@@ -98,6 +100,8 @@ namespace pcapfs {
                                                         smb::winFiletimeToTimePoint(metaData->creationTime)
                                                     );
         };
+
+        bool processFileForDirLayout() { return (!flags.test(pcapfs::flags::IS_METADATA) || config.showMetadata); };
 
         void deduplicateVersions(const Index &idx);
 
@@ -130,6 +134,8 @@ namespace pcapfs {
 
         // only needed for parsing
         SmbTimePair timestampsOfCurrVersion;
+
+        bool donotDisplay = false;
 
     protected:
         static bool registeredAtFactory;

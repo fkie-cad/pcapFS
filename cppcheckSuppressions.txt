@@ -14,3 +14,4 @@ unusedStructMember:src/virtualfiles/udp.h
 useStlAlgorithm:src/virtualfiles/cobaltstrike/cs_manager.cpp
 uninitDerivedMemberVar:src/virtualfiles/serverfile.h
 uninitMemberVar:src/virtualfiles/serverfile.h
+redundantInitialization:src/virtualfiles/smb.cpp

@@ -23,6 +23,8 @@ namespace pcapfs {
 
     using TimePoint = std::chrono::system_clock::time_point;
     using TimeSlot = std::pair<TimePoint, TimePoint>;
+
+    const TimePoint ZERO_TIME_POINT{};
 }
 
 /*

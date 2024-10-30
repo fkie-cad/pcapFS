@@ -46,13 +46,16 @@ std::string pcapfs::VirtualFile::getFilename() {
 
 
 bool pcapfs::VirtualFile::showFile() {
-    if (flags.test(pcapfs::flags::IS_METADATA) && !config.showMetadata) {
+    if ((flags.test(pcapfs::flags::IS_METADATA) && !config.showMetadata) ||
+        (!config.showAll && flags.test(pcapfs::flags::PARSED)))
         return false;
+    else {
+        if ((config.snip.first != ZERO_TIME_POINT && timestamp < config.snip.first) ||
+            (config.snip.second != ZERO_TIME_POINT && timestamp > config.snip.second))
+            return false;
+        else
+            return true;
     }
-    if (!config.showAll && flags.test(pcapfs::flags::PARSED)) {
-        return false;
-    }
-    return true;
 }
 
 

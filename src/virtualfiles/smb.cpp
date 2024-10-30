@@ -7,6 +7,22 @@
 #include <boost/serialization/set.hpp>
 
 
+bool pcapfs::SmbFile::showFile() {
+    if (donotDisplay ||
+        (flags.test(pcapfs::flags::IS_METADATA) && !config.showMetadata) ||
+        (!config.showAll && flags.test(pcapfs::flags::PARSED)))
+        return false;
+    else {
+        if (config.noFsTimestamps &&
+            ((config.snip.first != ZERO_TIME_POINT && accessTime < config.snip.first) ||
+            (config.snip.second != ZERO_TIME_POINT && accessTime > config.snip.second))){
+            return false;
+        } else
+            return true;
+    }
+}
+
+
 std::vector<pcapfs::FilePtr> pcapfs::SmbFile::parse(FilePtr filePtr, Index &idx) {
     (void)filePtr;
     (void)idx;
@@ -93,11 +109,21 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
     if (fileVersions.size() <= 1) {
         if (timestampList.empty()) {
             // should not happen
-            accessTime = changeTime = modifyTime = TimePoint{};
+            accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
         } else {
-            // take newest timestamp
-            const auto target = timestampList.rbegin();
+            // take newest timestamp (or nearest timestamp if snip option and noFsTimestamps is set)
+            auto target = timestampList.rbegin();
             if (config.noFsTimestamps) {
+                if (config.snip.second != ZERO_TIME_POINT) {
+                    while (target != timestampList.rend() && target->first > config.snip.second)
+                        --target;
+
+                    if (target == timestampList.rend() || target->first < config.snip.first) {
+                        // smb file won't be displayed because it has no matching timestamp in snip interval
+                        donotDisplay = true;
+                        return resultVector;
+                    }
+                }
                 accessTime = changeTime = modifyTime = target->first;
             } else {
                 accessTime = target->second.accessTime;
@@ -105,6 +131,23 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
                 modifyTime = target->second.modifyTime;
             }
         }
+        return resultVector;
+    }
+
+    auto timestampPos = timestampList.rbegin();
+    if (config.noFsTimestamps && config.snip.second != ZERO_TIME_POINT && fileVersions.begin()->first.networkTime > config.snip.second &&
+        (timestampPos = std::find_if(timestampList.rbegin(), timestampList.rend(),
+                                    [](const auto &entry){ return (entry.first <= config.snip.second) && (entry.first >= config.snip.first); }
+                                    )) != timestampList.rend()) {
+        // special case: options noFsTimestamps + snip are set and the oldest file version is newer then the upper bound of snip.
+        // when in addition the file has a saved timestamp that fits into the interval specified by snip, we set the corresponding
+        // timestamp and display the file as metadata file
+        // This corresponds to a scenario in which it is already known, that the file exists (e.g. through query directory) before something is
+        // read/written from/to the file and snip specifies an early time interval before the read/write
+        accessTime = timestampPos->first;
+        changeTime = timestampPos->first;
+        modifyTime = timestampPos->first;
+        flags.set(flags::IS_METADATA);
         return resultVector;
     }
 
@@ -135,9 +178,9 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
                 newFile->setModifyTime(targetTimestamps.modifyTime);
             } else {
                 // no matching timestamps found
-                newFile->setAccessTime(TimePoint{});
-                newFile->setChangeTime(TimePoint{});
-                newFile->setModifyTime(TimePoint{});
+                newFile->setAccessTime(ZERO_TIME_POINT);
+                newFile->setChangeTime(ZERO_TIME_POINT);
+                newFile->setModifyTime(ZERO_TIME_POINT);
             }
         }
 

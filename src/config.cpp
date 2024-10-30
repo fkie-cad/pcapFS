@@ -252,6 +252,8 @@ namespace {
                     ("show-all", "also show file which have been parsed already")
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("snapshot", po::value<std::string>(), "unix timestamp of point in time where to reconstruct SMB share")
+                    ("snip", po::value<std::string>()->value_name("<startTime>,<endTime>"),
+                    "only display virtual files from the specified time interval (unix timestamps)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
                     ("version,V", "show version information and exit");
@@ -350,6 +352,41 @@ namespace {
                     std::cerr << "Warning: Invalid snapshot timestamp, won't consider it" << std::endl;
                 }
             }
+
+            if (vm.count("snip")) {
+                try {
+                    const std::string snipString = vm["snip"].as<std::string>();
+                    if (std::count(snipString.begin(), snipString.end(), ',') != 1) {
+                        std::cerr << "Warning: Invalid format of snip argument, won't consider it" << std::endl;
+                    } else {
+                        const auto commaPos = snipString.find(',');
+                        const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                        const std::string startSnipString(snipString.begin(), snipString.begin() + commaPos);
+                        const long long startSnip = startSnipString.empty() ? 0 : std::stoll(startSnipString);
+                        if (startSnip < 0 || startSnip > now) {
+                            std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
+                        } else {
+                            const std::string endSnipString(snipString.begin() + commaPos + 1, snipString.end());
+                            const long long endSnip = endSnipString.empty() ? 0 : std::stoll(endSnipString);
+                            if (endSnip < 0 || endSnip > now) {
+                                std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
+                            } else {
+                                if (endSnip != 0 && endSnip <= startSnip) {
+                                    std::cerr << "Warning: Invalid snip time interval, won't consider it" << std::endl;
+                                } else {
+                                    opts.config.snip = std::pair<pcapfs::TimePoint, pcapfs::TimePoint>(
+                                        std::chrono::system_clock::from_time_t(static_cast<std::time_t>(startSnip)),
+                                        std::chrono::system_clock::from_time_t(static_cast<std::time_t>(endSnip))
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } catch(const std::logic_error&) {
+                    std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
+                }
+            }
+
 
             // Prepare the options to be forwarded to FUSE:
             if (vm.count("foreground")) { opts.fuseArgs.add("-f"); }
