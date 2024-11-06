@@ -102,40 +102,46 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         fileVersions.erase(pos);
 }
 
+void pcapfs::SmbFile::setNearestTimestamp() {
+    if (timestampList.empty()) {
+        // should not happen
+        accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
+    } else {
+        // take newest timestamp (or nearest timestamp if snip option is set)
+        auto target = timestampList.rbegin();
+        if (config.snip.second != ZERO_TIME_POINT) {
+            while (target != timestampList.rend() && target->first > config.snip.second)
+                ++target;
+
+            if (target == timestampList.rend() || target->first < config.snip.first) {
+                // smb file won't be displayed because it has no matching timestamp in snip interval
+                donotDisplay = true;
+                return;
+            }
+        }
+
+        if (config.noFsTimestamps) {
+            accessTime = changeTime = modifyTime = target->first;
+        } else {
+            accessTime = target->second.accessTime;
+            changeTime = target->second.changeTime;
+            modifyTime = target->second.modifyTime;
+        }
+    }
+}
+
 
 std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSmbVersionFiles() {
     std::vector<SmbFilePtr> resultVector;
 
     if (fileVersions.size() <= 1) {
-        if (timestampList.empty()) {
-            // should not happen
-            accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
-        } else {
-            // take newest timestamp (or nearest timestamp if snip option and noFsTimestamps is set)
-            auto target = timestampList.rbegin();
-            if (config.noFsTimestamps) {
-                if (config.snip.second != ZERO_TIME_POINT) {
-                    while (target != timestampList.rend() && target->first > config.snip.second)
-                        --target;
-
-                    if (target == timestampList.rend() || target->first < config.snip.first) {
-                        // smb file won't be displayed because it has no matching timestamp in snip interval
-                        donotDisplay = true;
-                        return resultVector;
-                    }
-                }
-                accessTime = changeTime = modifyTime = target->first;
-            } else {
-                accessTime = target->second.accessTime;
-                changeTime = target->second.changeTime;
-                modifyTime = target->second.modifyTime;
-            }
-        }
+        setNearestTimestamp();
         return resultVector;
     }
 
+    // TODO: this has to be changed! -> probably just remove config.noFsTimestamps from if clause
     auto timestampPos = timestampList.rbegin();
-    if (config.noFsTimestamps && config.snip.second != ZERO_TIME_POINT && fileVersions.begin()->first.networkTime > config.snip.second &&
+    if (config.snip.second != ZERO_TIME_POINT && fileVersions.begin()->first.networkTime > config.snip.second &&
         (timestampPos = std::find_if(timestampList.rbegin(), timestampList.rend(),
                                     [](const auto &entry){ return (entry.first <= config.snip.second) && (entry.first >= config.snip.first); }
                                     )) != timestampList.rend()) {
@@ -147,6 +153,8 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
         accessTime = timestampPos->first;
         changeTime = timestampPos->first;
         modifyTime = timestampPos->first;
+        filesizeRaw = filesizeProcessed = 0;
+        fragments.clear();
         flags.set(flags::IS_METADATA);
         return resultVector;
     }
@@ -154,6 +162,13 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
     size_t i = 0;
     auto currVersion = fileVersions.begin();
     while (currVersion != fileVersions.end()) {
+        if ((config.snip.first != ZERO_TIME_POINT && currVersion->first.networkTime < config.snip.first) ||
+            (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime > config.snip.second)) {
+            // file version does not beong to snip interval
+            currVersion++;
+            i++;
+            continue;
+        }
         SmbFilePtr newFile(this->clone());
         newFile->setFilename(filename + "@" + std::to_string(i));
 
@@ -196,6 +211,9 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
         resultVector.push_back(newFile);
         currVersion++;
         i++;
+    }
+    if (resultVector.empty() && (config.snip.first != ZERO_TIME_POINT || config.snip.second != ZERO_TIME_POINT)) {
+        setNearestTimestamp();
     }
 
     return resultVector;
@@ -254,10 +272,20 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
 }
 
 
-void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, bool writeOperation) {
+void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation) {
     // first, we get the nearest filesystem timestamp
     // when having a read operation read, the corresponding network timestamp from the timestampList has to be older
     // than currNetworkTimestamp and for write, it has to be newer
+
+    // TODO: for hbrid mode: we need to add the the possible time skew between network and fs time
+    // this only has impact when the negotiate protocol response was recorded
+    //const TimePoint referenceTimestamp = currNetworkTimestamp + skew;
+
+    // TODO:
+    // if fs timestamp mode: set timestamps for write operations always to zero
+    // (and don't show the corresponding versions if --snapshot)
+    // der referenceTimestamp für den hybrid timestamp mode -> mache aus SmbTimePair SmbTimeTriple (bzw. abtrahiere das in astrakter Manager-Klasse)
+
     TimePoint nearestFsTimestamp;
     auto entry = timestampList.begin();
     if (currNetworkTimestamp >= entry->first) {

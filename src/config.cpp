@@ -258,6 +258,9 @@ namespace {
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
                     ("version,V", "show version information and exit");
 
+            // TODO: make --timestamp-mode=network/fs/hybrid instead of --no-fstimestamps
+            // default: hybrid (= partly artificially set fs timestamps)
+
 
             po::typed_value<std::string, char>* verbosity;
             #if(DEBUG)

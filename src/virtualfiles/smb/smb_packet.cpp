@@ -28,8 +28,12 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     if (isResponse) {
                         const std::shared_ptr<NegotiateResponse> negResponse = std::make_shared<NegotiateResponse>(&data[64], len - 64);
                         smbContext->dialect = negResponse->dialect;
-                        if (smbContext->createServerFiles)
-                            SmbManager::getInstance().setTimeOfNegResponse(negResponse->systemTime, smbContext->currentTimestamp);
+                        if (smbContext->createServerFiles){
+                            const TimePoint systemTime = winFiletimeToTimePoint(negResponse->systemTime);
+                            SmbManager::getInstance().setTimeOfNegResponse(systemTime, smbContext->currentTimestamp);
+                            smbContext->timeSkew = std::chrono::duration_cast<std::chrono::seconds>(systemTime - smbContext->offsetFile->connectionBreaks.at(0).second);
+                            LOG_DEBUG << "calculated skew: " << std::to_string(smbContext->timeSkew.count());
+                        }
                         message = negResponse;
                     } else
                         message = std::make_shared<NegotiateRequest>(&data[64], len - 64);

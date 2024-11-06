@@ -170,13 +170,17 @@ namespace pcapfs {
             // map messageId - SetInfoRequestData
             std::map<uint64_t, std::shared_ptr<SetInfoRequestData>> setInfoRequestData;
 
+            // map messageId - tree name
+            std::map<uint64_t, std::string> requestedTrees;
+
             uint32_t currentTreeId = 0;
 
             // current offset into the underlying TCP file, needed for handling reads
             uint64_t currentOffset = 0;
 
-            // map messageId - tree name
-            std::map<uint64_t, std::string> requestedTrees;
+            // time skew between SMB share time and network time
+            std::chrono::seconds timeSkew = std::chrono::seconds(0);
+
             bool createServerFiles = false;
 
             std::string clientIP;

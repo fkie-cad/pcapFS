@@ -36,12 +36,14 @@ namespace pcapfs {
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
-            void setTimeOfNegResponse(uint64_t inTime, TimePoint networkTime);
+            void setTimeOfNegResponse(const TimePoint &fsTime, const TimePoint &networkTime);
             void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, bool noFsTimestamps);
-            std::vector<FilePtr> const getSmbFiles(const Index &idx);
-            SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext);
+            std::vector<FilePtr> const getSmbFiles(const Index &idx); // TODO: create abstract super function for that (its also needed by ftp)
+
+            SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext); // TODO: abstrahieren in global manager
             SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
-            uint64_t getNewId();
+
+            uint64_t getNewId(); // TODO: move to abstract super class
 
             void serialize(boost::archive::text_oarchive &archive, const unsigned int&);
             void deserialize(boost::archive::text_iarchive &archive, const unsigned int&);
@@ -54,17 +56,20 @@ namespace pcapfs {
 
             ServerEndpointTree const getServerEndpointTree(const SmbContextPtr &smbContext);
 
-            std::map<ServerEndpointTree, SmbFiles> serverFiles;
+            // TODO: ABSTRAHIERE SERVERFILES ETC. IN ABSTRAKTEN SUPER-MANAGER
+            std::map<ServerEndpointTree, SmbFiles> serverFiles; // in FTP, we have std::string instead of ServerEndpointTree
+
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
             std::map<ServerEndpoint, SmbTreeNames> treeNames;
-            uint64_t idCounter = 0;
+            uint64_t idCounter = 0; // TODO: move to abstract super class
 
             // first connectionBreak
-            TimePoint oldestNetworkTimestamp = TimePoint::max();
+            TimePoint oldestNetworkTimestamp = TimePoint::max(); // TODO: put into super class
             // last connectionBreak
-            TimePoint newestNetworkTimestamp = TimePoint{};
+            TimePoint newestNetworkTimestamp = TimePoint{}; // TODO: put into super class
             // networkTime , fsTime
             // (required for calculation of allowed snapshot range w.r.t. the fsTime)
+            // TODO: neglect allowed range for fs timestamp mode!!!
             std::pair<TimePoint, TimePoint> timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(TimePoint::max(), TimePoint::max());
         };
     }

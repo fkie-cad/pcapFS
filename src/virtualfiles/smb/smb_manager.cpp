@@ -370,7 +370,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
         // save timstamps for current version
-        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, false);
+        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
 
         smbFilePtr->isCurrentlyReadOperation = true;
 
@@ -402,7 +402,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
 
-            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, false);
+            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
             smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -452,7 +452,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
         // save timstamps for current version
-        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, false);
+        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
 
         smbFilePtr->isCurrentlyReadOperation = false;
 
@@ -483,7 +483,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
 
-            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, false);
+            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
             smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -535,6 +535,8 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
             snapshotSpecified = false;
             snapshot = TimePoint::min();
         } else if (!noFsTimestamps) {
+            // TODO: neglect this; for filesystem timestamp mode, all snapshot values are allowed!
+
             // FsTime(oldestNegReponse) - (networkTime(oldestNegReponse) - oldestNetworkTimestamp) + 1
             const TimePoint oldestFsTimestamp = timeOfOldestNegResponse.second - (timeOfOldestNegResponse.first - oldestNetworkTimestamp) + std::chrono::seconds(1);
             const TimePoint newestFsTimestamp = oldestFsTimestamp + (newestNetworkTimestamp - oldestNetworkTimestamp);
@@ -593,9 +595,10 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                     // When we don't have timstamp matched, the file won't be displayed.
 
                     if (noFsTimestamps) {
+                        const auto timestampList = smbFilePtr->getTimestampList();
                         if (currVersion == fileVersions.end()) {
                             // we have an empty metadata file
-                            const auto timestampList = smbFilePtr->getTimestampList();
+                            //const auto timestampList = smbFilePtr->getTimestampList();
                             auto entry = timestampList.begin();
                             while (entry != timestampList.end() && entry->first <= snapshot)
                                 ++entry;
@@ -614,8 +617,20 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                             }
 
                         } else {
-                            LOG_DEBUG << "didn't find matching timestamp for " << smbFilePtr->getFilename();
-                            indexFiles.erase(indexFiles.begin()+i);
+                            auto timestampPos = timestampList.rbegin();
+                            if ((timestampPos = std::find_if(timestampList.rbegin(), timestampList.rend(),
+                                    [snapshot](const auto &entry){ return entry.first <= snapshot; }
+                                    )) != timestampList.rend()) {
+                                smbFilePtr->fragments.clear(),
+                                smbFilePtr->setFilesizeRaw(0);
+                                smbFilePtr->setFilesizeProcessed(0);
+                                smbFilePtr->flags.set(pcapfs::flags::IS_METADATA);
+                                LOG_DEBUG << "found no matching file version for " << smbFilePtr->getFilename() << " but a matching timestamp"
+                                            << " => create empty metadata file";
+                            } else {
+                                LOG_DEBUG << "didn't find matching timestamp for " << smbFilePtr->getFilename();
+                                indexFiles.erase(indexFiles.begin()+i);
+                            }
                         }
                     } else {
                         if (smbTimestampsSet) {
@@ -679,6 +694,8 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                     // old smb file is not needed anymore since we now have all versions of it as separate files
                     indexFiles.erase(indexFiles.begin()+i);
                 }
+            } else if (smbFilePtr->isDirectory) {
+                smbFilePtr->setNearestTimestamp();
             }
         }
     }
@@ -733,10 +750,9 @@ std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const In
 }
 
 
-void pcapfs::smb::SmbManager::setTimeOfNegResponse(uint64_t inTime, TimePoint networkTime) {
+void pcapfs::smb::SmbManager::setTimeOfNegResponse(const TimePoint &fsTime, const TimePoint &networkTime) {
     if (networkTime < timeOfOldestNegResponse.first) {
-        const TimePoint fsTp = winFiletimeToTimePoint(inTime);
-        timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(networkTime, fsTp);
+        timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(networkTime, fsTime);
     }
 }
 

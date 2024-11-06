@@ -10,6 +10,7 @@
 namespace pcapfs {
 
     struct SmbTimePair {
+        // TODO: abstrahiere SmbTimePair, mache daraus ein tripel mit hybrid time (= artificially berechneter fs timestamp (= networkTimestamp + skew bei write operations))
         SmbTimePair(){}
         SmbTimePair(const TimePoint &inFsTime, const TimePoint &inNetworkTime) : fsTime(inFsTime), networkTime(inNetworkTime) {}
         TimePoint fsTime = TimePoint{};
@@ -65,6 +66,7 @@ namespace pcapfs {
         }
     };
 
+    // TODO: make FileSnapshot global abstract, add fileOperation as local variable (read/write)
     struct SmbFileSnapshot {
         SmbFileSnapshot() {}
         SmbFileSnapshot(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
@@ -109,13 +111,15 @@ namespace pcapfs {
 
         std::shared_ptr<SmbFile> clone() { return std::make_shared<SmbFile>(*this); };
 
-        std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles();
+        std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles(); // TODO: move this to serverfile?
 
-        void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, bool writeOperation);
+        void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation);
 
         void addAsNewFileVersion() {
             fileVersions[timestampsOfCurrVersion] = SmbFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation);
         }
+
+        void setNearestTimestamp();
 
         std::map<SmbTimePair, SmbFileSnapshot> const getFileVersions() { return fileVersions; };
 
@@ -128,9 +132,9 @@ namespace pcapfs {
         Bytes const getContentForFragments(const Index &idx, const std::vector<Fragment> &inFragments);
 
         // map network time - fs time
-        std::map<TimePoint, SmbTimestamps> timestampList;
+        std::map<TimePoint, SmbTimestamps> timestampList; // TODO: also add that to serverfile.h?
 
-        std::map<SmbTimePair, SmbFileSnapshot> fileVersions;
+        std::map<SmbTimePair, SmbFileSnapshot> fileVersions; // TODO: also add that to serverfile.h?
 
         // only needed for parsing
         SmbTimePair timestampsOfCurrVersion;
