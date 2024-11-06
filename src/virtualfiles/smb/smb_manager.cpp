@@ -534,18 +534,6 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
             LOG_ERROR << "Falling back to default mode ...";
             snapshotSpecified = false;
             snapshot = TimePoint::min();
-        } else if (!noFsTimestamps) {
-            // TODO: neglect this; for filesystem timestamp mode, all snapshot values are allowed!
-
-            // FsTime(oldestNegReponse) - (networkTime(oldestNegReponse) - oldestNetworkTimestamp) + 1
-            const TimePoint oldestFsTimestamp = timeOfOldestNegResponse.second - (timeOfOldestNegResponse.first - oldestNetworkTimestamp) + std::chrono::seconds(1);
-            const TimePoint newestFsTimestamp = oldestFsTimestamp + (newestNetworkTimestamp - oldestNetworkTimestamp);
-            if (snapshot < oldestFsTimestamp || snapshot > newestFsTimestamp) {
-                LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval according to the filesystem time of the SMB share";
-                LOG_ERROR << "Falling back to default mode ...";
-                snapshotSpecified = false;
-                snapshot = TimePoint::min();
-            }
         }
     }
 
@@ -694,7 +682,9 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
                     // old smb file is not needed anymore since we now have all versions of it as separate files
                     indexFiles.erase(indexFiles.begin()+i);
                 }
-            } else if (smbFilePtr->isDirectory) {
+            } else {
+                // this implicitly sets donotDisplay for the directory file to true if it does not
+                // belong to the specified snip time interval
                 smbFilePtr->setNearestTimestamp();
             }
         }
