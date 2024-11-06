@@ -527,14 +527,12 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
     std::vector<pcapfs::FilePtr> filesToAdd;
     pcapfs::SmbTimestamps targetTimestamps;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
-    if (snapshotSpecified) {
+    if (snapshotSpecified && noFsTimestamps && (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
         // check if specified snapshot time is in allowed range
-        if (noFsTimestamps && (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
-            LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
-            LOG_ERROR << "Falling back to default mode ...";
-            snapshotSpecified = false;
-            snapshot = TimePoint::min();
-        }
+        LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
+        LOG_ERROR << "Falling back to default mode ...";
+        snapshotSpecified = false;
+        snapshot = TimePoint::min();
     }
 
     LOG_DEBUG << "preparing smb files for dir layout";
