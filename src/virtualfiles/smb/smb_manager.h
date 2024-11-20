@@ -37,7 +37,7 @@ namespace pcapfs {
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
             void setTimeOfNegResponse(const TimePoint &fsTime, const TimePoint &networkTime);
-            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, bool noFsTimestamps);
+            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode);
             std::vector<FilePtr> const getSmbFiles(const Index &idx); // TODO: create abstract super function for that (its also needed by ftp)
 
             SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext); // TODO: abstrahieren in global manager

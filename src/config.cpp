@@ -246,7 +246,6 @@ namespace {
                     ("pcap-suffix", po::value<std::string>(&opts.config.pcapSuffix),
                      "take only files from a directory with a matching suffix (e.g. '.pcap')")
                     ("no-cs", "do not try to locate and decrypt cobalt strike traffic")
-                    ("no-fstimestamps", "for SMB files, set network timestamps instead of filesystem timestamps from the SMB share")
                     ("no-mount,n", "only create an index file, don't mount the PCAP(s)")
                     ("rewrite,r", "overwrite a possibly existing index file")
                     ("show-all", "also show file which have been parsed already")
@@ -256,10 +255,10 @@ namespace {
                     "only display virtual files from the specified time interval (unix timestamps)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
+                    ("timestamp-mode", po::value<std::string>()->default_value("hybrid"),
+                    "timestamps to set for SMB files (hybrid/fs/network)")
                     ("version,V", "show version information and exit");
 
-            // TODO: make --timestamp-mode=network/fs/hybrid instead of --no-fstimestamps
-            // default: hybrid (= partly artificially set fs timestamps)
 
 
             po::typed_value<std::string, char>* verbosity;
@@ -317,7 +316,6 @@ namespace {
             if (vm.count("show-all")) { opts.config.showAll = true; }
             if (vm.count("show-metadata")) { opts.config.showMetadata = true; }
             if (vm.count("no-cs")) { opts.config.noCS = true; }
-            if (vm.count("no-fstimestamps")) { opts.config.noFsTimestamps = true; }
             if (vm.count("check-non-default-ports")) { opts.config.checkNonDefaultPorts = true; }
             if (vm.count("verbosity")) {
                 opts.config.verbosity = getLogLevelFromString(vm["verbosity"].as<std::string>());
@@ -390,6 +388,15 @@ namespace {
                 }
             }
 
+            if (vm.count("timestamp-mode")) {
+                const std::string timestampModeString = vm["timestamp-mode"].as<std::string>();
+                if (timestampModeString == "fs")
+                    opts.config.timestampMode = pcapfs::options::TimestampMode::FS;
+                else if (timestampModeString == "network")
+                    opts.config.timestampMode = pcapfs::options::TimestampMode::NETWORK;
+                else if (timestampModeString != "hybrid")
+                    std::cerr << "Warning: invalid timestamp mode, using default mode" << std::endl;
+            }
 
             // Prepare the options to be forwarded to FUSE:
             if (vm.count("foreground")) { opts.fuseArgs.add("-f"); }

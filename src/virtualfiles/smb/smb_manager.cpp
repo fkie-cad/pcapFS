@@ -369,7 +369,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
 
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
-        // save timstamps for current version
+        // save timestamps for current version
         smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
 
         smbFilePtr->isCurrentlyReadOperation = true;
@@ -452,7 +452,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
         // save timstamps for current version
-        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
+        smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, true);
 
         smbFilePtr->isCurrentlyReadOperation = false;
 
@@ -483,7 +483,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
             smbFilePtr->fragments.clear();
             smbFilePtr->fragments.push_back(newFragment);
 
-            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, false);
+            smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, true);
             smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
             smbFilePtr->setFilesizeRaw(newFragment.length);
             smbFilePtr->setFilesizeProcessed(smbFilePtr->getFilesizeRaw());
@@ -523,11 +523,12 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 }
 
 
-void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, bool noFsTimestamps) {
+void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
     std::vector<pcapfs::FilePtr> filesToAdd;
-    pcapfs::SmbTimestamps targetTimestamps;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
-    if (snapshotSpecified && noFsTimestamps && (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
+
+    if (snapshotSpecified && timestampMode == pcapfs::options::TimestampMode::NETWORK &&
+        (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
         // check if specified snapshot time is in allowed range
         LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
         LOG_ERROR << "Falling back to default mode ...";
@@ -536,154 +537,27 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
     }
 
     LOG_DEBUG << "preparing smb files for dir layout";
-
-    for (int i = indexFiles.size() - 1; i >= 0; --i) {
+    for (size_t i = indexFiles.size() - 1; i != (size_t)-1; --i) {
         FilePtr currFile = indexFiles.at(i);
-        if (currFile->isFiletype("smb")) {
-            pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(indexFiles.at(i));
-            if (!smbFilePtr->processFileForDirLayout())
-                continue;
-            const auto fileVersions = smbFilePtr->getFileVersions();
+        if (!currFile->isFiletype("smb"))
+            continue;
 
-            if (snapshotSpecified) {
+        pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(indexFiles.at(i));
+        if (!smbFilePtr->processFileForDirLayout())
+            continue;
 
-                auto currVersion = fileVersions.begin();
-                bool smbTimestampsSet = false;
-                if (noFsTimestamps) {
-                    // advance to file version corresponding to the specified snapshot time
-                    while (currVersion != fileVersions.end() && currVersion->first.networkTime <= snapshot)
-                        currVersion++;
-                } else {
-                    // advance to file version corresponding to the specified snapshot time
-                    while (currVersion != fileVersions.end() && currVersion->first.fsTime <= snapshot)
-                        currVersion++;
-
-                    // select matching timestamps corresponding to the specified snapshot time
-                    for(const auto &entry: smbFilePtr->getTimestampList()) {
-                        if ((entry.second.accessTime != ZERO_TIME_POINT && entry.second.accessTime <= snapshot) &&
-                            (entry.second.changeTime != ZERO_TIME_POINT && entry.second.changeTime <= snapshot) &&
-                            (entry.second.modifyTime != ZERO_TIME_POINT && entry.second.modifyTime <= snapshot)) {
-                                targetTimestamps = entry.second;
-                                smbTimestampsSet = true;
-                        }
-                    }
-                }
-
-                if (currVersion == fileVersions.begin()) {
-                    // at this point, the timestamp for the oldest file version is newer than the requested snapshot time
-                    // or no file versions are saved
-
-                    // when we have saved file versions, the file operation corresponding to the oldest file version is READ and we have
-                    // a saved timestamp which is older than the snapshot time, then we take the file content from the oldest file version.
-
-                    // otherwise, we can't be sure if the file existed with this version content to that time, so we don't set fragments.
-                    // But, when one of the timestamps matches, we take that and make it an empty file.
-                    // When we don't have timstamp matched, the file won't be displayed.
-
-                    if (noFsTimestamps) {
-                        const auto timestampList = smbFilePtr->getTimestampList();
-                        if (currVersion == fileVersions.end()) {
-                            // we have an empty metadata file
-                            //const auto timestampList = smbFilePtr->getTimestampList();
-                            auto entry = timestampList.begin();
-                            while (entry != timestampList.end() && entry->first <= snapshot)
-                                ++entry;
-
-                            if (entry != timestampList.begin())
-                                --entry;
-
-                            if (entry->first > snapshot) {
-                                // network timestamp for the oldest file version is newer than the requested snapshot time
-                                // -> do not display file
-                                indexFiles.erase(indexFiles.begin()+i);
-                            } else {
-                                smbFilePtr->setAccessTime(entry->first);
-                                smbFilePtr->setChangeTime(entry->first);
-                                smbFilePtr->setModifyTime(entry->first);
-                            }
-
-                        } else {
-                            auto timestampPos = timestampList.rbegin();
-                            if ((timestampPos = std::find_if(timestampList.rbegin(), timestampList.rend(),
-                                    [snapshot](const auto &entry){ return entry.first <= snapshot; }
-                                    )) != timestampList.rend()) {
-                                smbFilePtr->fragments.clear(),
-                                smbFilePtr->setFilesizeRaw(0);
-                                smbFilePtr->setFilesizeProcessed(0);
-                                smbFilePtr->flags.set(pcapfs::flags::IS_METADATA);
-                                LOG_DEBUG << "found no matching file version for " << smbFilePtr->getFilename() << " but a matching timestamp"
-                                            << " => create empty metadata file";
-                            } else {
-                                LOG_DEBUG << "didn't find matching timestamp for " << smbFilePtr->getFilename();
-                                indexFiles.erase(indexFiles.begin()+i);
-                            }
-                        }
-                    } else {
-                        if (smbTimestampsSet) {
-                            if (fileVersions.size() > 0 && targetTimestamps.changeTime <= snapshot && currVersion->second.readOperation) {
-                                smbFilePtr->fragments = currVersion->second.fragments;
-                                smbFilePtr->setClientIPs(currVersion->second.clientIPs);
-                                const size_t calculatedFilesize = std::accumulate(smbFilePtr->fragments.begin(), smbFilePtr->fragments.end(), 0,
-                                                                            [](size_t counter, const auto &frag){ return counter + frag.length; });
-                                smbFilePtr->setFilesizeRaw(calculatedFilesize);
-                                smbFilePtr->setFilesizeProcessed(calculatedFilesize);
-                            } else {
-                                smbFilePtr->fragments.clear(),
-                                smbFilePtr->setFilesizeRaw(0);
-                                smbFilePtr->setFilesizeProcessed(0);
-                                smbFilePtr->flags.set(pcapfs::flags::IS_METADATA);
-                            }
-                            smbFilePtr->setAccessTime(targetTimestamps.accessTime);
-                            smbFilePtr->setChangeTime(targetTimestamps.changeTime);
-                            smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
-                            indexFiles[i] = smbFilePtr;
-                        } else {
-                            indexFiles.erase(indexFiles.begin()+i);
-                            LOG_DEBUG << "didn't find matching timestamp for " << smbFilePtr->getFilename();
-                        }
-                    }
-                } else {
-                    // found matching file version
-                    currVersion--;
-
-                    smbFilePtr->fragments = currVersion->second.fragments;
-                    smbFilePtr->setClientIPs(currVersion->second.clientIPs);
-                    const size_t calculatedFilesize = std::accumulate(smbFilePtr->fragments.begin(), smbFilePtr->fragments.end(), 0,
-                                                                [](size_t counter, const auto &frag){ return counter + frag.length; });
-                    smbFilePtr->setFilesizeRaw(calculatedFilesize);
-                    smbFilePtr->setFilesizeProcessed(calculatedFilesize);
-
-                    if (noFsTimestamps) {
-                        smbFilePtr->setAccessTime(currVersion->first.networkTime);
-                        smbFilePtr->setChangeTime(currVersion->first.networkTime);
-                        smbFilePtr->setModifyTime(currVersion->first.networkTime);
-                    } else {
-                        if (smbTimestampsSet) {
-                            smbFilePtr->setAccessTime(targetTimestamps.accessTime);
-                            smbFilePtr->setChangeTime(targetTimestamps.changeTime);
-                            smbFilePtr->setModifyTime(targetTimestamps.modifyTime);
-                        } else {
-                            // no matching timestamps found
-                            smbFilePtr->setAccessTime(ZERO_TIME_POINT);
-                            smbFilePtr->setChangeTime(ZERO_TIME_POINT);
-                            smbFilePtr->setModifyTime(ZERO_TIME_POINT);
-                        }
-                    }
-                    indexFiles[i] = smbFilePtr;
-                }
-
-            } else if (!smbFilePtr->isDirectory) {
-                // no snapshot time specified -> create separate smb file for each version
-                std::vector<pcapfs::SmbFilePtr> smbFileVersions = smbFilePtr->constructSmbVersionFiles();
+        if (snapshotSpecified) {
+            if (!smbFilePtr->constructSnapshotFile()) {
+                // constructSnapshotFile returns false if no file version fits the snapshot time
+                indexFiles.erase(indexFiles.begin()+i);
+            }
+        } else {
+            // no snapshot time specified -> create separate smb file for each version
+            const std::vector<pcapfs::SmbFilePtr> smbFileVersions = smbFilePtr->constructSmbVersionFiles();
+            if (smbFileVersions.size() != 0) {
                 filesToAdd.insert(filesToAdd.end(), smbFileVersions.begin(), smbFileVersions.end());
-                if (smbFileVersions.size() != 0) {
-                    // old smb file is not needed anymore since we now have all versions of it as separate files
-                    indexFiles.erase(indexFiles.begin()+i);
-                }
-            } else {
-                // this implicitly sets donotDisplay for the directory file to true if it does not
-                // belong to the specified snip time interval
-                smbFilePtr->setNearestTimestamp();
+                // old smb file is not needed anymore since we now have all versions of it as separate files
+                indexFiles.erase(indexFiles.begin()+i);
             }
         }
     }
@@ -725,7 +599,6 @@ uint64_t pcapfs::smb::SmbManager::getNewId() {
 
 std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const Index &idx) {
     std::vector<FilePtr> resultVector;
-
     LOG_DEBUG << "Collecting all SMB files...";
     for (const auto &endpt : serverFiles) {
         for (auto &fileEntry: endpt.second) {

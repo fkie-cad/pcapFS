@@ -6,11 +6,10 @@
 
 ### Added
 - SMB: snapshot option
-- SMB: option `--no-fstimestamps`
 - option `--snip`
 
 ### Changed
-- SMB: distinguish between network timestamps and filesystem timestamps. By default, filesystem timestamps are considered
+- SMB: distinguish between network timestamps, filesystem timestamps and hybrid timestamps. By default, hybrid timestamps are considered. These are "smart" filesystem timestamps that are updated according to the recorded read/write operations.
 
 
 ## [0.6.0]

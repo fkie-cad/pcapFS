@@ -9,23 +9,29 @@
 
 namespace pcapfs {
 
-    struct SmbTimePair {
-        // TODO: abstrahiere SmbTimePair, mache daraus ein tripel mit hybrid time (= artificially berechneter fs timestamp (= networkTimestamp + skew bei write operations))
-        SmbTimePair(){}
-        SmbTimePair(const TimePoint &inFsTime, const TimePoint &inNetworkTime) : fsTime(inFsTime), networkTime(inNetworkTime) {}
+    struct SmbTimeTriple {
+        // TODO: abstrahiere SmbTimeTriple
+        SmbTimeTriple(){}
+        SmbTimeTriple(const TimePoint &inHybridTime, const TimePoint &inFsTime, const TimePoint &inNetworkTime) :
+                        hybridTime(inHybridTime), fsTime(inFsTime), networkTime(inNetworkTime) {}
+        TimePoint hybridTime = TimePoint{};
         TimePoint fsTime = TimePoint{};
         TimePoint networkTime = TimePoint{};
 
-        bool operator<(const SmbTimePair &tp) const {
-            return (fsTime == tp.fsTime) ? networkTime < tp.networkTime : fsTime < tp.fsTime;
+        bool operator<(const SmbTimeTriple &tp) const {
+            if (hybridTime == tp.hybridTime)
+                return (fsTime == tp.fsTime) ? networkTime < tp.networkTime : fsTime < tp.fsTime;
+            else
+                return hybridTime < tp.hybridTime;
         };
 
-        bool operator==(const SmbTimePair &tp) const {
-            return fsTime == tp.fsTime && networkTime == tp.networkTime;
+        bool operator==(const SmbTimeTriple &tp) const {
+            return hybridTime == tp.hybridTime && fsTime == tp.fsTime && networkTime == tp.networkTime;
         };
 
         template<class Archive>
         void serialize(Archive &archive, const unsigned int) {
+            archive & hybridTime;
             archive & fsTime;
             archive & networkTime;
         }
@@ -74,11 +80,13 @@ namespace pcapfs {
         std::vector<Fragment> fragments;
         std::set<std::string> clientIPs;
         bool readOperation = false;
+        std::set<SmbTimeTriple> accesses;
 
         template<class Archive>
         void serialize(Archive &archive, const unsigned int) {
             archive & fragments;
             archive & clientIPs;
+            archive & accesses;
         }
     };
 
@@ -95,23 +103,22 @@ namespace pcapfs {
                                 const smb::FileMetaDataPtr &metaData);
 
         void addTimestampToList(const TimePoint &networkTime, const smb::FileMetaDataPtr &metaData) {
-            timestampList[networkTime] = SmbTimestamps(
-                                                        smb::winFiletimeToTimePoint(metaData->lastAccessTime),
-                                                        smb::winFiletimeToTimePoint(metaData->lastWriteTime),
-                                                        smb::winFiletimeToTimePoint(metaData->changeTime),
-                                                        smb::winFiletimeToTimePoint(metaData->creationTime)
-                                                    );
+            if (metaData->lastAccessTime != 0 && metaData->lastWriteTime != 0 && metaData->changeTime != 0) {
+                fsTimestamps[networkTime] = SmbTimestamps(
+                                                smb::winFiletimeToTimePoint(metaData->lastAccessTime),
+                                                smb::winFiletimeToTimePoint(metaData->lastWriteTime),
+                                                smb::winFiletimeToTimePoint(metaData->changeTime),
+                                                smb::winFiletimeToTimePoint(metaData->creationTime)
+                                                );
+            }
         };
 
         bool processFileForDirLayout() { return (!flags.test(pcapfs::flags::IS_METADATA) || config.showMetadata); };
 
         void deduplicateVersions(const Index &idx);
 
-        std::map<TimePoint, SmbTimestamps> const getTimestampList() { return timestampList; };
-
-        std::shared_ptr<SmbFile> clone() { return std::make_shared<SmbFile>(*this); };
-
         std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles(); // TODO: move this to serverfile?
+        bool constructSnapshotFile();
 
         void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation);
 
@@ -119,25 +126,27 @@ namespace pcapfs {
             fileVersions[timestampsOfCurrVersion] = SmbFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation);
         }
 
-        void setNearestTimestamp();
-
-        std::map<SmbTimePair, SmbFileSnapshot> const getFileVersions() { return fileVersions; };
-
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
 
         bool isCurrentlyReadOperation = false;
 
     private:
+        std::shared_ptr<SmbFile> clone() { return std::make_shared<SmbFile>(*this); };
+
         Bytes const getContentForFragments(const Index &idx, const std::vector<Fragment> &inFragments);
 
-        // map network time - fs time
-        std::map<TimePoint, SmbTimestamps> timestampList; // TODO: also add that to serverfile.h?
+        std::map<TimePoint, SmbTimestamps> const getAllTimestamps();
 
-        std::map<SmbTimePair, SmbFileSnapshot> fileVersions; // TODO: also add that to serverfile.h?
+        // map network time - fs time
+        std::map<TimePoint, SmbTimestamps> fsTimestamps; // TODO: also add that to serverfile.h?
+
+        std::map<TimePoint, SmbTimestamps> hybridTimestamps; // TODO: also add that to serverfile.h?
+
+        std::map<SmbTimeTriple, SmbFileSnapshot> fileVersions; // TODO: also add that to serverfile.h?
 
         // only needed for parsing
-        SmbTimePair timestampsOfCurrVersion;
+        SmbTimeTriple timestampsOfCurrVersion;
 
         bool donotDisplay = false;
 

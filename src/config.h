@@ -13,6 +13,8 @@ namespace pcapfs {
 
     namespace options {
 
+        enum TimestampMode : uint8_t { HYBRID, FS, NETWORK };
+
         struct PcapFsOptions {
             Path indexFilePath;
             Path configFilePath;
@@ -29,7 +31,7 @@ namespace pcapfs {
             bool noMount = false;
             bool showMetadata = false;
             bool noCS = false;
-            bool noFsTimestamps = false;
+            uint8_t timestampMode = TimestampMode::HYBRID;
             bool checkNonDefaultPorts = false;
             bool showAll = false;
             bool indexInMemory = false;

@@ -164,11 +164,11 @@ namespace pcapfs_filesystem {
     }
 
 
-    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, pcapfs::TimePoint &snapshot, bool noFsTimestamps) {
+    int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, pcapfs::TimePoint &snapshot, uint8_t timestampMode) {
         initRoot();
         auto files = index.getFiles();
-        pcapfs::smb::SmbManager::getInstance().adjustSmbFilesForDirLayout(files, snapshot, noFsTimestamps);
-        bool snapshotAndFsTimestamps = (snapshot != pcapfs::TimePoint::min() && !noFsTimestamps);
+        pcapfs::smb::SmbManager::getInstance().adjustSmbFilesForDirLayout(files, snapshot, timestampMode);
+        bool snapshotAndFsTimestamps = (snapshot != pcapfs::TimePoint::min() && timestampMode == pcapfs::options::TimestampMode::FS);
 
         bool earlyBreak = false;
 
@@ -274,9 +274,9 @@ namespace pcapfs_filesystem {
 
 
     int DirectoryLayout::initFilesystem(const pcapfs::Index &index, const std::string &sortby,
-                                        pcapfs::TimePoint &snapshot, bool noFsTimestamps) {
+                                        pcapfs::TimePoint &snapshot, uint8_t timestampMode) {
         dirSortby = pathVector(sortby);
-        fillDirTreeSortby(index, snapshot, noFsTimestamps);
+        fillDirTreeSortby(index, snapshot, timestampMode);
         pcapfs_filesystem::index = index;
         return 0;
     }
