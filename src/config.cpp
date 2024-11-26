@@ -344,11 +344,26 @@ namespace {
 
             if (vm.count("snapshot")) {
                 try {
-                    long long timestamp = std::stoll(vm["snapshot"].as<std::string>());
-                    if (timestamp < 0)
-                        std::cerr << "Warning: Invalid snapshot timestamp: negative value" << std::endl;
-                    else
-                        opts.config.snapshot = std::chrono::system_clock::from_time_t(static_cast<std::time_t>(timestamp));
+                    const std::string snapshotString = vm["snapshot"].as<std::string>();
+                    if (std::all_of(snapshotString.begin(), snapshotString.end(), ::isdigit)) {
+                        long long timestamp = std::stoll(snapshotString);
+                        if (timestamp < 0)
+                            std::cerr << "Warning: Invalid snapshot timestamp: negative value" << std::endl;
+                        else
+                            opts.config.snapshot = std::chrono::system_clock::from_time_t(static_cast<std::time_t>(timestamp));
+                    } else {
+                        std::tm t = {};
+                        std::istringstream ss(snapshotString);
+                        // e.g. 2024-11-20T13:54:29
+                        ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                        if (ss.fail()) {
+                            std::cerr << "Warning: Failed to parse snapshot timestamp, won't consider it" << std::endl;
+                        } else {
+                            // TODO: take UTC or local time zone?
+                            //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
+                            opts.config.snapshot = std::chrono::system_clock::from_time_t(std::mktime(&t));
+                        }
+                    }
                 } catch (const std::logic_error&) {
                     std::cerr << "Warning: Invalid snapshot timestamp, won't consider it" << std::endl;
                 }
@@ -362,26 +377,56 @@ namespace {
                     } else {
                         const auto commaPos = snipString.find(',');
                         const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
                         const std::string startSnipString(snipString.begin(), snipString.begin() + commaPos);
-                        const long long startSnip = startSnipString.empty() ? 0 : std::stoll(startSnipString);
-                        if (startSnip < 0 || startSnip > now) {
-                            std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
-                        } else {
-                            const std::string endSnipString(snipString.begin() + commaPos + 1, snipString.end());
-                            const long long endSnip = endSnipString.empty() ? 0 : std::stoll(endSnipString);
-                            if (endSnip < 0 || endSnip > now) {
-                                std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
+                        time_t startSnip{};
+                        if (!startSnipString.empty()) {
+                            if (std::all_of(startSnipString.begin(), startSnipString.end(), ::isdigit)) {
+                                startSnip = static_cast<time_t>(std::stoll(startSnipString));
                             } else {
-                                if (endSnip != 0 && endSnip <= startSnip) {
-                                    std::cerr << "Warning: Invalid snip time interval, won't consider it" << std::endl;
+                                std::tm t = {};
+                                std::istringstream ss(startSnipString);
+                                // e.g. 2024-11-20T13:54:29
+                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                                if (ss.fail()) {
+                                    std::cerr << "Warning: Failed to parse snip timestamp, won't consider it" << std::endl;
                                 } else {
-                                    opts.config.snip = std::pair<pcapfs::TimePoint, pcapfs::TimePoint>(
-                                        std::chrono::system_clock::from_time_t(static_cast<std::time_t>(startSnip)),
-                                        std::chrono::system_clock::from_time_t(static_cast<std::time_t>(endSnip))
-                                    );
+                                    // TODO: take UTC or local time zone?
+                                    //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
+                                    startSnip = std::mktime(&t);
                                 }
                             }
                         }
+
+                        const std::string endSnipString(snipString.begin() + commaPos + 1, snipString.end());
+                        time_t endSnip{};
+                        if (!endSnipString.empty()) {
+                            if (std::all_of(endSnipString.begin(), endSnipString.end(), ::isdigit)) {
+                                endSnip = static_cast<time_t>(std::stoll(endSnipString));
+                            } else {
+                                std::tm t = {};
+                                std::istringstream ss(endSnipString);
+                                // e.g. 2024-11-20T13:54:29
+                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                                if (ss.fail()) {
+                                    std::cerr << "Warning: Failed to parse snip timestamp, won't consider it" << std::endl;
+                                } else {
+                                    // TODO: take UTC or local time zone?
+                                    //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
+                                    endSnip = std::mktime(&t);
+                                }
+                            }
+                        }
+
+                        if (startSnip < 0 || startSnip > now || endSnip < 0 || endSnip > now || (endSnip != 0 && endSnip <= startSnip)) {
+                            std::cerr << "Warning: Invalid snip timestamp(s), won't consider it" << std::endl;
+                        } else {
+                            opts.config.snip = std::pair<pcapfs::TimePoint, pcapfs::TimePoint>(
+                                std::chrono::system_clock::from_time_t(startSnip),
+                                std::chrono::system_clock::from_time_t(endSnip)
+                            );
+                        }
+
                     }
                 } catch(const std::logic_error&) {
                     std::cerr << "Warning: Invalid snip timestamp, won't consider it" << std::endl;
