@@ -440,9 +440,9 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
     while (currVersion != fileVersions.end()) {
         if (((config.snip.first != ZERO_TIME_POINT && currVersion->first.networkTime < config.snip.first) ||
             (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime >= config.snip.second)) &&
-            std::none_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
-                            [](const auto &access){ return (config.snip.first != ZERO_TIME_POINT && access.networkTime >= config.snip.first) ||
-                                                            (config.snip.second != ZERO_TIME_POINT && access.networkTime < config.snip.second); }
+            std::all_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
+                            [](const auto &access){ return (config.snip.first != ZERO_TIME_POINT && access.networkTime < config.snip.first) ||
+                                                            (config.snip.second != ZERO_TIME_POINT && access.networkTime >= config.snip.second); }
                         )
             ) {
             // file version does not belong to snip interval
