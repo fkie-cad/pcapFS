@@ -250,9 +250,10 @@ namespace {
                     ("rewrite,r", "overwrite a possibly existing index file")
                     ("show-all", "also show file which have been parsed already")
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
-                    ("snapshot", po::value<std::string>(), "unix timestamp of point in time where to reconstruct SMB share")
+                    ("snapshot", po::value<std::string>(),
+                    "point in time where to reconstruct SMB share (unix timestamp or yyyy-MM-ddTHH:mm:ss)")
                     ("snip", po::value<std::string>()->value_name("<startTime>,<endTime>"),
-                    "only display virtual files from the specified time interval (unix timestamps)")
+                    "only display virtual files from the specified network time interval (unix timestamps or yyyy-MM-ddTHH:mm:ss)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
                     ("timestamp-mode", po::value<std::string>()->default_value("hybrid"),
