@@ -72,7 +72,7 @@ namespace pcapfs {
         }
     };
 
-    // TODO: make FileSnapshot global abstract, add fileOperation as local variable (read/write)
+    // TODO: make FileSnapshot global abstract
     struct SmbFileSnapshot {
         SmbFileSnapshot() {}
         SmbFileSnapshot(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
@@ -87,6 +87,7 @@ namespace pcapfs {
             archive & fragments;
             archive & clientIPs;
             archive & accesses;
+            archive & readOperation;
         }
     };
 
