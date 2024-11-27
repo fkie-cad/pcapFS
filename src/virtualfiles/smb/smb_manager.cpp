@@ -63,7 +63,7 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
                             // update fileId-filename mapping
                             fileHandles[endpointTree][createResponse->fileId] = filePath;
 
-                            SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+                            SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
                             if (!smbFilePtr) {
                                 // create empty SMB file
                                 // SMB files are already created here because otherwise, in certain scenarios with simultaneous SMB share accesses
@@ -237,7 +237,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<QueryInfoResp
         if (!smbContext->createServerFiles)
             return;
 
-        SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+        SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
         if (!smbFilePtr) {
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filePath << " is new and added to the server files";
@@ -280,7 +280,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             if (fileInfo->filename == ".." && serverFiles.count(endpointTree) && serverFiles[endpointTree].count(filePath) &&
                 serverFiles[endpointTree][filePath]) {
                 // analyze FileInfo of parent directory only when the parent directory is already known as SmbFile
-                const SmbFilePtr tmpServerFilePtr = serverFiles[endpointTree][filePath];
+                const SmbFilePtr tmpServerFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
                 if (tmpServerFilePtr->getParentDir()) {
                     const size_t backslashPos = filePath.rfind("\\");
                     if (backslashPos != std::string::npos) {
@@ -315,7 +315,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
             continue;
         }
 
-        SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+        SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
         if (!smbFilePtr) {
             // server file not present in map -> create new one
             LOG_TRACE << "file " << filePath << " is new and added to the server files";
@@ -356,7 +356,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<ReadResponse>
     // take size of data that is actually read at the end
     newFragment.length = readResponse->dataLength;
 
-    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
 
     if (smbFilePtr->getFilesizeRaw() == 0 && currentReadRequestData->readOffset == 0) {
         // no fragments with file content are saved yet and we have readOffset 0
@@ -439,7 +439,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
     newFragment.start = writeRequestData->globalOffset + writeRequestData->dataOffset;
     newFragment.length = writeRequestData->writeLength;
 
-    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
 
     if (smbFilePtr->getFilesizeRaw() == 0 && writeRequestData->writeOffset == 0) {
         // no fragments with file content are saved yet and we have writeOffset 0
@@ -516,7 +516,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 
     LOG_TRACE << "updating SMB server file " << filePath << " with metadata from Set Info Request";
 
-    SmbFilePtr smbFilePtr = serverFiles[endpointTree][filePath];
+    SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
     smbFilePtr->addClientIP(smbContext->clientIP);
     smbFilePtr->addTimestampToList(smbContext->currentTimestamp, setInfoRequestData->metaData);
     serverFiles[endpointTree][filePath] = smbFilePtr;
@@ -571,7 +571,8 @@ pcapfs::smb::SmbFileHandles const pcapfs::smb::SmbManager::getFileHandles(const 
 }
 
 
-pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext) {
+pcapfs::ServerFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) {
+    const SmbContextPtr smbContext = std::static_pointer_cast<SmbContext>(context);
     const ServerEndpointTree endpt = getServerEndpointTree(smbContext);
     if (serverFiles[endpt].find(filePath) != serverFiles[endpt].end()) {
         LOG_DEBUG << "parent directory is already known as an SmbFile";
@@ -590,19 +591,13 @@ pcapfs::SmbFilePtr const pcapfs::smb::SmbManager::getAsParentDirFile(const std::
 }
 
 
-uint64_t pcapfs::smb::SmbManager::getNewId() {
-    const uint64_t newId = idCounter;
-    idCounter++;
-    return newId;
-}
-
-
-std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getSmbFiles(const Index &idx) {
+std::vector<pcapfs::FilePtr> const pcapfs::smb::SmbManager::getServerFiles(const Index &idx) {
     std::vector<FilePtr> resultVector;
     LOG_DEBUG << "Collecting all SMB files...";
     for (const auto &endpt : serverFiles) {
         for (auto &fileEntry: endpt.second) {
-            fileEntry.second->deduplicateVersions(idx);
+            SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(fileEntry.second);
+            smbFilePtr->deduplicateVersions(idx);
             resultVector.push_back(fileEntry.second);
         }
     }

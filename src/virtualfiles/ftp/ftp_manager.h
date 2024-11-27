@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../serverfile_manager.h"
 #include "../ftpcontrol.h"
 #include "../ftp.h"
 #include "../../commontypes.h"
@@ -12,10 +13,9 @@
 
 namespace pcapfs {
 
-    class FtpManager {
+    class FtpManager : public ServerFileManager {
     private:
         std::map<uint16_t, std::vector<FileTransmissionData>> data_transmissions;
-        std::map<std::string, FtpFilePtr> ftpFiles;
 
     public:
         using DataMap = std::map<uint16_t, std::vector<FileTransmissionData>>;
@@ -33,18 +33,16 @@ namespace pcapfs {
         void addFileTransmissionData(uint16_t port, const FileTransmissionData &data);
         std::vector<FileTransmissionData> getFileTransmissionData(uint16_t port);
 
-        FtpFilePtr getAsParentDirFile(const std::string &filePath, const FilePtr &offsetFilePtr);
-        uint64_t getNewId();
+        ServerFilePtr const getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) override;
+        std::vector<FilePtr> const getServerFiles(const Index&) override;
 
-        void addFtpFile(const std::string &filePath, const FtpFilePtr &inFtpFile) { ftpFiles[filePath] = inFtpFile; };
-        std::vector<FilePtr> getFtpFiles();
+        void addFtpFile(const std::string &filePath, const FtpFilePtr &inFtpFile) { serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = inFtpFile; };
 
         void updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr);
         void updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr);
 
     private:
         FtpManager() {}
-        uint64_t idCounter = 0;
     };
 }
 

@@ -25,63 +25,58 @@ std::vector<pcapfs::FileTransmissionData> pcapfs::FtpManager::getFileTransmissio
 }
 
 
-pcapfs::FtpFilePtr pcapfs::FtpManager::getAsParentDirFile(const std::string &filePath, const FilePtr &offsetFilePtr) {
-    if (ftpFiles.find(filePath) != ftpFiles.end()) {
+pcapfs::ServerFilePtr const pcapfs::FtpManager::getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) {
+    if (serverFiles[SERVER_FILE_TREE_DUMMY].find(filePath) != serverFiles[SERVER_FILE_TREE_DUMMY].end()) {
         LOG_DEBUG << "parent directory is already known as an FtpFile";
-        return ftpFiles[filePath];
+        return serverFiles[SERVER_FILE_TREE_DUMMY][filePath];
     } else {
         LOG_DEBUG << "parent directory not known as FtpFile yet, create parent dir file on the fly";
         FtpFilePtr newFtpDirFilePtr = std::make_shared<FtpFile>();
-        newFtpDirFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
-        newFtpDirFilePtr->fillGlobalProperties(offsetFilePtr);
+        newFtpDirFilePtr->handleAllFilesToRoot(filePath, context);
+        newFtpDirFilePtr->fillGlobalProperties(context->offsetFile);
         newFtpDirFilePtr->setFilesizeRaw(0);
         newFtpDirFilePtr->setFilesizeProcessed(0);
         Fragment fragment;
-        fragment.id = offsetFilePtr->getIdInIndex();
+        fragment.id = context->offsetFile->getIdInIndex();
         fragment.start = 0;
         fragment.length = 0;
         newFtpDirFilePtr->fragments.push_back(fragment);
         newFtpDirFilePtr->isDirectory = true;
-        ftpFiles[filePath] = newFtpDirFilePtr;
+        serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = newFtpDirFilePtr;
         return newFtpDirFilePtr;
     }
 }
 
 
-uint64_t pcapfs::FtpManager::getNewId() {
-    const uint64_t newId = idCounter;
-    idCounter++;
-    return newId;
-}
-
-
-std::vector<pcapfs::FilePtr> pcapfs::FtpManager::getFtpFiles() {
+std::vector<pcapfs::FilePtr> const pcapfs::FtpManager::getServerFiles(const Index&) {
     std::vector<FilePtr> resultVector;
-    std::transform(ftpFiles.begin(), ftpFiles.end(), std::back_inserter(resultVector), [](const auto &f){ return f.second; });
+    std::transform(serverFiles[SERVER_FILE_TREE_DUMMY].begin(), serverFiles[SERVER_FILE_TREE_DUMMY].end(),
+                    std::back_inserter(resultVector), [](const auto &f){ return f.second; });
     return resultVector;
 }
 
 
 void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr) {
-    FtpFilePtr ftpFilePtr = ftpFiles[filePath];
+    FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (!ftpFilePtr) {
         ftpFilePtr = std::make_shared<FtpFile>();
-        ftpFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
+        const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
+        ftpFilePtr->handleAllFilesToRoot(filePath, context);
         ftpFilePtr->fillGlobalProperties(offsetFilePtr);
         ftpFilePtr->isDirectory = false;
         ftpFilePtr->parseResult(offsetFilePtr);
-        ftpFiles[filePath] = ftpFilePtr;
+        serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
     } else if (ftpFilePtr->getFilesizeRaw() == 0) {
         // file is previously known only as empty file, now it's filled with content
         ftpFilePtr->flags.reset(flags::IS_METADATA);
         ftpFilePtr->parseResult(offsetFilePtr);
-        ftpFiles[filePath] = ftpFilePtr;
+        serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
     }
 }
 
 
 void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr) {
-    FtpFilePtr ftpFilePtr = ftpFiles[filePath];
+    FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (ftpFilePtr) {
         if (ftpFilePtr->getModifyTime() != modifyTime) {
             // file is already known, just update the timestamps
@@ -89,11 +84,12 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
             ftpFilePtr->setModifyTime(modifyTime);
             ftpFilePtr->setAccessTime(modifyTime);
             ftpFilePtr->setChangeTime(modifyTime);
-            ftpFiles[filePath] = ftpFilePtr;
+            serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
         }
     } else {
         ftpFilePtr = std::make_shared<FtpFile>();
-        ftpFilePtr->handleAllFilesToRoot(filePath, offsetFilePtr);
+        const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
+        ftpFilePtr->handleAllFilesToRoot(filePath, context);
         ftpFilePtr->fillGlobalProperties(offsetFilePtr);
         ftpFilePtr->isDirectory = isDirectory;
         ftpFilePtr->setModifyTime(modifyTime);
@@ -107,6 +103,6 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
         ftpFilePtr->setFilesizeRaw(0);
         ftpFilePtr->setFilesizeProcessed(0);
         ftpFilePtr->flags.set(flags::IS_METADATA);
-        ftpFiles[filePath] = ftpFilePtr;
+        serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
     }
 }

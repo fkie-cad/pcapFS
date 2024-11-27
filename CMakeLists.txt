@@ -71,6 +71,7 @@ set(PCAPFS_COMMON_SOURCES
         src/virtualfiles/smb/smb_manager.cpp
         src/virtualfiles/serverfile.cpp
         src/virtualfiles/smb.cpp
+        src/virtualfiles/serverfile_manager.cpp
         )
 
 set(PCAPFS_LINK_LIBRARIES

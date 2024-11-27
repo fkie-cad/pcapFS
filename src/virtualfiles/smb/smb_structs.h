@@ -3,6 +3,7 @@
 
 #include "smb_constants.h"
 #include "smb_utils.h"
+#include "../serverfile_manager.h"
 #include "../../file.h"
 #include "../../exceptions.h"
 #include <memory>
@@ -76,7 +77,7 @@ namespace pcapfs {
         };
 
         // Identifier for an SMB server tree, used as key for managing the extracted file information in SmbManager
-        struct ServerEndpointTree {
+        struct ServerEndpointTree : ServerFileTree {
             ServerEndpointTree() = default;
             ServerEndpointTree(const ServerEndpoint &endp, const std::string &inTreeName) : serverEndpoint(endp), treeName(inTreeName) {}
             ServerEndpoint serverEndpoint;
@@ -143,12 +144,11 @@ namespace pcapfs {
         };
 
         // holds information to be memorized along one SMB TCP connection
-        struct SmbContext {
+        struct SmbContext : ServerFileContext {
             SmbContext(const FilePtr &filePtr, bool inCreateServerFiles) :
-                    offsetFile(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles),
+                    ServerFileContext(filePtr), serverEndpoint(filePtr), createServerFiles(inCreateServerFiles),
                     clientIP(determineClientIP(filePtr)) {}
 
-            FilePtr offsetFile = nullptr;
             ServerEndpoint serverEndpoint;
             uint16_t dialect = 0;
 

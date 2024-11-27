@@ -1,6 +1,7 @@
 #ifndef PCAPFS_SMB_MANAGER_H
 #define PCAPFS_SMB_MANAGER_H
 
+#include "../serverfile_manager.h"
 #include "smb_messages.h"
 #include "../smb.h"
 #include "smb_structs.h"
@@ -8,12 +9,10 @@
 namespace pcapfs {
     namespace smb {
 
-        // map filename - FilePtr
-        typedef std::unordered_map<std::string, SmbFilePtr> SmbFiles;
         // map guid - filename
         typedef std::unordered_map<std::string, std::string> SmbFileHandles;
 
-        class SmbManager {
+        class SmbManager : public ServerFileManager {
         public:
             static SmbManager& getInstance() {
                 static SmbManager instance;
@@ -23,7 +22,13 @@ namespace pcapfs {
             SmbManager(SmbManager const&) = delete;
             void operator=(SmbManager const&) = delete;
 
+            std::vector<FilePtr> const getServerFiles(const Index &idx) override;
+            ServerFilePtr const getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) override;
+
             void extractMappings(const std::vector<FilePtr> &tcpFiles, const Index &idx, bool checkNonDefaultPorts);
+            void setTimeOfNegResponse(const TimePoint &fsTime, const TimePoint &networkTime);
+            SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
+            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode);
 
             // SMB2_QUERY_INFO Response
             void updateSmbFiles(const std::shared_ptr<QueryInfoResponse> &queryInfoResponse, const SmbContextPtr &smbContext, uint64_t messageId);
@@ -36,15 +41,6 @@ namespace pcapfs {
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
 
-            void setTimeOfNegResponse(const TimePoint &fsTime, const TimePoint &networkTime);
-            void adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode);
-            std::vector<FilePtr> const getSmbFiles(const Index &idx); // TODO: create abstract super function for that (its also needed by ftp)
-
-            SmbFilePtr const getAsParentDirFile(const std::string &filePath, const SmbContextPtr &smbContext); // TODO: abstrahieren in global manager
-            SmbFileHandles const getFileHandles(const SmbContextPtr &smbContext);
-
-            uint64_t getNewId(); // TODO: move to abstract super class
-
             void serialize(boost::archive::text_oarchive &archive, const unsigned int&);
             void deserialize(boost::archive::text_iarchive &archive, const unsigned int&);
 
@@ -56,20 +52,15 @@ namespace pcapfs {
 
             ServerEndpointTree const getServerEndpointTree(const SmbContextPtr &smbContext);
 
-            // TODO: ABSTRAHIERE SERVERFILES ETC. IN ABSTRAKTEN SUPER-MANAGER
-            std::map<ServerEndpointTree, SmbFiles> serverFiles; // in FTP, we have std::string instead of ServerEndpointTree
-
             std::map<ServerEndpointTree, SmbFileHandles> fileHandles;
             std::map<ServerEndpoint, SmbTreeNames> treeNames;
-            uint64_t idCounter = 0; // TODO: move to abstract super class
 
             // first connectionBreak
-            TimePoint oldestNetworkTimestamp = TimePoint::max(); // TODO: put into super class
+            TimePoint oldestNetworkTimestamp = TimePoint::max();
             // last connectionBreak
-            TimePoint newestNetworkTimestamp = TimePoint{}; // TODO: put into super class
+            TimePoint newestNetworkTimestamp = TimePoint{};
             // networkTime , fsTime
             // (required for calculation of allowed snapshot range w.r.t. the fsTime)
-            // TODO: neglect allowed range for fs timestamp mode!!!
             std::pair<TimePoint, TimePoint> timeOfOldestNegResponse = std::pair<TimePoint, TimePoint>(TimePoint::max(), TimePoint::max());
         };
     }

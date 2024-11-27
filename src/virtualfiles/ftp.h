@@ -21,7 +21,7 @@ namespace pcapfs {
 
         void fillGlobalProperties(const FilePtr &filePtr);
         void parseResult(const FilePtr &filePtr);
-        void handleAllFilesToRoot(const std::string &filePath, const FilePtr &offsetFilePtr);
+        void handleAllFilesToRoot(const std::string &filePath, const ServerFileContextPtr &context);
 
     protected:
         static bool registeredAtFactory;

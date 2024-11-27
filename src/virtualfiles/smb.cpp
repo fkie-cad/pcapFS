@@ -62,9 +62,9 @@ pcapfs::Bytes const pcapfs::SmbFile::getContentForFragments(const Index &idx, co
 }
 
 
-std::map<pcapfs::TimePoint, pcapfs::SmbTimestamps> const pcapfs::SmbFile::getAllTimestamps() {
+std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> const pcapfs::SmbFile::getAllTimestamps() {
     // returns union of hybridTimestamps and fsTimestamps
-    std::map<pcapfs::TimePoint, pcapfs::SmbTimestamps> result = hybridTimestamps;
+    std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> result = hybridTimestamps;
     for (const auto &entry: fsTimestamps) {
         result[entry.first] = entry.second;
     }
@@ -77,14 +77,14 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         return;
 
     // add current saved fragments as newest version
-    fileVersions.emplace(timestampsOfCurrVersion, SmbFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation));
+    fileVersions.emplace(timestampsOfCurrVersion, ServerFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation));
 
     // nothing to deduplicate
     if (fileVersions.size() <= 1)
         return;
 
     LOG_DEBUG << "deduplicating file versions of " << filename;
-    std::vector<std::map<SmbTimeTriple, SmbFileSnapshot>::iterator> toBeErased;
+    std::vector<std::map<TimeTriple, ServerFileSnapshot>::iterator> toBeErased;
     auto currVersion = fileVersions.begin();
     while (currVersion != fileVersions.end()) {
         auto cmpVersion = std::next(currVersion);
@@ -118,9 +118,9 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
 bool pcapfs::SmbFile::constructSnapshotFile() {
 
     const auto referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ? fsTimestamps : getAllTimestamps();
-    std::reverse_iterator<std::map<pcapfs::TimePoint, pcapfs::SmbTimestamps>::const_iterator> targetTimestampPos;
+    std::reverse_iterator<std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps>::const_iterator> targetTimestampPos;
     TimePoint upperBoundTimestamp = config.snapshot;
-    std::reverse_iterator<std::set<SmbTimeTriple>::const_iterator> tmpTimestampPos;
+    std::reverse_iterator<std::set<TimeTriple>::const_iterator> tmpTimestampPos;
     bool foundMatchingTimestamps = false;
 
     // first, we select the file version that matches the snapshot time
@@ -537,7 +537,7 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
     fragments.push_back(fragment);
 
     if (metaData->lastAccessTime != 0 && metaData->lastWriteTime != 0 && metaData->changeTime != 0)
-        fsTimestamps[smbContext->currentTimestamp] = SmbTimestamps(
+        fsTimestamps[smbContext->currentTimestamp] = ServerFileTimestamps(
                                                                     smb::winFiletimeToTimePoint(metaData->lastAccessTime),
                                                                     smb::winFiletimeToTimePoint(metaData->lastWriteTime),
                                                                     smb::winFiletimeToTimePoint(metaData->changeTime),
@@ -592,7 +592,7 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
 
     if (fsTimestampsPos == fsTimestamps.crend()) {
         // only happens in specific edge case
-        timestampsOfCurrVersion = SmbTimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
+        timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
         // we don't add a hybrid timestamp in that case
     } else {
         // search latest (hybrid/fs) timestamp as reference for new hybrid timestamp
@@ -603,7 +603,7 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
                                             [currNetworkTimestamp](const auto &entry){ return entry.first <= currNetworkTimestamp; });
 
         if (tmpPos != hybridRefTimestamps.rend()) {
-            std::pair<std::reverse_iterator<std::map<TimePoint, SmbTimestamps>::const_iterator>, TimePoint> hybridPos =
+            std::pair<std::reverse_iterator<std::map<TimePoint, ServerFileTimestamps>::const_iterator>, TimePoint> hybridPos =
                     std::make_pair(tmpPos, std::max({tmpPos->second.accessTime, tmpPos->second.changeTime, tmpPos->second.modifyTime}));
             ++tmpPos;
 
@@ -616,20 +616,20 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
             }
 
             if (writeOperation) {
-                timestampsOfCurrVersion = SmbTimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
-                hybridTimestamps[currNetworkTimestamp] = SmbTimestamps(
+                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
+                hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
                                                   hybridPos.first->second.accessTime,
                                                   derivedFsTimestamp,
                                                   derivedFsTimestamp,
                                                   hybridPos.first->second.birthTime
                 );
             } else {
-                timestampsOfCurrVersion = SmbTimeTriple(derivedFsTimestamp,
+                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
                                                     std::max({fsTimestampsPos->second.accessTime,
                                                                 fsTimestampsPos->second.changeTime,
                                                                 fsTimestampsPos->second.modifyTime}),
                                                     currNetworkTimestamp);
-                hybridTimestamps[currNetworkTimestamp] = SmbTimestamps(
+                hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
                                                     derivedFsTimestamp,
                                                     hybridPos.first->second.modifyTime,
                                                     hybridPos.first->second.changeTime,
@@ -638,10 +638,10 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
             }
         } else {
             if (writeOperation) {
-                timestampsOfCurrVersion = SmbTimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
+                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
 
             } else {
-                timestampsOfCurrVersion = SmbTimeTriple(derivedFsTimestamp,
+                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
                                                         std::max({fsTimestampsPos->second.accessTime,
                                                                     fsTimestampsPos->second.changeTime,
                                                                     fsTimestampsPos->second.modifyTime}),

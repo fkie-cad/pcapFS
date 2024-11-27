@@ -118,7 +118,7 @@ void pcapfs::FtpFile::handleMlsdFiles(const FilePtr &filePtr, const std::string 
 }
 
 
-void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const FilePtr &offsetFilePtr) {
+void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const ServerFileContextPtr &context) {
 
     LOG_DEBUG << "FTP: building up cascade of parent dir files for " << filePath;
     const size_t slashPos = filePath.rfind("/");
@@ -130,7 +130,7 @@ void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const Fi
         if(!remainder.empty() && remainder != "/") {
             LOG_DEBUG << "detected subdir(s)";
             LOG_DEBUG << "remainder: " << remainder;
-            parentDir = FtpManager::getInstance().getAsParentDirFile(remainder, offsetFilePtr);
+            parentDir = FtpManager::getInstance().getAsParentDirFile(remainder, context);
         } else {
             // root directory has nullptr as parentDir
             parentDir = nullptr;
