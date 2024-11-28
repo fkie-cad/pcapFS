@@ -103,6 +103,11 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
             cmpVersion->second.accesses = currVersion->second.accesses;
             cmpVersion->second.accesses.insert(currVersion->first);
 
+            // we deduplicate a possible pair of duplicate versions with
+            // (write,read) (read,write) to a single version with read
+            if (currVersion->second.readOperation)
+                cmpVersion->second.readOperation = true;
+
             toBeErased.push_back(currVersion);
         } else {
             LOG_TRACE << "versions are different";
