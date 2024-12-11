@@ -40,6 +40,8 @@ namespace pcapfs {
             void updateSmbFiles(const std::shared_ptr<WriteRequestData> &writeRequestData, const SmbContextPtr &smbContext);
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
+            // SMB2_CLOSE Response
+            void updateSmbFiles(const std::string &fileId, const FileMetaDataPtr &metaData, const SmbContextPtr &smbContext);
 
             void serialize(boost::archive::text_oarchive &archive, const unsigned int&);
             void deserialize(boost::archive::text_iarchive &archive, const unsigned int&);

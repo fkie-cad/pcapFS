@@ -464,7 +464,8 @@ std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSm
             newFile->setModifyTime(currVersion->first.networkTime);
 
         } else if (config.timestampMode == pcapfs::options::TimestampMode::HYBRID || currVersion->second.readOperation) {
-            const auto pos = std::find_if(referenceTimestamps.crbegin(), referenceTimestamps.crend(),
+            const auto pos = (i == fileVersions.size() - 1) ? referenceTimestamps.crbegin() :
+                                std::find_if(referenceTimestamps.crbegin(), referenceTimestamps.crend(),
                                             [currVersion](const auto &entry){ return entry.first <= currVersion->first.networkTime; });
 
             if (pos == referenceTimestamps.crend()) {

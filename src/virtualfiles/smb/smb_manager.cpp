@@ -523,6 +523,30 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, ui
 }
 
 
+void pcapfs::smb::SmbManager::updateSmbFiles(const std::string &fileId, const FileMetaDataPtr &metaData, const SmbContextPtr &smbContext) {
+    // update server files with file metadata obtained from close response
+
+    const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
+    if (fileHandles[endpointTree].find(fileId) == fileHandles[endpointTree].end()) {
+        // fileId - filename mapping not known
+        return;
+    }
+
+    const std::string filePath = fileHandles[endpointTree].at(fileId);
+    if (serverFiles[endpointTree].find(filePath) == serverFiles[endpointTree].end() || !serverFiles[endpointTree].at(filePath)) {
+        // should not happen
+        return;
+    }
+
+    LOG_TRACE << "updating SMB server file " << filePath << " with metadata from Close Response";
+
+    SmbFilePtr smbFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
+    smbFilePtr->addClientIP(smbContext->clientIP);
+    smbFilePtr->addTimestampToList(smbContext->currentTimestamp, metaData);
+    serverFiles[endpointTree][filePath] = smbFilePtr;
+}
+
+
 void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
     std::vector<pcapfs::FilePtr> filesToAdd;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());

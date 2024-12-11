@@ -305,20 +305,34 @@ namespace pcapfs {
 
                 totalSize = 24;
                 fileId = bytesToHexString(Bytes(&rawData.at(8), &rawData[24]));
+                postqueryAttrib = (*(uint16_t*) &rawData.at(2) == 1);
             }
             std::string fileId = "";
+            bool postqueryAttrib = false;
         };
 
 
         class CloseResponse : public SmbMessage {
         public:
             CloseResponse(const uint8_t* data, size_t len) : SmbMessage(len) {
-                const uint16_t structureSize = *(uint16_t*) data;
+                const Bytes rawData(data, data+len);
+                const uint16_t structureSize = *(uint16_t*) &rawData.at(0);
                 if (structureSize != 60)
                     throw SmbSizeError("Invalid StructureSize in SMB2 Close Response");
 
                 totalSize = 60;
+                if (*(uint16_t*) &rawData.at(2) == 1) {
+                    // SMB2_CLOSE_FLAG_POSTQUERY_ATTRIB is set
+                    postqueryAttrib = true;
+                    metaData->creationTime = *(uint64_t*) &rawData.at(8);
+                    metaData->lastAccessTime = *(uint64_t*) &rawData.at(16);
+                    metaData->lastWriteTime = *(uint64_t*) &rawData.at(24);
+                    metaData->changeTime = *(uint64_t*) &rawData.at(32);
+                }
             }
+
+            FileMetaDataPtr metaData = std::make_shared<FileMetaData>();
+            bool postqueryAttrib = false;
         };
 
 

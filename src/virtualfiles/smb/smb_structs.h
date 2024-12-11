@@ -101,6 +101,11 @@ namespace pcapfs {
             }
         };
 
+        struct CloseRequestData {
+            std::string fileId = "";
+            bool postqueryAttrib = false;
+        };
+
         // for memorizing requested file information between query info request and response
         struct QueryInfoRequestData {
             uint8_t infoType = 0;
@@ -154,6 +159,9 @@ namespace pcapfs {
 
             // map messageId - filename
             std::map<uint64_t, std::string> createRequestFileNames;
+
+            // map messageId - CloseRequestData
+            std::map<uint64_t, std::shared_ptr<CloseRequestData>> closeRequestData;
 
             // map messageId - QueryInfoRequestData
             std::map<uint64_t, std::shared_ptr<QueryInfoRequestData>> queryInfoRequestData;
