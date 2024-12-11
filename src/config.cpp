@@ -251,9 +251,9 @@ namespace {
                     ("show-all", "also show file which have been parsed already")
                     ("show-metadata", "show meta data files (e.g. HTTP headers)")
                     ("snapshot", po::value<std::string>(),
-                    "point in time where to reconstruct SMB share (unix timestamp or yyyy-MM-ddTHH:mm:ss)")
+                    "point in time where to reconstruct SMB share (unix timestamp or time string yyyy-MM-ddTHH:mm:ssZ in UTC)")
                     ("snip", po::value<std::string>()->value_name("<startTime>,<endTime>"),
-                    "only display virtual files from the specified network time interval (unix timestamps or yyyy-MM-ddTHH:mm:ss)")
+                    "only display virtual files from the specified network time interval (unix timestamps or time string yyyy-MM-ddTHH:mm:ssZ in UTC)")
                     ("sortby", po::value<std::string>(&(opts.config.sortby))->default_value("/protocol/"),
                      "virtual directory hierarchy to create when mounting the PCAP(s)")
                     ("timestamp-mode", po::value<std::string>()->default_value("hybrid"),
@@ -355,14 +355,12 @@ namespace {
                     } else {
                         std::tm t = {};
                         std::istringstream ss(snapshotString);
-                        // e.g. 2024-11-20T13:54:29
-                        ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                        // e.g. 2024-11-20T13:54:29Z
+                        ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%SZ");
                         if (ss.fail()) {
                             std::cerr << "Warning: Failed to parse snapshot timestamp, won't consider it" << std::endl;
                         } else {
-                            // TODO: take UTC or local time zone?
-                            //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
-                            opts.config.snapshot = std::chrono::system_clock::from_time_t(std::mktime(&t));
+                            opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
                         }
                     }
                 } catch (const std::logic_error&) {
@@ -387,14 +385,12 @@ namespace {
                             } else {
                                 std::tm t = {};
                                 std::istringstream ss(startSnipString);
-                                // e.g. 2024-11-20T13:54:29
-                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                                // e.g. 2024-11-20T13:54:29Z
+                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%SZ");
                                 if (ss.fail()) {
                                     std::cerr << "Warning: Failed to parse snip timestamp, won't consider it" << std::endl;
                                 } else {
-                                    // TODO: take UTC or local time zone?
-                                    //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
-                                    startSnip = std::mktime(&t);
+                                    startSnip = timegm(&t);
                                 }
                             }
                         }
@@ -407,14 +403,12 @@ namespace {
                             } else {
                                 std::tm t = {};
                                 std::istringstream ss(endSnipString);
-                                // e.g. 2024-11-20T13:54:29
-                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%S");
+                                // e.g. 2024-11-20T13:54:29Z
+                                ss >> std::get_time(&t, "%Y-%m-%dT%H:%M:%SZ");
                                 if (ss.fail()) {
                                     std::cerr << "Warning: Failed to parse snip timestamp, won't consider it" << std::endl;
                                 } else {
-                                    // TODO: take UTC or local time zone?
-                                    //opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
-                                    endSnip = std::mktime(&t);
+                                    endSnip = timegm(&t);
                                 }
                             }
                         }
