@@ -77,14 +77,14 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         return;
 
     // add current saved fragments as newest version
-    fileVersions.emplace(timestampsOfCurrVersion, ServerFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation));
+    fileVersions.emplace(timestampsOfCurrVersion, ServerFileVersion(fragments, clientIPs, isCurrentlyReadOperation));
 
     // nothing to deduplicate
     if (fileVersions.size() <= 1)
         return;
 
     LOG_DEBUG << "deduplicating file versions of " << filename;
-    std::vector<std::map<TimeTriple, ServerFileSnapshot>::iterator> toBeErased;
+    std::vector<std::map<TimeTriple, ServerFileVersion>::iterator> toBeErased;
     auto currVersion = fileVersions.begin();
     while (currVersion != fileVersions.end()) {
         auto cmpVersion = std::next(currVersion);

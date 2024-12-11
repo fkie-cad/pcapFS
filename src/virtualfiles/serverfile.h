@@ -78,9 +78,9 @@ namespace pcapfs {
     };
 
 
-    struct ServerFileSnapshot {
-        ServerFileSnapshot() {}
-        ServerFileSnapshot(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
+    struct ServerFileVersion {
+        ServerFileVersion() {}
+        ServerFileVersion(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
                         : fragments(inFragments), clientIPs(inClientIPs), readOperation(inReadOperation) {}
         std::vector<Fragment> fragments;
         std::set<std::string> clientIPs;

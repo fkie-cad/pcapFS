@@ -42,7 +42,7 @@ namespace pcapfs {
         void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation);
 
         void addAsNewFileVersion() {
-            fileVersions[timestampsOfCurrVersion] = ServerFileSnapshot(fragments, clientIPs, isCurrentlyReadOperation);
+            fileVersions[timestampsOfCurrVersion] = ServerFileVersion(fragments, clientIPs, isCurrentlyReadOperation);
         }
 
         void serialize(boost::archive::text_oarchive &archive) override;
@@ -62,7 +62,7 @@ namespace pcapfs {
 
         std::map<TimePoint, ServerFileTimestamps> hybridTimestamps; // TODO: also add that to serverfile.h?
 
-        std::map<TimeTriple, ServerFileSnapshot> fileVersions; // TODO: also add that to serverfile.h?
+        std::map<TimeTriple, ServerFileVersion> fileVersions; // TODO: also add that to serverfile.h?
 
         // only needed for parsing
         TimeTriple timestampsOfCurrVersion;
