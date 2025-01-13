@@ -129,7 +129,7 @@ namespace pcapfs {
             uint64_t writeOffset = 0;
             uint32_t writeLength = 0;
             uint16_t dataOffset = 0;
-            // globalOffset is the offset into the pcap file, where the write payload is located
+            // globalOffset is the offset into the TCP file, where the write payload is located
             uint64_t globalOffset = 0;
         };
 

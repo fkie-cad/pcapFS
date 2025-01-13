@@ -94,7 +94,7 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
 
         const Bytes a = this->getContentForFragments(idx, currVersion->second.fragments);
         const Bytes b = this->getContentForFragments(idx, cmpVersion->second.fragments);
-        if (a == b) {
+        if ((a.size() == b.size()) && a == b) {
             LOG_TRACE << "found duplicate versions";
             // copy clientIPs and time points of file accesses to version that is kept
             for (const auto &ip: currVersion->second.clientIPs) {
