@@ -36,10 +36,10 @@ source "${venv}/bin/activate"
 set -u
 
 if [[ $# -eq 0 ]]; then
-    py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
-    py.test "${here}/pcapfs-crypto-tests-features.py" -vv
+    python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+    python3 -m pytest "${here}/pcapfs-crypto-tests-features.py" -vv
 elif [[ "$1" = "vagrant" ]]; then
     cd /home/vagrant/pcapfs/tests/system/
-    py.test "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
-    py.test "${here}/pcapfs-crypto-tests-features.py" -vv
+    python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+    python3 -m pytest "${here}/pcapfs-crypto-tests-features.py" -vv
 fi
