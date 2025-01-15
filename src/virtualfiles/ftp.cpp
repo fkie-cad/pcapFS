@@ -1,7 +1,10 @@
 #include "ftp.h"
 #include "../filefactory.h"
+#include "../exceptions.h"
 #include "ftp/ftp_manager.h"
 #include "ftp/ftp_commands.h"
+
+#include <boost/algorithm/string.hpp>
 
 
 
@@ -22,7 +25,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 
     if (d.transmission_type == FTPCommands::MLSD) {
         LOG_DEBUG << "FTP: handling MLSD file for " << d.transmission_file;
-        handleMlsdFiles(filePtr, d.transmission_file);
+        handleMlsd(filePtr, d.transmission_file);
     } else {
         LOG_DEBUG << "FTP: found TCP connection with FTP file download";
         if (d.transmission_file.empty()) {
@@ -78,42 +81,58 @@ bool pcapfs::FtpFile::connectionBreaksInTimeSlot(TimePoint break_time, const pca
 }
 
 
-void pcapfs::FtpFile::handleMlsdFiles(const FilePtr &filePtr, const std::string &filePath) {
-    const Bytes data = filePtr->getBuffer();
-    const std::string totalFileContent = std::string(data.begin(), data.end());
-    std::stringstream ss(totalFileContent);
-    std::string line;
-    while(std::getline(ss,line,'\n')){
-        size_t spacePos = line.rfind("; ");
-        if (spacePos == std::string::npos || spacePos + 3 >= line.length())
-            continue;
+pcapfs::FtpFileMetaData const pcapfs::FtpFile::parseMetadataLine(std::string &line) {
+    size_t spacePos = line.rfind("; ");
+    if (spacePos == std::string::npos || spacePos + 3 >= line.length())
+        throw PcapFsException("FTP: invalid metadata line");
 
-        // -1 because of ending newline
-        const std::string extractedFilename(line.begin()+spacePos+2, line.end()-1);
-        if (extractedFilename.empty() || std::any_of(extractedFilename.begin(), extractedFilename.end(),
-                                                        [](char c) { return !std::isprint(c); }))
-            continue;
+    // -1 because of ending newline
+    const std::string extractedFilename(line.begin()+spacePos+2, line.end()-1);
+    if (extractedFilename.empty() || std::any_of(extractedFilename.begin(), extractedFilename.end(), [](char c) { return !std::isprint(c); }))
+        throw PcapFsException("FTP: invalid metadata line");
 
-        std::string extractedModifyTime, extractedType;
-        std::stringstream ss2(line);
-        std::string token;
-        while(std::getline(ss2, token, ';')) {
-            std::stringstream ss3(token);
-            std::string key, value;
-            if (std::getline(ss3, key, '=') && std::getline(ss3, value)) {
-                if (key == "modify")
-                    extractedModifyTime = value;
-                else if (key == "type")
-                    extractedType = value;
-            }
+    FtpFileMetaData result;
+    result.filename = extractedFilename;
+
+    std::stringstream ss(line);
+    std::string token;
+    while(std::getline(ss, token, ';')) {
+        std::stringstream ss2(token);
+        std::string key, value;
+        if (std::getline(ss2, key, '=') && std::getline(ss2, value)) {
+            if (boost::iequals(key, "modify"))
+                result.modifyTime = value;
+            else if (boost::iequals(key, "type"))
+                result.isDir = boost::iequals(value, "dir");
         }
+    }
 
-        std::tm tm = {};
-        std::stringstream ss4(extractedModifyTime);
-        ss4 >> std::get_time(&tm, "%Y%m%d%H%M%S");
-        const TimePoint tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-        const std::string fullFilePath = filePath + extractedFilename;
-        FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, (extractedType == "dir"), tp, filePtr);
+    return result;
+}
+
+
+void pcapfs::FtpFile::handleMlsd(const FilePtr &filePtr, const std::string &filePath) {
+    const Bytes data = filePtr->getBuffer();
+    std::stringstream ss(std::string(data.begin(), data.end()));
+    std::string line;
+    while (std::getline(ss, line, '\n')) {
+        try {
+            const FtpFileMetaData metadata = parseMetadataLine(line);
+            if (metadata.filename.empty())
+                continue;
+
+            const std::string fullFilePath = filePath + metadata.filename;
+            TimePoint tp = ZERO_TIME_POINT;
+            if (!metadata.modifyTime.empty()) {
+                std::tm tm = {};
+                std::stringstream ss2(metadata.modifyTime);
+                ss2 >> std::get_time(&tm, "%Y%m%d%H%M%S");
+                tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+            }
+            FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, tp, filePtr);
+        } catch (const PcapFsException &err){
+                continue;
+        }
     }
 }
 
@@ -199,11 +218,14 @@ std::vector<pcapfs::FilePtr> const pcapfs::FtpFile::constructVersionFiles() {
     // TODO: make this smarty because in almost all cases we just have one version
     std::vector<FilePtr> resultVector;
 
-    const auto entryPos = fsTimestamps.crbegin();
-    if (entryPos != fsTimestamps.crend()) {
-        accessTime = changeTime = modifyTime = (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) ? entryPos->first : entryPos->second;
-    } else {
-        accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
+    auto entryPos = fsTimestamps.crbegin();
+    if (config.timestampMode != pcapfs::options::TimestampMode::NETWORK) {
+        while (entryPos != fsTimestamps.crend() && entryPos->second == ZERO_TIME_POINT)
+            ++entryPos;
+        accessTime = changeTime = modifyTime = (entryPos == fsTimestamps.crend()) ? ZERO_TIME_POINT : entryPos->second;
+    }
+    else {
+        accessTime = changeTime = modifyTime = (entryPos == fsTimestamps.crend()) ? ZERO_TIME_POINT : entryPos->first;
     }
 
     return resultVector;
@@ -213,6 +235,18 @@ std::vector<pcapfs::FilePtr> const pcapfs::FtpFile::constructVersionFiles() {
 bool pcapfs::FtpFile::constructSnapshotFile() {
 
     return true;
+}
+
+
+void pcapfs::FtpFile::serialize(boost::archive::text_oarchive &archive) {
+    ServerFile::serialize(archive);
+    archive << fsTimestamps;
+}
+
+
+void pcapfs::FtpFile::deserialize(boost::archive::text_iarchive &archive) {
+    ServerFile::deserialize(archive);
+    archive >> fsTimestamps;
 }
 
 

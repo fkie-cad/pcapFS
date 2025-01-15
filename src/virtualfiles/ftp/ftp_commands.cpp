@@ -9,6 +9,7 @@ namespace pcapfs {
 	const std::string FTPCommands::MFMT = "MFMT";
 	const std::string FTPCommands::MKD = "MKD";
 	const std::string FTPCommands::MLSD = "MLSD";
+	const std::string FTPCommands::MLST = "MLST";
 	const std::string FTPCommands::PASS = "PASS";
 	const std::string FTPCommands::PASV = "PASV";
 	const std::string FTPCommands::PORT = "PORT";

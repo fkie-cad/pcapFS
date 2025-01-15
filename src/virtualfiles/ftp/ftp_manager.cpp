@@ -84,6 +84,7 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
         const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
         ftpFilePtr->handleAllFilesToRoot(filePath, context);
         ftpFilePtr->fillGlobalProperties(offsetFilePtr);
+        ftpFilePtr->isDirectory = isDirectory;
         ftpFilePtr->addFsTimestamp(offsetFilePtr->getTimestamp(), modifyTime);
         Fragment fragment;
         fragment.id = offsetFilePtr->getIdInIndex();

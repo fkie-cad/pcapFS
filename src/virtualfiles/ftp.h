@@ -11,6 +11,12 @@ namespace pcapfs {
         TimeSlot time_slot;
     };
 
+    struct FtpFileMetaData {
+        std::string filename;
+        std::string modifyTime;
+        bool isDir = false;
+    };
+
     class FtpFile : public ServerFile {
     public:
         static FilePtr create() { return std::make_shared<FtpFile>(); };
@@ -28,6 +34,9 @@ namespace pcapfs {
         std::vector<FilePtr> const constructVersionFiles() override;
         bool constructSnapshotFile() override;
 
+        void serialize(boost::archive::text_oarchive &archive) override;
+        void deserialize(boost::archive::text_iarchive &archive) override;
+
     protected:
         static bool registeredAtFactory;
 
@@ -38,7 +47,9 @@ namespace pcapfs {
 
         static bool connectionBreaksInTimeSlot(TimePoint break_time, const TimeSlot &time_slot);
 
-        static void handleMlsdFiles(const FilePtr &filePtr, const std::string &filePath);
+        static void handleMlsd(const FilePtr &filePtr, const std::string &filePath);
+
+        static FtpFileMetaData const parseMetadataLine(std::string &line);
 
         std::map<TimePoint, TimePoint> fsTimestamps;
     };

@@ -14,6 +14,7 @@ namespace pcapfs {
 			static const std::string MFMT; // modify last modification info of a file
 			static const std::string MKD; // make directory
 			static const std::string MLSD; // list directory content
+			static const std::string MLST; // list file/directory metadata
 			static const std::string PASS; // passwort for authentication
 			static const std::string PASV; // enter passive mode
 			static const std::string PORT; // Specifies an address and port to which the server should connect.
