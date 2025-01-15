@@ -169,7 +169,7 @@ namespace pcapfs_filesystem {
         initRoot();
         auto files = index.getFiles();
         pcapfs::smb::SmbManager::getInstance().adjustServerFilesForDirLayout(files, snapshot, timestampMode);
-        pcapfs::FtpManager::getInstance().adjustServerFilesForDirLayout(files, snapshot, timestampMode);
+        pcapfs::ftp::FtpManager::getInstance().adjustServerFilesForDirLayout(files, snapshot, timestampMode);
         bool snapshotAndFsTimestamps = (snapshot != pcapfs::TimePoint::min() && timestampMode == pcapfs::options::TimestampMode::FS);
 
         bool earlyBreak = false;

@@ -2,7 +2,7 @@
 #include "../ftp.h"
 
 
-void pcapfs::FtpManager::addFileTransmissionData(uint16_t port, const FileTransmissionData &data) {
+void pcapfs::ftp::FtpManager::addFileTransmissionData(uint16_t port, const FileTransmissionData &data) {
     LOG_DEBUG << "FTP: add file transmission data for file " << data.transmission_file;
     DataMap::iterator it = data_transmissions.find(port);
     if (it == data_transmissions.end()) {
@@ -15,7 +15,7 @@ void pcapfs::FtpManager::addFileTransmissionData(uint16_t port, const FileTransm
 }
 
 
-std::vector<pcapfs::FileTransmissionData> pcapfs::FtpManager::getFileTransmissionData(uint16_t port) {
+std::vector<pcapfs::FileTransmissionData> pcapfs::ftp::FtpManager::getFileTransmissionData(uint16_t port) {
     DataMap::iterator it = data_transmissions.find(port);
     if (it != data_transmissions.end()) {
         return it->second;
@@ -25,7 +25,7 @@ std::vector<pcapfs::FileTransmissionData> pcapfs::FtpManager::getFileTransmissio
 }
 
 
-pcapfs::ServerFilePtr const pcapfs::FtpManager::getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) {
+pcapfs::ServerFilePtr const pcapfs::ftp::FtpManager::getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) {
     if (serverFiles[SERVER_FILE_TREE_DUMMY].find(filePath) != serverFiles[SERVER_FILE_TREE_DUMMY].end()) {
         LOG_DEBUG << "parent directory is already known as an FtpFile";
         return serverFiles[SERVER_FILE_TREE_DUMMY][filePath];
@@ -48,7 +48,7 @@ pcapfs::ServerFilePtr const pcapfs::FtpManager::getAsParentDirFile(const std::st
 }
 
 
-std::vector<pcapfs::FilePtr> const pcapfs::FtpManager::getServerFiles(const Index&) {
+std::vector<pcapfs::FilePtr> const pcapfs::ftp::FtpManager::getServerFiles(const Index&) {
     std::vector<FilePtr> resultVector;
     std::transform(serverFiles[SERVER_FILE_TREE_DUMMY].begin(), serverFiles[SERVER_FILE_TREE_DUMMY].end(),
                     std::back_inserter(resultVector), [](const auto &f){ return f.second; });
@@ -56,7 +56,7 @@ std::vector<pcapfs::FilePtr> const pcapfs::FtpManager::getServerFiles(const Inde
 }
 
 
-void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr) {
+void pcapfs::ftp::FtpManager::updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr) {
     FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (!ftpFilePtr) {
         ftpFilePtr = std::make_shared<FtpFile>();
@@ -75,7 +75,7 @@ void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FileP
 }
 
 
-void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr) {
+void pcapfs::ftp::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr) {
     FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (ftpFilePtr) {
        ftpFilePtr->addFsTimestamp(offsetFilePtr->getTimestamp(), modifyTime);
@@ -100,7 +100,7 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
 
 
 // TODO: make this function once for all server files
-void pcapfs::FtpManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
+void pcapfs::ftp::FtpManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
     std::vector<pcapfs::FilePtr> filesToAdd;
 
     for (size_t i = indexFiles.size() - 1; i != (size_t)-1; --i) {

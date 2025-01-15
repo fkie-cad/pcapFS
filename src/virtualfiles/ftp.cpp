@@ -23,7 +23,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
     if (d.transmission_type.empty())
         return resultVector;
 
-    if (d.transmission_type == FTPCommands::MLSD) {
+    if (d.transmission_type == ftp::FtpCommands::MLSD) {
         LOG_DEBUG << "FTP: handling MLSD file for " << d.transmission_file;
         handleMlsd(filePtr, d.transmission_file);
     } else {
@@ -36,9 +36,9 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
             resultPtr->setFilename(d.transmission_type);
             resultPtr->setParentDir(nullptr);
             resultPtr->fillGlobalProperties(filePtr);
-            FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
+            ftp::FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
         } else {
-            FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
+            ftp::FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
         }
     }
 
@@ -51,7 +51,7 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 
 std::vector<pcapfs::FileTransmissionData>
 pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
-    FtpManager &manager = FtpManager::getInstance();
+    ftp::FtpManager &manager = ftp::FtpManager::getInstance();
     const uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
     const uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
 
@@ -129,7 +129,7 @@ void pcapfs::FtpFile::handleMlsd(const FilePtr &filePtr, const std::string &file
                 ss2 >> std::get_time(&tm, "%Y%m%d%H%M%S");
                 tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
             }
-            FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, tp, filePtr);
+            ftp::FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, tp, filePtr);
         } catch (const PcapFsException &err){
                 continue;
         }
@@ -149,7 +149,7 @@ void pcapfs::FtpFile::handleAllFilesToRoot(const std::string &filePath, const Se
         if(!remainder.empty() && remainder != "/") {
             LOG_DEBUG << "detected subdir(s)";
             LOG_DEBUG << "remainder: " << remainder;
-            parentDir = FtpManager::getInstance().getAsParentDirFile(remainder, context);
+            parentDir = ftp::FtpManager::getInstance().getAsParentDirFile(remainder, context);
         } else {
             // root directory has nullptr as parentDir
             parentDir = nullptr;
@@ -196,7 +196,7 @@ void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
     setProperty("srcPort", filePtr->getProperty("srcPort"));
     setProperty("dstPort", filePtr->getProperty("dstPort"));
     flags.set(flags::PROCESSED);
-    setIdInIndex(FtpManager::getInstance().getNewId());
+    setIdInIndex(ftp::FtpManager::getInstance().getNewId());
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
 }
 

@@ -1,22 +1,24 @@
 #include "ftp_commands.h"
 
 namespace pcapfs {
-	const std::string FTPCommands::ALLO = "ALLO";
-	const std::string FTPCommands::AUTH = "AUTH";
-	const std::string FTPCommands::CWD = "CWD";
-	const std::string FTPCommands::FEAT = "FEAT";
-	const std::string FTPCommands::LIST = "LIST";
-	const std::string FTPCommands::MFMT = "MFMT";
-	const std::string FTPCommands::MKD = "MKD";
-	const std::string FTPCommands::MLSD = "MLSD";
-	const std::string FTPCommands::MLST = "MLST";
-	const std::string FTPCommands::PASS = "PASS";
-	const std::string FTPCommands::PASV = "PASV";
-	const std::string FTPCommands::PORT = "PORT";
-	const std::string FTPCommands::PWD = "PWD";
-	const std::string FTPCommands::RETR = "RETR";
-	const std::string FTPCommands::STOR = "STOR";
-	const std::string FTPCommands::TYPE = "TYPE";
-	const std::string FTPCommands::USER = "USER";
-	const std::string FTPCommands::QUIT = "QUIT";
+	namespace ftp {
+		const std::string FtpCommands::ALLO = "ALLO";
+		const std::string FtpCommands::AUTH = "AUTH";
+		const std::string FtpCommands::CWD = "CWD";
+		const std::string FtpCommands::FEAT = "FEAT";
+		const std::string FtpCommands::LIST = "LIST";
+		const std::string FtpCommands::MFMT = "MFMT";
+		const std::string FtpCommands::MKD = "MKD";
+		const std::string FtpCommands::MLSD = "MLSD";
+		const std::string FtpCommands::MLST = "MLST";
+		const std::string FtpCommands::PASS = "PASS";
+		const std::string FtpCommands::PASV = "PASV";
+		const std::string FtpCommands::PORT = "PORT";
+		const std::string FtpCommands::PWD = "PWD";
+		const std::string FtpCommands::RETR = "RETR";
+		const std::string FtpCommands::STOR = "STOR";
+		const std::string FtpCommands::TYPE = "TYPE";
+		const std::string FtpCommands::USER = "USER";
+		const std::string FtpCommands::QUIT = "QUIT";
+	}
 }

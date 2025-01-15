@@ -199,7 +199,7 @@ int main(int argc, const char *argv[]) {
         // insert possible SMB server files
         LOG_TRACE << "inserting all smb server files into index";
         index.insert(pcapfs::smb::SmbManager::getInstance().getServerFiles(index));
-        index.insert(pcapfs::FtpManager::getInstance().getServerFiles(index));
+        index.insert(pcapfs::ftp::FtpManager::getInstance().getServerFiles(index));
 
         if (!config.indexInMemory) {
             index.write(config.indexFilePath);

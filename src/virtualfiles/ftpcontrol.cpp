@@ -42,9 +42,9 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpControlFile::parse(FilePtr filePtr, Inde
     for (size_t i = 0; i < numElements; ++i) {
         parseResult(result, filePtr, i);
 
-        if (result->getProperty(FTPCommands::USER) != "") {
+        if (result->getProperty(ftp::FtpCommands::USER) != "") {
             parseUSERCredentials(result, i, filePtr, credentials);
-        } else if (result->getProperty(FTPCommands::PASS) != "") {
+        } else if (result->getProperty(ftp::FtpCommands::PASS) != "") {
             parsePASSCredentials(filePtr, result, credentials, i);
         }
     }
@@ -200,9 +200,9 @@ pcapfs::FtpControlFile::Response pcapfs::FtpControlFile::parseResponse(char *raw
 
 void pcapfs::FtpControlFile::handleResponseTypes(const Response &response,
                                                         std::shared_ptr<pcapfs::FtpControlFile> &result) {
-    if (response.code == FTPResponseCodes::EnteringPassiveMode)
+    if (response.code == ftp::FtpResponseCodes::EnteringPassiveMode)
         result->setProperty("activeDataPort", parsePassivePort(response.message));
-    else if (response.code == FTPResponseCodes::EnteringExtendedPassiveMode)
+    else if (response.code == ftp::FtpResponseCodes::EnteringExtendedPassiveMode)
         result->setProperty("activeDataPort", parseExtendedPassivePort(response.message));
 }
 
@@ -300,13 +300,13 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
                                                   const Response &response, const TimeSlot &time_slot) {
     const std::string command = cmd.first;
 
-    if (command == FTPCommands::PASS) {
-        result->setProperty(FTPCommands::PASS, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
-    } else if (command == FTPCommands::USER) {
-        result->setProperty(FTPCommands::USER, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
-    } else if (command == FTPCommands::PORT) {
+    if (command == ftp::FtpCommands::PASS) {
+        result->setProperty(ftp::FtpCommands::PASS, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
+    } else if (command == ftp::FtpCommands::USER) {
+        result->setProperty(ftp::FtpCommands::USER, (cmd.second.size() > 0) ? cmd.second.at(0) : "");
+    } else if (command == ftp::FtpCommands::PORT) {
         result->setProperty("activeDataPort", parsePassivePort(cmd.second.at(0)));
-    } else if (command == FTPCommands::CWD && response.code == FTPResponseCodes::FileActionSuccessful && cmd.second.size() > 0) {
+    } else if (command == ftp::FtpCommands::CWD && response.code == ftp::FtpResponseCodes::FileActionSuccessful && cmd.second.size() > 0) {
         const std::string rootDirName = "FILES_FROM_" + result->getProperty("dstIP");
         std::string dir = cmd.second.at(0);
         if (dir.at(dir.length() - 1) != '/')
@@ -321,7 +321,7 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
             else
                 result->setProperty("cwd", rootDirName + dir);
         }
-    } else if (response.code == FTPResponseCodes::FileStatusOK && !result->getProperty("activeDataPort").empty()) {
+    } else if (response.code == ftp::FtpResponseCodes::FileStatusOK && !result->getProperty("activeDataPort").empty()) {
 
         // TODO: also check for MLST command with following 250 <response>
         // then parse MLST response on the fly
@@ -347,7 +347,7 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
         param = result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd");
     }
 
-    FtpManager::getInstance().addFileTransmissionData(stoi(result->getProperty("activeDataPort")),
+    ftp::FtpManager::getInstance().addFileTransmissionData(stoi(result->getProperty("activeDataPort")),
                                                         FileTransmissionData{param, command, time_slot});
 }
 
