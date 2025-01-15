@@ -168,10 +168,7 @@ void pcapfs::FtpFile::parseResult(const pcapfs::FilePtr &filePtr) {
 
 
 void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
-    accessTime = filePtr->connectionBreaks.at(0).second;
-    modifyTime = filePtr->connectionBreaks.at(0).second;
-    changeTime = filePtr->connectionBreaks.at(0).second;
-    birthTime = filePtr->connectionBreaks.at(0).second;
+    fsTimestamps[filePtr->connectionBreaks.at(0).second] = ZERO_TIME_POINT;
     setProperty("protocol", "ftp");
     setFiletype("ftp");
     setOffsetType(filePtr->getFiletype());
@@ -195,6 +192,27 @@ size_t pcapfs::FtpFile::read(uint64_t startOffset, size_t length, const Index &i
     }
     memcpy(buf, totalContent.data() + startOffset, length);
     return std::min(totalContent.size() - startOffset, length);
+}
+
+
+std::vector<pcapfs::FilePtr> const pcapfs::FtpFile::constructVersionFiles() {
+    // TODO: make this smarty because in almost all cases we just have one version
+    std::vector<FilePtr> resultVector;
+
+    const auto entryPos = fsTimestamps.crbegin();
+    if (entryPos != fsTimestamps.crend()) {
+        accessTime = changeTime = modifyTime = (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) ? entryPos->first : entryPos->second;
+    } else {
+        accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
+    }
+
+    return resultVector;
+}
+
+
+bool pcapfs::FtpFile::constructSnapshotFile() {
+
+    return true;
 }
 
 

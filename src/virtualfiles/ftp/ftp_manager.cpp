@@ -78,23 +78,13 @@ void pcapfs::FtpManager::updateFtpFiles(const std::string &filePath, const FileP
 void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr) {
     FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (ftpFilePtr) {
-        if (ftpFilePtr->getModifyTime() != modifyTime) {
-            // file is already known, just update the timestamps
-            LOG_TRACE << "updated modify time of" << filePath;
-            ftpFilePtr->setModifyTime(modifyTime);
-            ftpFilePtr->setAccessTime(modifyTime);
-            ftpFilePtr->setChangeTime(modifyTime);
-            serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
-        }
+       ftpFilePtr->addFsTimestamp(offsetFilePtr->getTimestamp(), modifyTime);
     } else {
         ftpFilePtr = std::make_shared<FtpFile>();
         const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
         ftpFilePtr->handleAllFilesToRoot(filePath, context);
         ftpFilePtr->fillGlobalProperties(offsetFilePtr);
-        ftpFilePtr->isDirectory = isDirectory;
-        ftpFilePtr->setModifyTime(modifyTime);
-        ftpFilePtr->setAccessTime(modifyTime);
-        ftpFilePtr->setChangeTime(modifyTime);
+        ftpFilePtr->addFsTimestamp(offsetFilePtr->getTimestamp(), modifyTime);
         Fragment fragment;
         fragment.id = offsetFilePtr->getIdInIndex();
         fragment.start = 0;
@@ -105,4 +95,27 @@ void pcapfs::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath, boo
         ftpFilePtr->flags.set(flags::IS_METADATA);
         serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
     }
+}
+
+
+// TODO: make this function once for all server files
+void pcapfs::FtpManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
+    std::vector<pcapfs::FilePtr> filesToAdd;
+
+    for (size_t i = indexFiles.size() - 1; i != (size_t)-1; --i) {
+        FilePtr currFile = indexFiles.at(i);
+        if (!currFile->isFiletype("ftp"))
+            continue;
+
+        pcapfs::FtpFilePtr ftpFilePtr = std::static_pointer_cast<pcapfs::FtpFile>(indexFiles.at(i));
+
+        const std::vector<pcapfs::FilePtr> ftpFileVersions = ftpFilePtr->constructVersionFiles();
+        //if (ftpFileVersions.size() != 0) {
+        //    filesToAdd.insert(filesToAdd.end(), ftpFileVersions.begin(), ftpFileVersions.end());
+        //    // old ftp file is not needed anymore since we now have all versions of it as separate files
+        //    indexFiles.erase(indexFiles.begin()+i);
+        //}
+    }
+
+    indexFiles.insert(indexFiles.end(), filesToAdd.begin(), filesToAdd.end());
 }

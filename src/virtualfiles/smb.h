@@ -36,8 +36,8 @@ namespace pcapfs {
 
         void deduplicateVersions(const Index &idx);
 
-        std::vector<std::shared_ptr<SmbFile>> const constructSmbVersionFiles(); // TODO: move this to serverfile?
-        bool constructSnapshotFile();
+        std::vector<FilePtr> const constructVersionFiles() override;
+        bool constructSnapshotFile() override;
 
         void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation);
 

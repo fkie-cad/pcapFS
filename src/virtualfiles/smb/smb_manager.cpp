@@ -547,10 +547,12 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::string &fileId, const Fi
 }
 
 
-void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
+// TODO: make this function once for all server files
+void pcapfs::smb::SmbManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
     std::vector<pcapfs::FilePtr> filesToAdd;
     bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
 
+    // TODO: this check needs to be globalized because it should also be done for FTP files
     if (snapshotSpecified && timestampMode == pcapfs::options::TimestampMode::NETWORK &&
         (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
         // check if specified snapshot time is in allowed range
@@ -577,7 +579,7 @@ void pcapfs::smb::SmbManager::adjustSmbFilesForDirLayout(std::vector<FilePtr> &i
             }
         } else {
             // no snapshot time specified -> create separate smb file for each version
-            const std::vector<pcapfs::SmbFilePtr> smbFileVersions = smbFilePtr->constructSmbVersionFiles();
+            const std::vector<pcapfs::FilePtr> smbFileVersions = smbFilePtr->constructVersionFiles();
             if (smbFileVersions.size() != 0) {
                 filesToAdd.insert(filesToAdd.end(), smbFileVersions.begin(), smbFileVersions.end());
                 // old smb file is not needed anymore since we now have all versions of it as separate files

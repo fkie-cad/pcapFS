@@ -321,7 +321,11 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
             else
                 result->setProperty("cwd", rootDirName + dir);
         }
-    } else if (response.code == FTPResponseCodes::FileStatusOK) {
+    } else if (response.code == FTPResponseCodes::FileStatusOK && !result->getProperty("activeDataPort").empty()) {
+
+        // TODO: also check for MLST command with following 250 <response>
+        // then parse MLST response on the fly
+
         handleDataTransferCommand(result, cmd, time_slot);
     }
 }
@@ -332,20 +336,19 @@ void pcapfs::FtpControlFile::handleDataTransferCommand(std::shared_ptr<pcapfs::F
     const std::string command = cmd.first;
     const std::vector<std::string> params = cmd.second;
     std::string param;
-    if (command == FTPCommands::MLSD) {
-        param = result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd");
+    if (params.size() > 0) {
+        const std::string filename = params.at(0); // can also be a directory name
+        if (filename.at(0) == '/')
+            param = "FILES_FROM_" + result->getProperty("dstIP") + filename; // absolute path
+        else
+            param = (result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd")) + params.at(0); // only file/dir name
+
     } else {
-        param = (params.size() > 0) ?
-                (result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd")) + params.at(0) :
-                "";
+        param = result->getProperty("cwd").empty() ? "FILES_FROM_" + result->getProperty("dstIP") + "/" : result->getProperty("cwd");
     }
 
-    const FileTransmissionData data{param, command, time_slot};
-
-    if (!result->getProperty("activeDataPort").empty()) {
-        const uint16_t port = stoi(result->getProperty("activeDataPort"));
-        FtpManager::getInstance().addFileTransmissionData(port, data);
-    }
+    FtpManager::getInstance().addFileTransmissionData(stoi(result->getProperty("activeDataPort")),
+                                                        FileTransmissionData{param, command, time_slot});
 }
 
 

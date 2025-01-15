@@ -23,6 +23,11 @@ namespace pcapfs {
         void parseResult(const FilePtr &filePtr);
         void handleAllFilesToRoot(const std::string &filePath, const ServerFileContextPtr &context);
 
+        void addFsTimestamp(const TimePoint &networkTime, const TimePoint &fsTime) { fsTimestamps[networkTime] = fsTime; };
+
+        std::vector<FilePtr> const constructVersionFiles() override;
+        bool constructSnapshotFile() override;
+
     protected:
         static bool registeredAtFactory;
 
@@ -34,6 +39,8 @@ namespace pcapfs {
         static bool connectionBreaksInTimeSlot(TimePoint break_time, const TimeSlot &time_slot);
 
         static void handleMlsdFiles(const FilePtr &filePtr, const std::string &filePath);
+
+        std::map<TimePoint, TimePoint> fsTimestamps;
     };
 
     typedef std::shared_ptr<FtpFile> FtpFilePtr;

@@ -23,6 +23,8 @@ namespace pcapfs {
         virtual std::vector<FilePtr> const getServerFiles(const Index &idx) = 0;
         virtual ServerFilePtr const getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) = 0;
 
+        virtual void adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) = 0;
+
         uint64_t getNewId();
 
     protected:

@@ -401,8 +401,8 @@ bool pcapfs::SmbFile::constructSnapshotFile() {
 }
 
 
-std::vector<std::shared_ptr<pcapfs::SmbFile>> const pcapfs::SmbFile::constructSmbVersionFiles() {
-    std::vector<SmbFilePtr> resultVector;
+std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
+    std::vector<FilePtr> resultVector;
 
     const auto referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ? fsTimestamps : getAllTimestamps();
     if (fileVersions.size() <= 1) {

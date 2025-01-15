@@ -8,6 +8,7 @@
 #include "offsets.h"
 #include "logging.h"
 #include "virtualfiles/smb/smb_manager.h"
+#include "virtualfiles/ftp/ftp_manager.h"
 
 
 namespace pcapfs_filesystem {
@@ -167,7 +168,8 @@ namespace pcapfs_filesystem {
     int DirectoryLayout::fillDirTreeSortby(const pcapfs::Index &index, pcapfs::TimePoint &snapshot, uint8_t timestampMode) {
         initRoot();
         auto files = index.getFiles();
-        pcapfs::smb::SmbManager::getInstance().adjustSmbFilesForDirLayout(files, snapshot, timestampMode);
+        pcapfs::smb::SmbManager::getInstance().adjustServerFilesForDirLayout(files, snapshot, timestampMode);
+        pcapfs::FtpManager::getInstance().adjustServerFilesForDirLayout(files, snapshot, timestampMode);
         bool snapshotAndFsTimestamps = (snapshot != pcapfs::TimePoint::min() && timestampMode == pcapfs::options::TimestampMode::FS);
 
         bool earlyBreak = false;

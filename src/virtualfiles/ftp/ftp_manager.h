@@ -35,6 +35,7 @@ namespace pcapfs {
 
         ServerFilePtr const getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) override;
         std::vector<FilePtr> const getServerFiles(const Index&) override;
+        void adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) override;
 
         void addFtpFile(const std::string &filePath, const FtpFilePtr &inFtpFile) { serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = inFtpFile; };
 

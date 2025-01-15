@@ -122,6 +122,9 @@ namespace pcapfs {
             clientIPs.insert(ip);
         };
 
+        virtual std::vector<FilePtr> const constructVersionFiles() = 0;
+        virtual bool constructSnapshotFile() = 0;
+
         void serialize(boost::archive::text_oarchive &archive) override;
         void deserialize(boost::archive::text_iarchive &archive) override;
 
