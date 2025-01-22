@@ -4,6 +4,7 @@
 #include "../commontypes.h"
 #include "virtualfile.h"
 #include "../file.h"
+#include "ftp/ftp_utils.h"
 
 
 namespace pcapfs {
@@ -18,11 +19,6 @@ namespace pcapfs {
 
     protected:
         using Command = std::pair<std::string, std::vector<std::string>>;
-        struct Response {
-            uint16_t code;
-            std::string message;
-            TimePoint timestamp;
-        };
 
         static bool registeredAtFactory;
 
@@ -33,6 +29,8 @@ namespace pcapfs {
         static const std::string DATA_DIRECTION_PREFIX_IN;
         static const std::string DATA_DIRECTION_PREFIX_OUT;
         static const uint8_t DATA_DIRECTION_PREFIX_LN;
+
+        static std::string const constructDirPathString(const std::vector<std::string> &params, const std::string &dstIP, const std::string &cwd);
 
         static void fillGlobalProperties(std::shared_ptr<FtpControlFile> &result, FilePtr &filePtr);
 
@@ -65,10 +63,10 @@ namespace pcapfs {
         static uint8_t handleResponse(std::shared_ptr<FtpControlFile> &result, size_t size,
                                       char *raw_data, TimePoint timestamp);
 
-        static Response parseResponse(char *raw_data, size_t size, TimePoint timestamp);
+        static FtpResponse parseResponse(char *raw_data, size_t size, TimePoint timestamp);
 
         static void
-        handleResponseTypes(const Response &response, std::shared_ptr<pcapfs::FtpControlFile> &result);
+        handleResponseTypes(const FtpResponse &response, std::shared_ptr<pcapfs::FtpControlFile> &result);
 
         static std::string const parsePassivePort(std::string message);
 
@@ -78,22 +76,19 @@ namespace pcapfs {
         handleCommand(const std::shared_ptr<pcapfs::FtpControlFile> &result, const pcapfs::FilePtr &filePtr,
                       size_t i, size_t size);
 
-        static Response
+        static FtpResponse
         getCommandResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements, pcapfs::Bytes &data);
 
         static TimePoint
         getTimestampAfterResponse(const pcapfs::FilePtr &filePtr, size_t i, size_t numElements,
-                                  const pcapfs::FtpControlFile::Response &response);
+                                  const pcapfs::FtpResponse &response);
 
         static pcapfs::FtpControlFile::Command parseCommand(char *raw_data, size_t size);
 
         static void
-        handleCommandTypes(std::shared_ptr<FtpControlFile> result, const Command &cmd, const Response &response,
-                           const TimeSlot &time_slot);
+        handleCommandTypes(std::shared_ptr<FtpControlFile> result, const pcapfs::FilePtr &filePtr,
+                            const Command &cmd, const FtpResponse &response, const TimeSlot &time_slot);
 
-        static void
-        handleDataTransferCommand(std::shared_ptr<pcapfs::FtpControlFile> &result, const Command &cmd,
-                                  const TimeSlot &time_slot);
 
         Bytes readRawData(const pcapfs::Index &idx, const Fragment &fragment) const;
 

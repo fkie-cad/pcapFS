@@ -1,12 +1,14 @@
 #include "ftp_manager.h"
+#include "ftp_commands.h"
 #include "../ftp.h"
+#include "../../exceptions.h"
 
 
-void pcapfs::ftp::FtpManager::addFileTransmissionData(uint16_t port, const FileTransmissionData &data) {
+void pcapfs::ftp::FtpManager::addFileTransmissionData(uint16_t port, const FtpFileTransmissionData &data) {
     LOG_DEBUG << "FTP: add file transmission data for file " << data.transmission_file;
     DataMap::iterator it = data_transmissions.find(port);
     if (it == data_transmissions.end()) {
-        std::vector<FileTransmissionData> files;
+        std::vector<FtpFileTransmissionData> files;
         files.emplace_back(data);
         data_transmissions.insert(DataMapPair(port, files));
     } else {
@@ -15,12 +17,12 @@ void pcapfs::ftp::FtpManager::addFileTransmissionData(uint16_t port, const FileT
 }
 
 
-std::vector<pcapfs::FileTransmissionData> pcapfs::ftp::FtpManager::getFileTransmissionData(uint16_t port) {
+std::vector<pcapfs::FtpFileTransmissionData> pcapfs::ftp::FtpManager::getFileTransmissionData(uint16_t port) {
     DataMap::iterator it = data_transmissions.find(port);
     if (it != data_transmissions.end()) {
         return it->second;
     } else {
-        return std::vector<FileTransmissionData>(0);
+        return std::vector<FtpFileTransmissionData>(0);
     }
 }
 
@@ -56,13 +58,15 @@ std::vector<pcapfs::FilePtr> const pcapfs::ftp::FtpManager::getServerFiles(const
 }
 
 
-void pcapfs::ftp::FtpManager::updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr) {
+void pcapfs::ftp::FtpManager::updateFtpFiles(const std::string &filePath, const std::string &command, const FilePtr &offsetFilePtr) {
     FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][filePath]);
     if (!ftpFilePtr) {
         ftpFilePtr = std::make_shared<FtpFile>();
         const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
         ftpFilePtr->handleAllFilesToRoot(filePath, context);
         ftpFilePtr->fillGlobalProperties(offsetFilePtr);
+        if (command != FtpCommands::RETR)
+            ftpFilePtr->flags.set(flags::IS_METADATA);
         ftpFilePtr->isDirectory = false;
         ftpFilePtr->parseResult(offsetFilePtr);
         serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
@@ -95,6 +99,58 @@ void pcapfs::ftp::FtpManager::updateFtpFilesFromMlsd(const std::string &filePath
         ftpFilePtr->setFilesizeProcessed(0);
         ftpFilePtr->flags.set(flags::IS_METADATA);
         serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = ftpFilePtr;
+    }
+}
+
+
+void pcapfs::ftp::FtpManager::updateFtpFilesFromMlst(const std::string &filePath, const FtpResponse &response, const FilePtr &offsetFilePtr) {
+    std::stringstream ss(std::string(response.message.begin(), response.message.end()));
+    std::string line;
+    size_t i = 0;
+    while (std::getline(ss, line, '\n') && i < 1) ++i;
+    if (i != 1 || line.empty())
+        return;
+
+    if (line.at(0) == ' ')
+        line = line.substr(1, line.size() - 1);
+
+    FtpFileMetaData metadata;
+    try {
+        metadata = ftp::parseMetadataLine(line);
+    } catch (const PcapFsException &err){
+        return;
+    }
+    if (metadata.filename.empty())
+        return;
+
+    std::string fullFilePath;
+    if (metadata.filename == "/")
+        fullFilePath = "FILES_FROM_" + offsetFilePtr->getProperty("dstIP");
+    else
+        fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + offsetFilePtr->getProperty("dstIP") + metadata.filename : filePath + metadata.filename;
+
+    if (fullFilePath.at(fullFilePath.size() - 1) == '/')
+        fullFilePath = fullFilePath.substr(0, fullFilePath.size() - 1);
+
+    FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][fullFilePath]);
+    if (ftpFilePtr) {
+        ftpFilePtr->addFsTimestamp(response.timestamp, metadata.modifyTime);
+    } else {
+        ftpFilePtr = std::make_shared<FtpFile>();
+        const ServerFileContextPtr context = std::make_shared<ServerFileContext>(offsetFilePtr);
+        ftpFilePtr->handleAllFilesToRoot(fullFilePath, context);
+        ftpFilePtr->fillGlobalProperties(offsetFilePtr);
+        ftpFilePtr->isDirectory = metadata.isDir;
+        ftpFilePtr->addFsTimestamp(response.timestamp, metadata.modifyTime);
+        Fragment fragment;
+        fragment.id = offsetFilePtr->getIdInIndex();
+        fragment.start = 0;
+        fragment.length = 0;
+        ftpFilePtr->fragments.push_back(fragment);
+        ftpFilePtr->setFilesizeRaw(0);
+        ftpFilePtr->setFilesizeProcessed(0);
+        ftpFilePtr->flags.set(flags::IS_METADATA);
+        serverFiles[SERVER_FILE_TREE_DUMMY][fullFilePath] = ftpFilePtr;
     }
 }
 

@@ -2,20 +2,16 @@
 #define PCAPFS_VIRTUAL_FILES_FTP_H
 
 #include "serverfile.h"
+#include "ftp/ftp_utils.h"
 
 namespace pcapfs {
 
-    struct FileTransmissionData {
+    struct FtpFileTransmissionData {
         std::string transmission_file;
         std::string transmission_type;
         TimeSlot time_slot;
     };
 
-    struct FtpFileMetaData {
-        std::string filename;
-        std::string modifyTime;
-        bool isDir = false;
-    };
 
     class FtpFile : public ServerFile {
     public:
@@ -40,16 +36,14 @@ namespace pcapfs {
     protected:
         static bool registeredAtFactory;
 
-        static std::vector<FileTransmissionData> getTransmissionDataForPort(pcapfs::FilePtr &filePtr);
+        static std::vector<FtpFileTransmissionData> getTransmissionDataForPort(pcapfs::FilePtr &filePtr);
 
-        static FileTransmissionData getTransmissionFileData(const pcapfs::FilePtr &filePtr,
-                                                            const std::vector<FileTransmissionData> &transmission_data);
+        static FtpFileTransmissionData getTransmissionFileData(const pcapfs::FilePtr &filePtr,
+                                                            const std::vector<FtpFileTransmissionData> &transmission_data);
 
         static bool connectionBreaksInTimeSlot(TimePoint break_time, const TimeSlot &time_slot);
 
         static void handleMlsd(const FilePtr &filePtr, const std::string &filePath);
-
-        static FtpFileMetaData const parseMetadataLine(std::string &line);
 
         std::map<TimePoint, TimePoint> fsTimestamps;
     };

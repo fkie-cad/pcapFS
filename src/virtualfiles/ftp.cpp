@@ -1,10 +1,9 @@
 #include "ftp.h"
 #include "../filefactory.h"
-#include "../exceptions.h"
 #include "ftp/ftp_manager.h"
 #include "ftp/ftp_commands.h"
-
-#include <boost/algorithm/string.hpp>
+#include "ftp/ftp_utils.h"
+#include "../exceptions.h"
 
 
 
@@ -14,12 +13,12 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
     if (filePtr->connectionBreaks.empty())
         return resultVector;
 
-    std::vector<pcapfs::FileTransmissionData> port_transmission_data = getTransmissionDataForPort(filePtr);
+    std::vector<pcapfs::FtpFileTransmissionData> port_transmission_data = getTransmissionDataForPort(filePtr);
 
     if (port_transmission_data.empty())
         return resultVector;
 
-    const FileTransmissionData d = getTransmissionFileData(filePtr, port_transmission_data);
+    const FtpFileTransmissionData d = getTransmissionFileData(filePtr, port_transmission_data);
     if (d.transmission_type.empty())
         return resultVector;
 
@@ -38,7 +37,12 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
             resultPtr->fillGlobalProperties(filePtr);
             ftp::FtpManager::getInstance().addFtpFile(resultPtr->getFilename(), resultPtr);
         } else {
-            ftp::FtpManager::getInstance().updateFtpFiles(d.transmission_file, filePtr);
+            std::string filePath = (d.transmission_file.at(d.transmission_file.size() - 1) == '/')
+                                        ? d.transmission_file.substr(0, d.transmission_file.size() - 1)
+                                        : d.transmission_file;
+            if (d.transmission_type != ftp::FtpCommands::RETR)
+                filePath += ("/" + d.transmission_type);
+            ftp::FtpManager::getInstance().updateFtpFiles(filePath, d.transmission_type, filePtr);
         }
     }
 
@@ -49,13 +53,13 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 }
 
 
-std::vector<pcapfs::FileTransmissionData>
+std::vector<pcapfs::FtpFileTransmissionData>
 pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
     ftp::FtpManager &manager = ftp::FtpManager::getInstance();
     const uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
     const uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
 
-    std::vector<FileTransmissionData> transmission_data = manager.getFileTransmissionData(dst_port);
+    std::vector<FtpFileTransmissionData> transmission_data = manager.getFileTransmissionData(dst_port);
     if (transmission_data.empty()) {
         transmission_data = manager.getFileTransmissionData(src_port);
     }
@@ -63,13 +67,13 @@ pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
 }
 
 
-pcapfs::FileTransmissionData
+pcapfs::FtpFileTransmissionData
 pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
-                                         const std::vector<pcapfs::FileTransmissionData> &transmission_data) {
-    FileTransmissionData d;
+                                         const std::vector<pcapfs::FtpFileTransmissionData> &transmission_data) {
+    FtpFileTransmissionData d;
     const OffsetWithTime owt = filePtr->connectionBreaks.at(0);
     auto result = std::find_if(transmission_data.cbegin(), transmission_data.cend(),
-                    [owt](const FileTransmissionData &td){ return connectionBreaksInTimeSlot(owt.second, td.time_slot); });
+                    [owt](const FtpFileTransmissionData &td){ return connectionBreaksInTimeSlot(owt.second, td.time_slot); });
     if (result != transmission_data.cend())
         d = *result;
     return d;
@@ -81,57 +85,28 @@ bool pcapfs::FtpFile::connectionBreaksInTimeSlot(TimePoint break_time, const pca
 }
 
 
-pcapfs::FtpFileMetaData const pcapfs::FtpFile::parseMetadataLine(std::string &line) {
-    size_t spacePos = line.rfind("; ");
-    if (spacePos == std::string::npos || spacePos + 3 >= line.length())
-        throw PcapFsException("FTP: invalid metadata line");
-
-    // -1 because of ending newline
-    const std::string extractedFilename(line.begin()+spacePos+2, line.end()-1);
-    if (extractedFilename.empty() || std::any_of(extractedFilename.begin(), extractedFilename.end(), [](char c) { return !std::isprint(c); }))
-        throw PcapFsException("FTP: invalid metadata line");
-
-    FtpFileMetaData result;
-    result.filename = extractedFilename;
-
-    std::stringstream ss(line);
-    std::string token;
-    while(std::getline(ss, token, ';')) {
-        std::stringstream ss2(token);
-        std::string key, value;
-        if (std::getline(ss2, key, '=') && std::getline(ss2, value)) {
-            if (boost::iequals(key, "modify"))
-                result.modifyTime = value;
-            else if (boost::iequals(key, "type"))
-                result.isDir = boost::iequals(value, "dir");
-        }
-    }
-
-    return result;
-}
-
-
 void pcapfs::FtpFile::handleMlsd(const FilePtr &filePtr, const std::string &filePath) {
     const Bytes data = filePtr->getBuffer();
     std::stringstream ss(std::string(data.begin(), data.end()));
     std::string line;
     while (std::getline(ss, line, '\n')) {
         try {
-            const FtpFileMetaData metadata = parseMetadataLine(line);
+            const FtpFileMetaData metadata = ftp::parseMetadataLine(line);
             if (metadata.filename.empty())
                 continue;
 
-            const std::string fullFilePath = filePath + metadata.filename;
-            TimePoint tp = ZERO_TIME_POINT;
-            if (!metadata.modifyTime.empty()) {
-                std::tm tm = {};
-                std::stringstream ss2(metadata.modifyTime);
-                ss2 >> std::get_time(&tm, "%Y%m%d%H%M%S");
-                tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-            }
-            ftp::FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, tp, filePtr);
+            std::string fullFilePath;
+            if (metadata.filename == "/")
+                fullFilePath = "FILES_FROM_" + filePtr->getProperty("dstIP");
+            else
+                fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + filePtr->getProperty("dstIP") + metadata.filename : filePath + metadata.filename;
+
+            if (fullFilePath.at(fullFilePath.size() - 1) == '/')
+                fullFilePath = fullFilePath.substr(0, fullFilePath.size() - 1);
+
+            ftp::FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, metadata.modifyTime, filePtr);
         } catch (const PcapFsException &err){
-                continue;
+            continue;
         }
     }
 }
@@ -188,15 +163,15 @@ void pcapfs::FtpFile::parseResult(const pcapfs::FilePtr &filePtr) {
 
 void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
     fsTimestamps[filePtr->connectionBreaks.at(0).second] = ZERO_TIME_POINT;
-    setProperty("protocol", "ftp");
-    setFiletype("ftp");
-    setOffsetType(filePtr->getFiletype());
-    setProperty("srcIP", filePtr->getProperty("srcIP"));
-    setProperty("dstIP", filePtr->getProperty("dstIP"));
-    setProperty("srcPort", filePtr->getProperty("srcPort"));
-    setProperty("dstPort", filePtr->getProperty("dstPort"));
+    properties["protocol"] =  "ftp";
+    filetype = "ftp";
+    offsetType = filePtr->getFiletype();
+    properties["srcIP"] = filePtr->getProperty("srcIP");
+    properties["dstIP"] = filePtr->getProperty("dstIP");
+    properties["srcPort"] = filePtr->getProperty("srcPort");
+    properties["dstPort"] = filePtr->getProperty("dstPort");
     flags.set(flags::PROCESSED);
-    setIdInIndex(ftp::FtpManager::getInstance().getNewId());
+    idInIndex = ftp::FtpManager::getInstance().getNewId();
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
 }
 

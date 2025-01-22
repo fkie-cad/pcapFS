@@ -8,6 +8,7 @@
 #include "../serverfile_manager.h"
 #include "../ftpcontrol.h"
 #include "../ftp.h"
+#include  "ftp_utils.h"
 #include "../../commontypes.h"
 
 
@@ -15,11 +16,11 @@ namespace pcapfs {
     namespace ftp {
         class FtpManager : public ServerFileManager {
         private:
-            std::map<uint16_t, std::vector<FileTransmissionData>> data_transmissions;
+            std::map<uint16_t, std::vector<FtpFileTransmissionData>> data_transmissions;
 
         public:
-            using DataMap = std::map<uint16_t, std::vector<FileTransmissionData>>;
-            using DataMapPair = std::pair<uint16_t, std::vector<FileTransmissionData>>;
+            using DataMap = std::map<uint16_t, std::vector<FtpFileTransmissionData>>;
+            using DataMapPair = std::pair<uint16_t, std::vector<FtpFileTransmissionData>>;
 
             static FtpManager &getInstance() {
                 static FtpManager instance;
@@ -30,8 +31,8 @@ namespace pcapfs {
             FtpManager(FtpManager &&) = delete;
             void operator=(const FtpManager &) = delete;
 
-            void addFileTransmissionData(uint16_t port, const FileTransmissionData &data);
-            std::vector<FileTransmissionData> getFileTransmissionData(uint16_t port);
+            void addFileTransmissionData(uint16_t port, const FtpFileTransmissionData &data);
+            std::vector<FtpFileTransmissionData> getFileTransmissionData(uint16_t port);
 
             ServerFilePtr const getAsParentDirFile(const std::string &filePath, const ServerFileContextPtr &context) override;
             std::vector<FilePtr> const getServerFiles(const Index&) override;
@@ -39,8 +40,9 @@ namespace pcapfs {
 
             void addFtpFile(const std::string &filePath, const FtpFilePtr &inFtpFile) { serverFiles[SERVER_FILE_TREE_DUMMY][filePath] = inFtpFile; };
 
-            void updateFtpFiles(const std::string &filePath, const FilePtr &offsetFilePtr);
+            void updateFtpFiles(const std::string &filePath, const std::string &command, const FilePtr &offsetFilePtr);
             void updateFtpFilesFromMlsd(const std::string &filePath, bool isDirectory, const TimePoint &modifyTime, const FilePtr &offsetFilePtr);
+            void updateFtpFilesFromMlst(const std::string &filePath, const FtpResponse &response, const FilePtr &offsetFilePtr);
 
         private:
             FtpManager() {}
