@@ -17,37 +17,39 @@
 
 
 size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    size_t fragment = 0;
+    size_t fragmentsPos = 0;
     size_t posInFragment = 0;
     size_t position = 0;
 
     // seek to start_offset
     while (position < startOffset) {
-        position += fragments[fragment].length;
-        fragment++;
+        position += fragments[fragmentsPos].length;
+        fragmentsPos++;
     }
 
     if (position > startOffset) {
-        fragment--;
-        posInFragment = fragments.at(fragment).length - (position - startOffset);
+        fragmentsPos--;
+        if (fragmentsPos >= fragments.size())
+            return 0;
+        posInFragment = fragments.at(fragmentsPos).length - (position - startOffset);
         position = static_cast<size_t>(startOffset);
     }
 
-    while (position < startOffset + length && fragment < fragments.size()) {
-        const size_t toRead = std::min(fragments.at(fragment).length - posInFragment, length - (position - startOffset));
+    while (position < startOffset + length && fragmentsPos < fragments.size()) {
+        const size_t toRead = std::min(fragments.at(fragmentsPos).length - posInFragment, length - (position - startOffset));
         //TODO: is start=0 really good for missing data?
-        if (fragments.at(fragment).start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
+        if (fragments.at(fragmentsPos).start == 0 && flags.test(pcapfs::flags::MISSING_DATA)) {
             // TCP missing data
             memset(buf + (position - startOffset), 0, toRead);
         } else {
             //TODO: offsets at which number?
-            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragment).id});
-            filePtr->read(fragments.at(fragment).start + posInFragment, toRead, idx, buf + (position - startOffset));
+            pcapfs::FilePtr filePtr = idx.get({this->offsetType, this->fragments.at(fragmentsPos).id});
+            filePtr->read(fragments.at(fragmentsPos).start + posInFragment, toRead, idx, buf + (position - startOffset));
         }
 
         // set run variables in case next fragment is needed
         position += toRead;
-        fragment++;
+        fragmentsPos++;
         posInFragment = 0;
     }
 
