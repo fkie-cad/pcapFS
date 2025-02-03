@@ -35,7 +35,7 @@ namespace boost {
         template<class Archive>
         void serialize(Archive &archive, pcapfs::TimePoint &timePoint, const unsigned int) {
             archive & make_binary_object(&timePoint, sizeof(timePoint));
-        };
+        }
     }
 }
 

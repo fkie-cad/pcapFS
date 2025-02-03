@@ -3,6 +3,7 @@
 
 #include "../commontypes.h"
 #include <set>
+#include <unordered_map>
 #include <pcapplusplus/SSLLayer.h>
 #include <pcapplusplus/SSLHandshake.h>
 #include <pcapplusplus/HttpLayer.h>
