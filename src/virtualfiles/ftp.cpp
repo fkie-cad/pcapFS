@@ -190,7 +190,7 @@ size_t pcapfs::FtpFile::read(uint64_t startOffset, size_t length, const Index &i
 
 
 std::vector<pcapfs::FilePtr> const pcapfs::FtpFile::constructVersionFiles() {
-    // TODO: make this smarty because in almost all cases we just have one version
+    // TODO: make this smartly because in almost all cases we just have one version
     std::vector<FilePtr> resultVector;
 
     auto entryPos = fsTimestamps.crbegin();
