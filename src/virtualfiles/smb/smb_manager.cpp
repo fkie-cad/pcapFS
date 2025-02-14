@@ -451,7 +451,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
 
         smbFilePtr->clearAndAddClientIP(smbContext->clientIP);
 
-        // save timstamps for current version
+        // save timestamps for current version
         smbFilePtr->saveCurrentTimestamps(smbContext->currentTimestamp, smbContext->timeSkew, true);
 
         smbFilePtr->isCurrentlyReadOperation = false;

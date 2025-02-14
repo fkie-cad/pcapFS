@@ -2,7 +2,7 @@ exclude: '.*\.(pcap|index|key|txt)|^3rdparty/|^build/|^dependencies|expected_out
 fail_fast: false
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: check-case-conflict
@@ -10,7 +10,7 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
   - repo: https://github.com/psf/black
-    rev: 23.1.0
+    rev: 25.1.0
     hooks:
       - id: black
   - repo: https://github.com/pocc/pre-commit-hooks
@@ -19,7 +19,7 @@ repos:
       - id: cppcheck
         args: ["src/", "tests/", "--suppressions-list=cppcheckSuppressions.txt", "--std=c++14", "--language=c++", "--force"]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.2
+    rev: v2.4.1
     hooks:
       - id: codespell
         pass_filenames: false
