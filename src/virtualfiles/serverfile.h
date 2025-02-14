@@ -63,6 +63,10 @@ namespace pcapfs {
                 return accessTime < tp.accessTime;
         };
 
+        bool operator<(const TimePoint &tp) const {
+            return accessTime < tp && modifyTime < tp && changeTime < tp;
+        };
+
         bool operator==(const ServerFileTimestamps &tp) const {
             return accessTime == tp.accessTime && modifyTime == tp.modifyTime &&
                     changeTime == tp.changeTime && birthTime == tp.birthTime;
@@ -77,7 +81,10 @@ namespace pcapfs {
         }
     };
 
+    typedef std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> ServerFileTimestampsMap;
+    typedef std::reverse_iterator<ServerFileTimestampsMap::const_iterator> ServerFileTimestampsPosRevIt;
 
+    template<typename T>
     struct ServerFileVersion {
         ServerFileVersion() {}
         ServerFileVersion(const std::vector<Fragment> &inFragments, const std::set<std::string> &inClientIPs, bool inReadOperation)
@@ -86,6 +93,7 @@ namespace pcapfs {
         std::set<std::string> clientIPs;
         bool readOperation = false;
         std::set<TimeTriple> accesses;
+        T timestamps;
 
         template<class Archive>
         void serialize(Archive &archive, const unsigned int) {
@@ -93,6 +101,7 @@ namespace pcapfs {
             archive & clientIPs;
             archive & accesses;
             archive & readOperation;
+            archive & timestamps;
         }
     };
 

@@ -13,22 +13,34 @@
 #include <boost/serialization/unordered_map.hpp>
 
 
-namespace boost {
-    namespace serialization {
-        template<class Archive>
-        void serialize(Archive & ar, pcpp::IPAddress& ip, const unsigned int) {
-            std::string ipString = ip.toString();
-            ar & ipString;
-            if (Archive::is_loading::value) {
-                ip = pcpp::IPAddress(ipString);
-            }
-        }
-    }
-}
-
-
 namespace pcapfs {
     namespace smb {
+
+        struct SmbTimestamps {
+            SmbTimestamps() = default;
+            SmbTimestamps(const std::map<TimePoint, ServerFileTimestamps>& inFsTimestamps,
+                            const std::map<TimePoint, ServerFileTimestamps>& inHybridTimestamps) :
+                            fsTimestamps(inFsTimestamps), hybridTimestamps(inHybridTimestamps) {}
+
+            std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> const getAllTimestamps() {
+                // returns union of hybridTimestamps and fsTimestamps
+                std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> result = hybridTimestamps;
+                for (const auto &entry: fsTimestamps) {
+                    if (!result.count(entry.first))
+                        result[entry.first] = entry.second;
+                }
+                return result;
+            }
+
+            template<class Archive>
+            void serialize(Archive &archive, const unsigned int) {
+                archive & fsTimestamps;
+                archive & hybridTimestamps;
+            }
+
+            std::map<TimePoint, ServerFileTimestamps> fsTimestamps;
+            std::map<TimePoint, ServerFileTimestamps> hybridTimestamps;
+        };
 
         // map treeId - tree name
         typedef std::unordered_map<uint32_t, std::string> SmbTreeNames;

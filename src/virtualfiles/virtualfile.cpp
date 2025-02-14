@@ -50,8 +50,8 @@ bool pcapfs::VirtualFile::showFile() {
         (!config.showAll && flags.test(pcapfs::flags::PARSED)))
         return false;
     else {
-        if ((config.snip.first != ZERO_TIME_POINT && timestamp < config.snip.first) ||
-            (config.snip.second != ZERO_TIME_POINT && timestamp > config.snip.second))
+        if ((options::LOWER_SNIP_SPECIFIED && timestamp < config.snip.first) ||
+            (options::UPPER_SNIP_SPECIFIED && timestamp > config.snip.second))
             return false;
         else
             return true;

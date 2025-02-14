@@ -42,7 +42,7 @@ namespace pcapfs {
         void saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation);
 
         void addAsNewFileVersion() {
-            fileVersions[timestampsOfCurrVersion] = ServerFileVersion(fragments, clientIPs, isCurrentlyReadOperation);
+            fileVersions[timestampsOfCurrVersion] = ServerFileVersion<smb::SmbTimestamps>(fragments, clientIPs, isCurrentlyReadOperation);
         }
 
         void serialize(boost::archive::text_oarchive &archive) override;
@@ -57,12 +57,18 @@ namespace pcapfs {
 
         std::map<TimePoint, ServerFileTimestamps> const getAllTimestamps();
 
+        ServerFileTimestampsPosRevIt getPosOfTimestampCandidate(const ServerFileTimestampsMap& timestampsMap);
+
+        bool tryMatchTimestampsToSnip(const ServerFileTimestampsMap& locFsTimestamps, const ServerFileTimestampsMap& locHybridTimestamps);
+
+        bool trySetAsMetadataFile(const ServerFileTimestampsMap &fsTimestamps, const ServerFileTimestampsMap &hybridTimestamps);
+
         // map network time - fs time
-        std::map<TimePoint, ServerFileTimestamps> fsTimestamps; // TODO: also add that to serverfile.h?
+        ServerFileTimestampsMap fsTimestamps; // TODO: also add that to serverfile.h?
 
-        std::map<TimePoint, ServerFileTimestamps> hybridTimestamps; // TODO: also add that to serverfile.h?
+        ServerFileTimestampsMap hybridTimestamps; // TODO: also add that to serverfile.h?
 
-        std::map<TimeTriple, ServerFileVersion> fileVersions; // TODO: also add that to serverfile.h?
+        std::map<TimeTriple, ServerFileVersion<smb::SmbTimestamps>> fileVersions; // TODO: also add that to serverfile.h?
 
         // only needed for parsing
         TimeTriple timestampsOfCurrVersion;

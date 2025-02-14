@@ -13,6 +13,10 @@ namespace pcapfs {
 
     namespace options {
 
+        extern bool UPPER_SNIP_SPECIFIED;
+        extern bool LOWER_SNIP_SPECIFIED;
+        extern bool SNAPSHOT_SPECIFIED;
+
         enum TimestampMode : uint8_t { HYBRID, FS, NETWORK };
 
         struct PcapFsOptions {

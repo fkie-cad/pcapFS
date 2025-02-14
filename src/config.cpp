@@ -17,6 +17,9 @@
 #include "utils.h"
 #include "versions.h"
 
+bool pcapfs::options::UPPER_SNIP_SPECIFIED = false;
+bool pcapfs::options::LOWER_SNIP_SPECIFIED = false;
+bool pcapfs::options::SNAPSHOT_SPECIFIED = false;
 
 namespace {
 
@@ -348,10 +351,12 @@ namespace {
                     const std::string snapshotString = vm["snapshot"].as<std::string>();
                     if (std::all_of(snapshotString.begin(), snapshotString.end(), ::isdigit)) {
                         long long timestamp = std::stoll(snapshotString);
-                        if (timestamp < 0)
+                        if (timestamp < 0) {
                             std::cerr << "Warning: Invalid snapshot timestamp: negative value" << std::endl;
-                        else
+                        } else {
                             opts.config.snapshot = std::chrono::system_clock::from_time_t(static_cast<std::time_t>(timestamp));
+                            pcapfs::options::SNAPSHOT_SPECIFIED = true;
+                        }
                     } else {
                         std::tm t = {};
                         std::istringstream ss(snapshotString);
@@ -361,6 +366,7 @@ namespace {
                             std::cerr << "Warning: Failed to parse snapshot timestamp, won't consider it" << std::endl;
                         } else {
                             opts.config.snapshot = std::chrono::system_clock::from_time_t(timegm(&t));
+                            pcapfs::options::SNAPSHOT_SPECIFIED = true;
                         }
                     }
                 } catch (const std::logic_error&) {
@@ -420,6 +426,9 @@ namespace {
                                 std::chrono::system_clock::from_time_t(startSnip),
                                 std::chrono::system_clock::from_time_t(endSnip)
                             );
+
+                            pcapfs::options::UPPER_SNIP_SPECIFIED = (opts.config.snip.second != pcapfs::ZERO_TIME_POINT);
+                            pcapfs::options::LOWER_SNIP_SPECIFIED = (opts.config.snip.first != pcapfs::ZERO_TIME_POINT);
                         }
 
                     }

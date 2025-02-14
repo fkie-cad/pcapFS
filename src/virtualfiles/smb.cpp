@@ -14,8 +14,8 @@ bool pcapfs::SmbFile::showFile() {
         return false;
     else {
         if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK &&
-            ((config.snip.first != ZERO_TIME_POINT && accessTime < config.snip.first) ||
-            (config.snip.second != ZERO_TIME_POINT && accessTime >= config.snip.second))){
+            ((options::LOWER_SNIP_SPECIFIED && accessTime < config.snip.first) ||
+            (options::UPPER_SNIP_SPECIFIED && accessTime >= config.snip.second))){
             return false;
         } else
             return true;
@@ -66,7 +66,8 @@ std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> const pcapfs::SmbFile:
     // returns union of hybridTimestamps and fsTimestamps
     std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> result = hybridTimestamps;
     for (const auto &entry: fsTimestamps) {
-        result[entry.first] = entry.second;
+        if (!result.count(entry.first))
+            result[entry.first] = entry.second;
     }
     return result;
 }
@@ -77,338 +78,244 @@ void pcapfs::SmbFile::deduplicateVersions(const Index &idx) {
         return;
 
     // add current saved fragments as newest version
-    fileVersions.emplace(timestampsOfCurrVersion, ServerFileVersion(fragments, clientIPs, isCurrentlyReadOperation));
+    fileVersions.emplace(timestampsOfCurrVersion, ServerFileVersion<smb::SmbTimestamps>(fragments, clientIPs, isCurrentlyReadOperation));
 
-    // nothing to deduplicate
-    if (fileVersions.size() <= 1)
-        return;
-
-    LOG_DEBUG << "deduplicating file versions of " << filename;
-    std::vector<std::map<TimeTriple, ServerFileVersion>::iterator> toBeErased;
-    auto currVersion = fileVersions.begin();
-    while (currVersion != fileVersions.end()) {
+    if (fileVersions.size() > 1) {
+        LOG_DEBUG << "deduplicating file versions of " << filename;
+        std::vector<std::map<TimeTriple, ServerFileVersion<smb::SmbTimestamps>>::iterator> toBeErased;
+        auto currVersion = fileVersions.begin();
         auto cmpVersion = std::next(currVersion);
-        if (cmpVersion == fileVersions.end()) {
-            break;
-        }
 
-        const Bytes a = this->getContentForFragments(idx, currVersion->second.fragments);
-        const Bytes b = this->getContentForFragments(idx, cmpVersion->second.fragments);
-        if ((a.size() == b.size()) && a == b) {
-            LOG_TRACE << "found duplicate versions";
-            // copy clientIPs and time points of file accesses to version that is kept
-            for (const auto &ip: currVersion->second.clientIPs) {
-                cmpVersion->second.clientIPs.insert(ip);
+        while (cmpVersion != fileVersions.end()) {
+            const Bytes a = this->getContentForFragments(idx, currVersion->second.fragments);
+            const Bytes b = this->getContentForFragments(idx, cmpVersion->second.fragments);
+            if ((a.size() == b.size()) && a == b) {
+                LOG_TRACE << "found duplicate versions";
+                // copy clientIPs and time points of file accesses to version that is kept
+                for (const auto &ip: cmpVersion->second.clientIPs) {
+                    currVersion->second.clientIPs.insert(ip);
+                }
+                for (const auto &ac: cmpVersion->second.accesses) {
+                    currVersion->second.accesses.insert(ac);
+                }
+                currVersion->second.accesses.insert(cmpVersion->first);
+
+                // implicitly, a duplicate file version pair is deduplicated according to
+                // their access types (read/write) in the following way:
+                // (read, read) or (read, write) -> read
+                // (write, write) or (write, read) -> write
+
+                toBeErased.push_back(cmpVersion);
+                // only advance cmpVersion. currVersion stays the same
+                cmpVersion++;
+
+            } else {
+                LOG_TRACE << "versions are different";
+                currVersion = cmpVersion;
+                cmpVersion = std::next(currVersion);
             }
-            cmpVersion->second.accesses = currVersion->second.accesses;
-            cmpVersion->second.accesses.insert(currVersion->first);
-
-            // we deduplicate a possible pair of duplicate versions with
-            // (write,read) (read,write) to a single version with read
-            if (currVersion->second.readOperation)
-                cmpVersion->second.readOperation = true;
-
-            toBeErased.push_back(currVersion);
-        } else {
-            LOG_TRACE << "versions are different";
         }
-        currVersion++;
+
+        for (const auto &pos: toBeErased)
+            fileVersions.erase(pos);
     }
 
-    for (const auto &pos: toBeErased)
-        fileVersions.erase(pos);
+    // insert timestamps to the corresponding file versions
+    auto fsTimestampsPos = fsTimestamps.rbegin();
+    auto hybridTimestampsPos = hybridTimestamps.rbegin();
+
+    for (auto versionPos = fileVersions.rbegin(); versionPos != fileVersions.rend(); ++versionPos) {
+        while (fsTimestampsPos != fsTimestamps.rend()) {
+            if (fsTimestampsPos->first >= versionPos->first.networkTime) {
+                versionPos->second.timestamps.fsTimestamps.emplace(fsTimestampsPos->first, fsTimestampsPos->second);
+            } else {
+                if (versionPos->second.readOperation &&
+                    std::chrono::duration_cast<std::chrono::seconds>(versionPos->first.networkTime - fsTimestampsPos->first).count() == 0) {
+                    // also include the fs timestamp from the previous create response, when we have a read
+                    versionPos->second.timestamps.fsTimestamps.emplace(fsTimestampsPos->first, fsTimestampsPos->second);
+                }
+                ++fsTimestampsPos;
+                break;
+            }
+            ++fsTimestampsPos;
+        }
+
+        while (hybridTimestampsPos != hybridTimestamps.rend() && hybridTimestampsPos->first >= versionPos->first.networkTime) {
+            versionPos->second.timestamps.hybridTimestamps.emplace(hybridTimestampsPos->first, hybridTimestampsPos->second);
+            ++hybridTimestampsPos;
+        }
+
+        if (std::next(versionPos) == fileVersions.rend() && versionPos->second.readOperation) {
+            // for the first file version, add also all fs timestamps which are older, when he have a read access
+            while (fsTimestampsPos != fsTimestamps.rend()) {
+                versionPos->second.timestamps.fsTimestamps.emplace(fsTimestampsPos->first, fsTimestampsPos->second);
+                ++fsTimestampsPos;
+            }
+        }
+    }
+
+    fsTimestamps.erase(fsTimestampsPos.base(), fsTimestamps.end());
+    hybridTimestamps.erase(hybridTimestampsPos.base(), hybridTimestamps.end());
+
+    // if the file operation for the first file version is write, there might still be fs and hybrid timestamps left in
+    // the corresponding "global" maps. These are used, when --snapshot or --snip is set accordingly
 }
 
 
-bool pcapfs::SmbFile::constructSnapshotFile() {
+pcapfs::ServerFileTimestampsPosRevIt pcapfs::SmbFile::getPosOfTimestampCandidate(const ServerFileTimestampsMap& timestampsMap) {
+    ServerFileTimestampsPosRevIt resultPos;
 
-    const auto referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ? fsTimestamps : getAllTimestamps();
-    std::reverse_iterator<std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps>::const_iterator> targetTimestampPos;
-    TimePoint upperBoundTimestamp = config.snapshot;
-    std::reverse_iterator<std::set<TimeTriple>::const_iterator> tmpTimestampPos;
-    bool foundMatchingTimestamps = false;
-
-    // first, we select the file version that matches the snapshot time
-    auto currVersion = fileVersions.begin();
-    if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
-        // advance to file version corresponding to the specified snapshot time
-        while (currVersion != fileVersions.end() && currVersion->first.networkTime <= config.snapshot) {
-
-            if (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime >= config.snip.second) {
-                // a snip interval is specified and we are outside of it
-
-                    if (std::find_if(currVersion->second.accesses.crbegin(), currVersion->second.accesses.crend(),
-                                        [](const auto &access){
-                                            return  (config.snip.first != ZERO_TIME_POINT && access.networkTime >= config.snip.first) ||
-                                                    (config.snip.second != ZERO_TIME_POINT && access.networkTime < config.snip.second);
-                                        }) != currVersion->second.accesses.crend()
-                        ) {
-                        // the network timestamp of the file version is outside of snip interval but the version has a saved access time
-                        // which fits inside
-                        upperBoundTimestamp = config.snip.second;
-                    } else {
-                        // outside of snip interval and no saved access time is inside snip interval
-                        break;
-                    }
+    if (options::SNAPSHOT_SPECIFIED) {
+        if (!options::LOWER_SNIP_SPECIFIED && !options::UPPER_SNIP_SPECIFIED) {
+            if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                         [](const auto &entry) { return entry.first < config.snapshot; });
+            } else {
+                // hybrid or fs
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                         [](const auto &entry) { return entry.second < config.snapshot; });
             }
 
-            currVersion++;
-        }
-        // select suitable timstamp
-       if ((targetTimestampPos = std::find_if(referenceTimestamps.rbegin(), referenceTimestamps.rend(),
-                                                    [upperBoundTimestamp](const auto &entry){ return entry.first <= upperBoundTimestamp &&
-                                                                            ((config.snip.first == ZERO_TIME_POINT || entry.first >= config.snip.first) &&
-                                                                            (config.snip.second == ZERO_TIME_POINT || entry.first < config.snip.second)); }
-                                                )) != referenceTimestamps.rend()) {
-            foundMatchingTimestamps = true;
+        } else if (options::LOWER_SNIP_SPECIFIED && !options::UPPER_SNIP_SPECIFIED) {
+            if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first >= config.snip.first) && (entry.first < config.snapshot);
+                                    }
+                                );
+            } else {
+                // hybrid or fs
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first >= config.snip.first) && (entry.second < config.snapshot);
+                                        }
+                                    );
+            }
+
+        } else if (!options::LOWER_SNIP_SPECIFIED && options::UPPER_SNIP_SPECIFIED) {
+            if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first < config.snip.second) && (entry.first < config.snapshot);
+                                    }
+                                );
+            } else {
+                // hybrid or fs
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first < config.snip.second) && (entry.second < config.snapshot);
+                                        }
+                                    );
+            }
+
+        } else {
+            // upper and lower snip boundary is specified
+            if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first < config.snip.second) && (entry.first >= config.snip.first) &&
+                                                    (entry.first < config.snapshot);
+                                    }
+                                );
+            } else {
+                // hybrid or fs
+                resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first < config.snip.second) && (entry.first >= config.snip.first) &&
+                                                    (entry.second < config.snapshot);
+                                        }
+                                    );
+            }
         }
 
     } else {
+        // --snapshot is not set
+        if (options::LOWER_SNIP_SPECIFIED && !options::UPPER_SNIP_SPECIFIED) {
+            resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                    [](const auto &entry){ return entry.first >= config.snip.first; });
+
+        } else if (!options::LOWER_SNIP_SPECIFIED && options::UPPER_SNIP_SPECIFIED) {
+            // upper snip boundary is not specified
+            resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                    [](const auto &entry){ return entry.first < config.snip.second; });
+
+        } else if (options::LOWER_SNIP_SPECIFIED && options::UPPER_SNIP_SPECIFIED) {
+            // upper and lower snip boundary is specified
+            resultPos = std::find_if(timestampsMap.crbegin(), timestampsMap.crend(),
+                                        [](const auto &entry) {
+                                            return (entry.first < config.snip.second) &&
+                                                    (entry.first >= config.snip.first);
+                                        }
+                                    );
+        } else {
+            // snapshot is not set and upper as well as lower snip boundary is not specified.
+            // This case does not occur because with this configuration, the function is not called
+            resultPos = timestampsMap.crend();
+        }
+    }
+
+    return resultPos;
+}
+
+
+bool pcapfs::SmbFile::tryMatchTimestampsToSnip(const ServerFileTimestampsMap& locFsTimestamps, const ServerFileTimestampsMap& locHybridTimestamps) {
+
+    ServerFileTimestampsPosRevIt fsPos = getPosOfTimestampCandidate(locFsTimestamps);
+
+    if (config.timestampMode == pcapfs::options::TimestampMode::FS && fsPos != locFsTimestamps.crend()) {
+        accessTime = fsPos->second.accessTime;
+        changeTime = fsPos->second.changeTime;
+        modifyTime = fsPos->second.modifyTime;
+        return true;
+
+    } else if (config.timestampMode != pcapfs::options::TimestampMode::FS) {
+        // hybrid or network timestamp mode
+        ServerFileTimestampsPosRevIt targetTimestampsPos;
+        ServerFileTimestampsPosRevIt hybridPos = getPosOfTimestampCandidate(locHybridTimestamps);
+
+        if (hybridPos != locHybridTimestamps.crend() &&
+            (fsPos == locFsTimestamps.crend() || fsPos->second < hybridPos->second)) {
+            targetTimestampsPos = hybridPos;
+        } else if (fsPos != locFsTimestamps.crend()) {
+             targetTimestampsPos = fsPos;
+        } else {
+             return false;
+        }
+
         if (config.timestampMode == pcapfs::options::TimestampMode::HYBRID) {
-            while (currVersion != fileVersions.end() && currVersion->first.hybridTime <= config.snapshot) {
-
-                if (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime >= config.snip.second) {
-                    // snip interval specified and we are outside of it
-
-                        if ((tmpTimestampPos = std::find_if(currVersion->second.accesses.crbegin(), currVersion->second.accesses.crend(),
-                                                [](const auto &access){
-                                                    return  (config.snip.first == ZERO_TIME_POINT && access.networkTime >= config.snip.first) ||
-                                                            (config.snip.second == ZERO_TIME_POINT && access.networkTime < config.snip.second);
-                                                })) != currVersion->second.accesses.crend()
-                            ) {
-                            // the network timestamp of the file version is outside of snip interval but the version has a saved access time
-                            // which fits inside -> take this access time
-                            upperBoundTimestamp = tmpTimestampPos->hybridTime;
-                        } else {
-                            // outside of snip interval and no saved access time is inside snip interval
-                            break;
-                        }
-                }
-
-                currVersion++;
-            }
-
-            // select suitable timestamp
-            auto tmpHybridTimestampPos = std::find_if(hybridTimestamps.rbegin(), hybridTimestamps.rend(),
-                                                    [upperBoundTimestamp](const auto &entry){ return entry.second.accessTime <= upperBoundTimestamp &&
-                                                                            entry.second.changeTime <= upperBoundTimestamp &&
-                                                                            entry.second.modifyTime <= upperBoundTimestamp &&
-                                                                            ((config.snip.first == ZERO_TIME_POINT || entry.first >= config.snip.first) &&
-                                                                            (config.snip.second == ZERO_TIME_POINT || entry.first < config.snip.second)); }
-                                            );
-
-            if ((targetTimestampPos = std::find_if(referenceTimestamps.rbegin(), referenceTimestamps.rend(),
-                                                    [upperBoundTimestamp](const auto &entry){ return entry.second.accessTime <= upperBoundTimestamp &&
-                                                                            entry.second.changeTime <= upperBoundTimestamp &&
-                                                                            entry.second.modifyTime <= upperBoundTimestamp &&
-                                                                            ((config.snip.first == ZERO_TIME_POINT || entry.first >= config.snip.first) &&
-                                                                            (config.snip.second == ZERO_TIME_POINT || entry.first < config.snip.second)); }
-                                                )) != referenceTimestamps.rend()) {
-                foundMatchingTimestamps = true;
-                if (tmpHybridTimestampPos != hybridTimestamps.rend() && (tmpHybridTimestampPos->second.accessTime > targetTimestampPos->second.accessTime ||
-                                                                        tmpHybridTimestampPos->second.changeTime > targetTimestampPos->second.changeTime ||
-                                                                        tmpHybridTimestampPos->second.modifyTime > targetTimestampPos->second.modifyTime)) {
-                    // because referenceTimestamps is a mix of fs and hybrid timestamps, it can be the case that, when iterating over referenceTimestamps,
-                    // the selected targetTimestampPos is not optimal (i.e., later coming timestamps are nearer to snapshot time) because the networkTime of
-                    // targetTimestampPos is higher and thus the suboptimal timestamps are seen first.
-                    // When this if condition is reached, we have a hybrid timestamp which is nearer to the snapshot time
-                    targetTimestampPos = tmpHybridTimestampPos;
-                }
-            }
-
+            accessTime = targetTimestampsPos->second.accessTime;
+            changeTime = targetTimestampsPos->second.changeTime;
+            modifyTime = targetTimestampsPos->second.modifyTime;
         } else {
-            // fs mode
-            while (currVersion != fileVersions.end() && currVersion->first.fsTime <= config.snapshot &&
-                    (std::next(currVersion) != fileVersions.end() || currVersion->second.readOperation)) {
-                // the second condition covers the case that the last file version is from a write operation (-> the corresponding fsTime is 0)
-                // then, we don't want to go further
-                if (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime >= config.snip.second) {
-                    // snip interval specified and we are outside of it
-
-                    if ((tmpTimestampPos = std::find_if(currVersion->second.accesses.crbegin(), currVersion->second.accesses.crend(),
-                                            [](const auto &access){
-                                                return  (config.snip.first != ZERO_TIME_POINT && access.networkTime >= config.snip.first) ||
-                                                        (config.snip.second != ZERO_TIME_POINT && access.networkTime < config.snip.second);
-                                            })) != currVersion->second.accesses.crend()
-                        ) {
-                        // the network timestamp of the file version is outside of snip interval but the version has a saved access time
-                        // which fits inside -> take this access time
-                        if (tmpTimestampPos->fsTime != ZERO_TIME_POINT) {
-                            upperBoundTimestamp = tmpTimestampPos->fsTime;
-                        }
-                    } else {
-                        // outside of snip interval and no saved access time is inside snip interval
-                        break;
-                    }
-                }
-
-                currVersion++;
-            }
-
-            // select suitable timestamp
-            if ((targetTimestampPos = std::find_if(referenceTimestamps.rbegin(), referenceTimestamps.rend(),
-                                                    [upperBoundTimestamp](const auto &entry){ return entry.second.accessTime <= upperBoundTimestamp &&
-                                                                            entry.second.changeTime <= upperBoundTimestamp &&
-                                                                            entry.second.modifyTime <= upperBoundTimestamp &&
-                                                                            ((config.snip.first == ZERO_TIME_POINT || entry.first >= config.snip.first) &&
-                                                                            (config.snip.second == ZERO_TIME_POINT || entry.first < config.snip.second)); }
-                                                )) != referenceTimestamps.rend()) {
-                foundMatchingTimestamps = true;
-            }
+            // network mode
+            accessTime = changeTime = modifyTime = targetTimestampsPos->first;
         }
+
+        return true;
     }
 
-
-    if (currVersion == fileVersions.begin()) {
-        // at this point, the timestamp for the oldest file version is newer than the requested snapshot time
-        // or no file versions are saved
-        if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
-
-            if (foundMatchingTimestamps) {
-                LOG_DEBUG << "found no matching file version for " << filename << " but a matching timestamp";
-                accessTime = changeTime = modifyTime = targetTimestampPos->first;
-
-                if (fileVersions.size() > 0 &&
-                    std::any_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
-                                [](const auto &access){ return access.networkTime <= config.snapshot; }
-                    )) {
-                    // file was accessed with recorded read/write before snapshot time but due to deduplication
-                    // the network timestamp of the file version is newer than snapshot time
-                    LOG_DEBUG << "matching file version for " << filename << " was one further due to deduplication";
-                    fragments = currVersion->second.fragments;
-                    clientIPs = currVersion->second.clientIPs;
-                    filesizeRaw = filesizeProcessed = std::accumulate(fragments.begin(), fragments.end(), 0,
-                                                                [](size_t counter, const auto &frag){ return counter + frag.length; });
-                    return true;
-                }
-
-                if (!flags.test(pcapfs::flags::IS_METADATA)) {
-                    fragments.clear(),
-                    filesizeRaw = filesizeProcessed = 0;
-                    flags.set(pcapfs::flags::IS_METADATA);
-                }
-            } else {
-                LOG_DEBUG << "didn't find matching timestamp for " << filename;
-                return false;
-            }
-        } else {
-            if (foundMatchingTimestamps) {
-
-                if (fileVersions.size() > 0 &&
-                    (((config.timestampMode == pcapfs::options::TimestampMode::HYBRID &&
-                    std::any_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
-                                [](const auto &access){ return access.hybridTime <= config.snapshot; })
-                    ) ||
-                    (config.timestampMode == pcapfs::options::TimestampMode::FS &&
-                    std::any_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
-                                [](const auto &access){ return access.fsTime != ZERO_TIME_POINT && access.fsTime <= config.snapshot; })
-                    )) ||
-                    (targetTimestampPos->second.changeTime <= config.snapshot && currVersion->second.readOperation))) {
-                    // display the content of the smb file although snapshot time is newer than fs/hybrid time of oldest file version
-                    // (fs/hybrid time of file version is always the max of access/modify/change time.)
-                    // With this, we cover the case that the oldest file version was accessed after the snapshot
-                    // but the changeTime is is older than the snapshot.
-                    // Then, we can be sure that the file was not modified and can display it.
-
-                    // Another case we cover here is that the file was accessed with recorded read/write before snapshot time
-                    // but due to deduplication the fs/hybrid timestamp of the file version is newer than snapshot time
-                    LOG_DEBUG << "matching file version for " << filename << " was one further due to deduplication";
-                    fragments = currVersion->second.fragments;
-                    clientIPs = currVersion->second.clientIPs;
-                    filesizeRaw = filesizeProcessed = std::accumulate(fragments.begin(), fragments.end(), 0,
-                                                                [](size_t counter, const auto &frag){ return counter + frag.length; });
-                } else {
-                    // we end up here in two cases:
-                    // 1. we have a metadata file
-                    // 2. the file has content (recorded reads/writes) and a timestamp that matches the snapshot time
-                    // but the first recorded file operation is write and happens after the specified snapshot time
-                    // (then we know that the file existed but we don't know its content at that time)
-                    fragments.clear(),
-                    filesizeRaw = filesizeProcessed = 0;
-                    flags.set(pcapfs::flags::IS_METADATA);
-                }
-                accessTime = targetTimestampPos->second.accessTime;
-                changeTime = targetTimestampPos->second.changeTime;
-                modifyTime = targetTimestampPos->second.modifyTime;
-            } else {
-                LOG_DEBUG << "didn't find matching timestamp for " << filename;
-                return false;
-            }
-        }
-    } else {
-        // at this point, the file version selected according to the snapshot time is not the first file version
-        // and we are one file version too far
-
-        if (config.timestampMode == pcapfs::options::TimestampMode::FS && currVersion == fileVersions.end()) {
-            currVersion--;
-            if (!currVersion->second.readOperation) {
-                // we have write operation for the file version of the corresponding snapshot time
-                // => we don't have an exact fs timestamp for that
-                // => taking solely fs timestamps into account (what we do in fs mode), we can't certainly tell
-                // what the file content is at that time
-                // => display as metadata file
-                fragments.clear(),
-                filesizeRaw = filesizeProcessed = 0;
-                flags.set(pcapfs::flags::IS_METADATA);
-                accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
-                return true;
-            }
-        } else if (currVersion == fileVersions.end() ||
-                    ((config.timestampMode == pcapfs::options::TimestampMode::NETWORK &&
-                    std::none_of(currVersion->second.accesses.begin(), currVersion->second.accesses.end(),
-                                [](const auto &ac){ return ac.networkTime <= config.snapshot; })) ||
-                    (config.timestampMode == pcapfs::options::TimestampMode::HYBRID &&
-                    std::none_of(currVersion->second.accesses.begin(), currVersion->second.accesses.end(),
-                                [](const auto &ac){ return ac.hybridTime <= config.snapshot; })) ||
-                    (config.timestampMode == pcapfs::options::TimestampMode::FS &&
-                    std::none_of(currVersion->second.accesses.begin(), currVersion->second.accesses.end(),
-                                [](const auto &ac){ return ac.fsTime != ZERO_TIME_POINT && ac.fsTime <= config.snapshot; }))
-                    )){
-            // Though the timestamp, which is saved as key of currVersion, is the first timestamp that is higher than the snapshot time,
-            // it can be the case that, due to deduplication, this file version (which is originally one version too new)
-            // has been accessed before the snapshot time. In this case, we don't want to decrement.
-            currVersion--;
-        }
-
-        // set fragments and filesize accordingly
-        fragments = currVersion->second.fragments;
-        clientIPs = currVersion->second.clientIPs;
-        filesizeRaw = filesizeProcessed =  std::accumulate(fragments.begin(), fragments.end(), 0,
-                                                            [](size_t counter, const auto &frag){ return counter + frag.length; });
-
-        if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
-            if (foundMatchingTimestamps) {
-                accessTime = changeTime = modifyTime = targetTimestampPos->first;
-            } else {
-                // no matching timestamps found
-                LOG_DEBUG << "found matching file version for " << filename << " but no timestamp, this should not happen";
-                accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
-            }
-        } else {
-            // hybrid and fs mode
-            if (foundMatchingTimestamps) {
-                accessTime = targetTimestampPos->second.accessTime;
-                changeTime = targetTimestampPos->second.changeTime;
-                modifyTime = targetTimestampPos->second.modifyTime;
-            } else {
-                // no matching timestamps found
-                LOG_DEBUG << "found matching file version for " << filename << " but no timestamp, this should not happen";
-                accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
-            }
-        }
-    }
-    return true;
+    return false;
 }
 
 
 std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
     std::vector<FilePtr> resultVector;
+    const size_t numFileVersions = fileVersions.size();
 
-    const auto referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ? fsTimestamps : getAllTimestamps();
-    if (fileVersions.size() <= 1) {
+    if (numFileVersions <= 1) {
         // metadata file, directory file or only one read/write (deduplicated)
+        std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> referenceTimestamps;
+        if (numFileVersions == 0) {
+            referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ? fsTimestamps : getAllTimestamps();
+        } else {
+            // we have one file version
+            referenceTimestamps = config.timestampMode == pcapfs::options::TimestampMode::FS ?
+                                    fileVersions.begin()->second.timestamps.fsTimestamps :
+                                    fileVersions.begin()->second.timestamps.getAllTimestamps();
+        }
+
         if (referenceTimestamps.empty() ||
-            (fileVersions.size() == 1 && config.timestampMode == pcapfs::options::TimestampMode::FS &&
+            (numFileVersions == 1 && config.timestampMode == pcapfs::options::TimestampMode::FS &&
                 !fileVersions.begin()->second.readOperation)) {
             // no timestamps saved or fs mode and the only file version is from write operation
             accessTime = changeTime = modifyTime = ZERO_TIME_POINT;
@@ -416,7 +323,7 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
             // take newest timestamp (or nearest timestamp if snip option is set)
             // (snip is always w.r.t. network timestamps)
             auto target = referenceTimestamps.crbegin();
-            if (config.snip.second != ZERO_TIME_POINT) {
+            if (options::UPPER_SNIP_SPECIFIED) {
                 while (target != referenceTimestamps.crend() && target->first >= config.snip.second)
                     ++target;
 
@@ -441,42 +348,124 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
     // from this point onwards, we have multiple file versions
     // => construct separate smb file for each version
     size_t i = 0;
-    auto currVersion = fileVersions.begin();
-    while (currVersion != fileVersions.end()) {
-        if (((config.snip.first != ZERO_TIME_POINT && currVersion->first.networkTime < config.snip.first) ||
-            (config.snip.second != ZERO_TIME_POINT && currVersion->first.networkTime >= config.snip.second)) &&
-            std::all_of(currVersion->second.accesses.cbegin(), currVersion->second.accesses.cend(),
-                            [](const auto &access){ return (config.snip.first != ZERO_TIME_POINT && access.networkTime < config.snip.first) ||
-                                                            (config.snip.second != ZERO_TIME_POINT && access.networkTime >= config.snip.second); }
+    for (auto currVersion = fileVersions.begin(); currVersion != fileVersions.end(); ++currVersion, ++i) {
+        const auto currAccesses = currVersion->second.accesses;
+        const auto networkTimeOfCurrVersion = currVersion->first.networkTime;
+        // it might be sufficient to only check the newest access instead of all
+        if (((options::LOWER_SNIP_SPECIFIED && networkTimeOfCurrVersion < config.snip.first) ||
+            (options::UPPER_SNIP_SPECIFIED && networkTimeOfCurrVersion >= config.snip.second)) &&
+            std::all_of(currAccesses.cbegin(), currAccesses.cend(),
+                            [](const auto &access) {
+                                return (options::LOWER_SNIP_SPECIFIED && access.networkTime < config.snip.first) ||
+                                        (options::UPPER_SNIP_SPECIFIED && access.networkTime >= config.snip.second);
+                                }
                         )
             ) {
             // file version does not belong to snip interval
-            currVersion++;
-            i++;
             continue;
         }
+
         SmbFilePtr newFile(this->clone());
         newFile->setFilename(filename + "@" + std::to_string(i));
 
-        if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
-            newFile->setAccessTime(currVersion->first.networkTime);
-            newFile->setChangeTime(currVersion->first.networkTime);
-            newFile->setModifyTime(currVersion->first.networkTime);
+        const auto currSmbTimestamps = currVersion->second.timestamps;
+        if (currSmbTimestamps.fsTimestamps.empty() && currSmbTimestamps.hybridTimestamps.empty()) {
+            // should not happen
+            newFile->setAccessTime(ZERO_TIME_POINT);
+            newFile->setChangeTime(ZERO_TIME_POINT);
+            newFile->setModifyTime(ZERO_TIME_POINT);
 
-        } else if (config.timestampMode == pcapfs::options::TimestampMode::HYBRID || currVersion->second.readOperation) {
-            const auto pos = (i == fileVersions.size() - 1) ? referenceTimestamps.crbegin() :
-                                std::find_if(referenceTimestamps.crbegin(), referenceTimestamps.crend(),
-                                            [currVersion](const auto &entry){ return entry.first <= currVersion->first.networkTime; });
+        } else if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
+            TimePoint selectedTimestamp;
 
-            if (pos == referenceTimestamps.crend()) {
-                newFile->setAccessTime(ZERO_TIME_POINT);
-                newFile->setChangeTime(ZERO_TIME_POINT);
-                newFile->setModifyTime(ZERO_TIME_POINT);
+            // it suffices to check options::UPPER_SNIP_SPECIFIED (instead of also LOWER_SNIP_SPECIFIED) because of the snip interval check above
+            if (options::UPPER_SNIP_SPECIFIED) {
+                // get the network timestamp of a file access inside the snip interval that was observed closest to the upper snip bound
+                const auto pos = std::find_if(currAccesses.crbegin(), currAccesses.crend(),
+                                                [](const auto &entry){ return entry.networkTime < config.snip.second; });
+
+                if (pos == currAccesses.rend()) {
+                    // All network times for the file version accesses are newer than the upper snip bound.
+                    // Together with the snip check from above and the fact that networkTimeOfCurrVersion
+                    // is always older than all saved access network times, we know that networkTimeOfCurrVersion
+                    // is the appropriate timestamp to set
+                    selectedTimestamp = networkTimeOfCurrVersion;
+                } else {
+                    selectedTimestamp = pos->networkTime;
+                }
             } else {
-                newFile->setAccessTime(pos->second.accessTime);
-                newFile->setChangeTime(pos->second.changeTime);
-                newFile->setModifyTime(pos->second.modifyTime);
+                if (currAccesses.empty()) {
+                    selectedTimestamp = networkTimeOfCurrVersion;
+                } else {
+                    selectedTimestamp = currAccesses.rbegin()->networkTime;
+                }
             }
+            newFile->setAccessTime(selectedTimestamp);
+            newFile->setChangeTime(selectedTimestamp);
+            newFile->setModifyTime(selectedTimestamp);
+
+        } else if (config.timestampMode == pcapfs::options::TimestampMode::HYBRID) {
+            ServerFileTimestamps selectedTimestamps;
+            if (options::UPPER_SNIP_SPECIFIED) {
+                // get the hybrid or fs timestamp that was observed inside the snip interval and was observed
+                // at the network time closest to the upper snip bound
+                const auto hybridPos = std::find_if(currSmbTimestamps.hybridTimestamps.crbegin(), currSmbTimestamps.hybridTimestamps.crend(),
+                                                [](const auto &entry){ return entry.first < config.snip.second; });
+
+                const auto fsPos = std::find_if(currSmbTimestamps.fsTimestamps.crbegin(), currSmbTimestamps.fsTimestamps.crend(),
+                                                [](const auto &entry){ return entry.first < config.snip.second; });
+
+                // select hybrid or fs time, whichever has newer timestamps
+                if (hybridPos != currSmbTimestamps.hybridTimestamps.crend() &&
+                    (fsPos == currSmbTimestamps.fsTimestamps.crend() || fsPos->second < hybridPos->second)) {
+                     selectedTimestamps = hybridPos->second;
+                } else if (fsPos != currSmbTimestamps.fsTimestamps.crend()) {
+                     selectedTimestamps = fsPos->second;
+                } else {
+                     selectedTimestamps = ServerFileTimestamps(ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT);;
+                }
+            } else {
+                const auto highesthybridTimestampPos = currSmbTimestamps.hybridTimestamps.rbegin();
+                const auto highestFsTimestampPos = currSmbTimestamps.fsTimestamps.rbegin();
+                // select the timestamp, that has been observed latest
+                if (currSmbTimestamps.fsTimestamps.empty() ||
+                    (!currSmbTimestamps.hybridTimestamps.empty() &&
+                        highesthybridTimestampPos->first >= highestFsTimestampPos->first)) {
+
+                    selectedTimestamps = highesthybridTimestampPos->second;
+                } else {
+                    selectedTimestamps = highestFsTimestampPos->second;
+                }
+            }
+            newFile->setAccessTime(selectedTimestamps.accessTime);
+            newFile->setChangeTime(selectedTimestamps.changeTime);
+            newFile->setModifyTime(selectedTimestamps.modifyTime);
+
+        } else if (config.timestampMode == pcapfs::options::TimestampMode::FS && currVersion->second.readOperation) {
+            ServerFileTimestamps selectedTimestamps;
+            if (options::UPPER_SNIP_SPECIFIED) {
+                // get the fs timestamp that was observed inside the snip interval and was observed
+                // at the network time closest to the upper snip bound
+                const auto pos = std::find_if(currSmbTimestamps.fsTimestamps.crbegin(), currSmbTimestamps.fsTimestamps.crend(),
+                                                [](const auto &entry){ return entry.first < config.snip.second; });
+
+                if (pos == currSmbTimestamps.fsTimestamps.crend()) {
+                    // should not happen
+                    selectedTimestamps = ServerFileTimestamps(ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT);
+                } else {
+                    selectedTimestamps = pos->second;
+                }
+            } else {
+                if (currSmbTimestamps.fsTimestamps.empty()) {
+                    selectedTimestamps = ServerFileTimestamps(ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT, ZERO_TIME_POINT);
+                } else {
+                    selectedTimestamps = currSmbTimestamps.fsTimestamps.rbegin()->second;
+                }
+            }
+            newFile->setAccessTime(selectedTimestamps.accessTime);
+            newFile->setChangeTime(selectedTimestamps.changeTime);
+            newFile->setModifyTime(selectedTimestamps.modifyTime);
+
         } else {
             // fs mode and write operation
             newFile->setAccessTime(ZERO_TIME_POINT);
@@ -494,36 +483,29 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
         newFile->setIdInIndex(smb::SmbManager::getInstance().getNewId());
 
         resultVector.push_back(newFile);
-        currVersion++;
-        i++;
     }
 
-    if (resultVector.empty() && (config.snip.first != ZERO_TIME_POINT || config.snip.second != ZERO_TIME_POINT)) {
+    if (config.showMetadata && resultVector.empty() && (options::LOWER_SNIP_SPECIFIED || options::UPPER_SNIP_SPECIFIED)) {
         // no file version fits into the specified snip interval
-        // Nevertheless, it can be the case that the file has been during this interval.
-        auto timestampPos = referenceTimestamps.crbegin();
-        if ((timestampPos = std::find_if(referenceTimestamps.crbegin(), referenceTimestamps.crend(),
-                                    [](const auto &entry){ return (entry.first < config.snip.second) && (entry.first >= config.snip.first); }
-                                    )) != referenceTimestamps.crend()) {
+        // Nevertheless, it can be the case that the file has been accessed during this interval (but not with read/write).
+        // Then, we want to display the file as metadata file
+        bool displayAsMetadataFile = false;
 
-            if (config.snip.second != ZERO_TIME_POINT && !hybridTimestamps.empty() && hybridTimestamps.begin()->first > config.snip.second) {
-                // the oldest network timestamp key of the hybrid timestamps is newer than the upper bound of snip.
-                // Since this network timestamp corresponds to the point in time, in which the first read/write happened,
-                // we now know that the oldest read/write is newer than the upper bound of snip
-                // Still, because we have timestamps that fit into the specified snip interval, we know that the file was accessed there,
-                // but not with read/write
-                // => we set the smb file as metadata file
-                filesizeRaw = filesizeProcessed = 0;
-                fragments.clear();
-                flags.set(flags::IS_METADATA);
+        for (auto currVersion = fileVersions.rbegin(); currVersion != fileVersions.rend(); ++currVersion) {
+            if (tryMatchTimestampsToSnip(currVersion->second.timestamps.fsTimestamps, currVersion->second.timestamps.hybridTimestamps)) {
+                displayAsMetadataFile = true;
+                break;
             }
-            if (config.timestampMode == pcapfs::options::TimestampMode::NETWORK) {
-                accessTime = changeTime = modifyTime = timestampPos->first;
-            } else {
-                accessTime = timestampPos->second.accessTime;
-                changeTime = timestampPos->second.changeTime;
-                modifyTime = timestampPos->second.modifyTime;
-            }
+        }
+
+        if (displayAsMetadataFile ||
+            (!fileVersions.begin()->second.readOperation && tryMatchTimestampsToSnip(fsTimestamps, hybridTimestamps))) {
+            // we have matching timestamps in the snip interval -> display file as metadata file
+            // (the second if condition additionally checks whether a "globally" saved timestamp fits inside the snip interval when
+            // the operation for the first file version is write)
+            filesizeRaw = filesizeProcessed = 0;
+            fragments.clear();
+            flags.set(flags::IS_METADATA);
         } else {
             // no matching timestamps in snip interval
             donotDisplay = true;
@@ -534,8 +516,87 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
 }
 
 
-void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath,
-                                                const smb::FileMetaDataPtr &metaData) {
+bool pcapfs::SmbFile::trySetAsMetadataFile(const ServerFileTimestampsMap &fsTimestamps, const ServerFileTimestampsMap &hybridTimestamps) {
+    if (tryMatchTimestampsToSnip(fsTimestamps, hybridTimestamps)) {
+        fragments.clear(),
+        filesizeRaw = filesizeProcessed = 0;
+        flags.set(pcapfs::flags::IS_METADATA);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+bool pcapfs::SmbFile::constructSnapshotFile() {
+    if (fileVersions.size() == 0) {
+        // metadata file. we only need to find and select suitable timestamps from the "global" maps
+        return tryMatchTimestampsToSnip(fsTimestamps, hybridTimestamps);
+    }
+
+    ServerFileVersion<smb::SmbTimestamps> targetFileVersion;
+    TimePoint networkTimeOfTargetVersion;
+
+    // select matching file version w.r.t. snapshot time
+    std::reverse_iterator<std::map<TimeTriple, ServerFileVersion<smb::SmbTimestamps>>::const_iterator> fileVersionPos;
+    if (config.timestampMode == options::TimestampMode::NETWORK) {
+        fileVersionPos = std::find_if(fileVersions.rbegin(), fileVersions.rend(),
+                                        [](const auto &version){ return version.first.networkTime < config.snapshot; });
+    } else if (config.timestampMode == options::TimestampMode::FS) {
+        fileVersionPos = std::find_if(fileVersions.rbegin(), fileVersions.rend(),
+                                        [](const auto &version) {
+                                            return version.first.fsTime != ZERO_TIME_POINT && version.first.fsTime < config.snapshot;
+                                        }
+                                    );
+    } else {
+        // hybrid mode
+        fileVersionPos = std::find_if(fileVersions.rbegin(), fileVersions.rend(),
+                                        [](const auto &version){ return version.first.hybridTime < config.snapshot; });
+    }
+
+    if (fileVersionPos == fileVersions.rend()) {
+        // timestamp key of oldest file version is newer than snapshot time
+        targetFileVersion = fileVersions.begin()->second;
+        if (targetFileVersion.readOperation) {
+            // when the first file version corresponds to read operation, it can still be the correct version to display
+            networkTimeOfTargetVersion = fileVersions.begin()->first.networkTime;
+        } else {
+            // first file version corresponds to write operation
+            // Then, we probably have saved timestamps left in the "global" timestamp maps of the smb file.
+            // If there are suitbale timestamps w.r.t the snapshot (and potentially the snip interval),
+            // we display the SMB file as metadata file
+            return trySetAsMetadataFile(fsTimestamps, hybridTimestamps);
+        }
+    } else {
+        targetFileVersion = fileVersionPos->second;
+        networkTimeOfTargetVersion = fileVersionPos->first.networkTime;
+    }
+
+    if ((options::LOWER_SNIP_SPECIFIED &&
+            config.snip.first > (targetFileVersion.accesses.empty() ?
+                                networkTimeOfTargetVersion :
+                                std::max({networkTimeOfTargetVersion, targetFileVersion.accesses.rbegin()->networkTime}))) ||
+        (options::UPPER_SNIP_SPECIFIED && config.snip.second < networkTimeOfTargetVersion)) {
+        // the lower snip boundary is higher than the network time of the file version's last read/write access or
+        // the upper snip boundary is lower than the network time of the file version's first read/write access
+        // -> only display as empty file (given that a suitable timestamp exists)
+        return trySetAsMetadataFile(targetFileVersion.timestamps.fsTimestamps, targetFileVersion.timestamps.hybridTimestamps);
+    }
+
+    if (tryMatchTimestampsToSnip(targetFileVersion.timestamps.fsTimestamps, targetFileVersion.timestamps.hybridTimestamps)) {
+        fragments = targetFileVersion.fragments;
+        clientIPs = targetFileVersion.clientIPs;
+        filesizeRaw = filesizeProcessed = std::accumulate(fragments.begin(), fragments.end(), 0,
+                                                    [](size_t counter, const auto &frag){ return counter + frag.length; });
+        return true;
+    } else {
+        LOG_DEBUG << "for smb file " << filename << ", the snapshot time is outside of the snip interval -> we do not display the file";
+        return false;
+    }
+}
+
+
+void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, const std::string &filePath, const smb::FileMetaDataPtr &metaData) {
     Fragment fragment;
     fragment.id = smbContext->offsetFile->getIdInIndex();
     fragment.start = 0;

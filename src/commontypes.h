@@ -10,6 +10,8 @@
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/binary_object.hpp>
 
+#include <pcapplusplus/IpAddress.h>
+
 #include "commontypes.h"
 
 
@@ -28,13 +30,22 @@ namespace pcapfs {
 }
 
 /*
-    Serialization function for TimePoint
+    Serialization function for TimePoint and pcpp::IPAddress
 */
 namespace boost {
     namespace serialization {
         template<class Archive>
         void serialize(Archive &archive, pcapfs::TimePoint &timePoint, const unsigned int) {
             archive & make_binary_object(&timePoint, sizeof(timePoint));
+        }
+
+        template<class Archive>
+        void serialize(Archive & archive, pcpp::IPAddress& ip, const unsigned int) {
+            std::string ipString = ip.toString();
+            archive & ipString;
+            if (Archive::is_loading::value) {
+                ip = pcpp::IPAddress(ipString);
+            }
         }
     }
 }

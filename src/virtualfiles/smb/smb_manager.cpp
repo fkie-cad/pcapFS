@@ -550,15 +550,14 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::string &fileId, const Fi
 // TODO: make this function once for all server files
 void pcapfs::smb::SmbManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
     std::vector<pcapfs::FilePtr> filesToAdd;
-    bool snapshotSpecified = (snapshot != pcapfs::TimePoint::min());
 
     // TODO: this check needs to be globalized because it should also be done for FTP files
-    if (snapshotSpecified && timestampMode == pcapfs::options::TimestampMode::NETWORK &&
+    if (options::SNAPSHOT_SPECIFIED && timestampMode == pcapfs::options::TimestampMode::NETWORK &&
         (snapshot < oldestNetworkTimestamp || snapshot > newestNetworkTimestamp)) {
         // check if specified snapshot time is in allowed range
         LOG_ERROR << "SMB: Specified snapshot time is not within the capture time interval";
         LOG_ERROR << "Falling back to default mode ...";
-        snapshotSpecified = false;
+        options::SNAPSHOT_SPECIFIED = false;
         snapshot = TimePoint::min();
     }
 
@@ -572,7 +571,7 @@ void pcapfs::smb::SmbManager::adjustServerFilesForDirLayout(std::vector<FilePtr>
         if (!smbFilePtr->processFileForDirLayout())
             continue;
 
-        if (snapshotSpecified) {
+        if (options::SNAPSHOT_SPECIFIED) {
             if (!smbFilePtr->constructSnapshotFile()) {
                 // constructSnapshotFile returns false if no file version fits the snapshot time
                 indexFiles.erase(indexFiles.begin()+i);
