@@ -9,9 +9,7 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
 
-#include "../commontypes.h"
 #include "../file.h"
-#include "../offsets.h"
 
 
 namespace pcapfs {
@@ -47,4 +45,4 @@ namespace pcapfs {
 
 }
 
-#endif //#define PCAPFS_VIRTUAL_FILES_VIRTUALFILE_H
+#endif // PCAPFS_VIRTUAL_FILES_VIRTUALFILE_H

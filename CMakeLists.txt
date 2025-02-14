@@ -27,9 +27,8 @@ set(PCAPFS_COMMON_SOURCES
         src/decodemap.h
         src/exceptions.h
         src/index.cpp
-        src/offsets.h
         src/logging.cpp
-        src/properties.h
+        src/properties.cpp
         src/utils.cpp
         src/pcapfs.cpp
         src/dirlayout.cpp

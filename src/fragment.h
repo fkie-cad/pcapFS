@@ -1,5 +1,5 @@
-#ifndef PCAPFS_OFFSETS_H
-#define PCAPFS_OFFSETS_H
+#ifndef PCAPFS_FRAGMENT_H
+#define PCAPFS_FRAGMENT_H
 
 #include <cstdint>
 
@@ -20,4 +20,4 @@ struct Fragment {
     }
 };
 
-#endif //PCAPFS_OFFSETS_H
+#endif //PCAPFS_FRAGMENT_H

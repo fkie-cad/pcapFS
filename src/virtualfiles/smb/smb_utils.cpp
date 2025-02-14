@@ -1,6 +1,7 @@
 #include "smb_utils.h"
 #include "smb_constants.h"
 #include "../../exceptions.h"
+#include "../../properties.h"
 
 #include <sstream>
 #include <iomanip>
@@ -10,10 +11,10 @@
 
 
 bool pcapfs::smb::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts) {
-    if (filePtr->getProperty("protocol") == "tcp" &&
+    if (filePtr->getProperty(prop::protocol) == "tcp" &&
         data.size() > 68 && data.at(0) == 0x00 && be32toh(*(uint32_t*) &data.at(0)) != 0 &&
         (memcmp(&data.at(4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(4), smb::SMB1_MAGIC, 4) == 0) &&
-        (checkNonDefaultPorts || (filePtr->getProperty("srcPort") == "445" || filePtr->getProperty("dstPort") == "445")))
+        (checkNonDefaultPorts || (filePtr->getProperty(prop::srcPort) == "445" || filePtr->getProperty(prop::dstPort) == "445")))
         return true;
     else
         return false;
@@ -22,8 +23,8 @@ bool pcapfs::smb::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool c
 
 size_t pcapfs::smb::getSmbOffsetAfterNbssSetup(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts) {
     // returns offset where smb Traffic begins after Netbios Session Setup
-    if (filePtr->getProperty("protocol") == "tcp" && data.size() > 68 && (checkNonDefaultPorts ||
-        (filePtr->getProperty("srcPort") == "139" || filePtr->getProperty("dstPort") == "139"))) {
+    if (filePtr->getProperty(prop::protocol) == "tcp" && data.size() > 68 && (checkNonDefaultPorts ||
+        (filePtr->getProperty(prop::srcPort) == "139" || filePtr->getProperty(prop::dstPort) == "139"))) {
         for (size_t pos = 0; pos < data.size() - 8; ++pos) {
             if (data.at(pos) == 0x00 && be32toh(*(uint32_t*) &data.at(pos)) != 0 &&
                 (memcmp(&data.at(pos+4), smb::SMB2_MAGIC, 4) == 0 || memcmp(&data.at(pos+4), smb::SMB1_MAGIC, 4) == 0))
@@ -98,6 +99,6 @@ std::string const pcapfs::smb::sanitizeFilename(const std::string &inFilename) {
 
 
 std::string const pcapfs::smb::determineClientIP(const FilePtr &filePtr) {
-    const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
-    return srcPort == 445 || srcPort == 139 ? filePtr->getProperty("dstIP") : filePtr->getProperty("srcIP");
+    const uint16_t srcPort = strToUint16(filePtr->getProperty(prop::srcPort));
+    return srcPort == 445 || srcPort == 139 ? filePtr->getProperty(prop::dstIP) : filePtr->getProperty(prop::srcIP);
 }

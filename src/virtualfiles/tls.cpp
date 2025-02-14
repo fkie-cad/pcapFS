@@ -77,10 +77,10 @@ size_t pcapfs::TlsFile::calculateProcessedSize(const Index &idx) {
 
 
 bool pcapfs::TlsFile::isTLSTraffic(const FilePtr &filePtr, const Bytes &data) {
-    if (filePtr->getProperty("protocol") != "tcp")
+    if (filePtr->getProperty(prop::protocol) != "tcp")
         return false;
     if (!config.checkNonDefaultPorts)
-        return (filePtr->getProperty("srcPort") == "443" || filePtr->getProperty("dstPort") == "443");
+        return (filePtr->getProperty(prop::srcPort) == "443" || filePtr->getProperty(prop::dstPort) == "443");
     else if (data.size() > 5) {
         LOG_TRACE << "try to detect TLS traffic with regex";
         try {
@@ -360,28 +360,28 @@ void pcapfs::TlsFile::createCertFiles(const FilePtr &filePtr, uint64_t offset, c
         certPtr->setFiletype("tls");
         certPtr->setFilename("TLSCertificate");
         certPtr->setOffsetType("tcp");
-        certPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-	    certPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-	    certPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-	    certPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-	    certPtr->setProperty("protocol", "tls");
+        certPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+	    certPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+	    certPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+	    certPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
+	    certPtr->setProperty(prop::protocol, "tls");
         if (!handshakeData->serverName.empty())
-            certPtr->setProperty("domain", handshakeData->serverName);
+            certPtr->setProperty(prop::domain, handshakeData->serverName);
         if (!handshakeData->ja3.empty())
-            certPtr->setProperty("ja3", handshakeData->ja3);
+            certPtr->setProperty(prop::ja3, handshakeData->ja3);
         if (!handshakeData->ja3s.empty())
-            certPtr->setProperty("ja3s", handshakeData->ja3s);
+            certPtr->setProperty(prop::ja3s, handshakeData->ja3s);
         if (!handshakeData->ja4.empty())
-            certPtr->setProperty("ja4", handshakeData->ja4);
+            certPtr->setProperty(prop::ja4, handshakeData->ja4);
         if (!handshakeData->ja4s.empty())
-            certPtr->setProperty("ja4s", handshakeData->ja4s);
+            certPtr->setProperty(prop::ja4s, handshakeData->ja4s);
         certPtr->flags.set(pcapfs::flags::IS_METADATA);
         certPtr->flags.set(pcapfs::flags::PROCESSED);
 
         auto tmp = certPtr->calculateProcessedCertSize(idx);
         certPtr->setFilesizeProcessed(tmp.first);
         if (!tmp.second.empty()) {
-            certPtr->setProperty("ja4x", tmp.second);
+            certPtr->setProperty(prop::ja4x, tmp.second);
             if (i == 0) {
                 // take ja4x fingerprint of first certificate of the chain
                 // as corresponding property for the TLS connection
@@ -423,26 +423,26 @@ void pcapfs::TlsFile::initResultPtr(const std::shared_ptr<TlsFile> &resultPtr, c
     if (handshakeData->cipherSuite)
         resultPtr->setCipherSuite(handshakeData->cipherSuite->asString());
     if (!handshakeData->ja3.empty())
-        resultPtr->setProperty("ja3", handshakeData->ja3);
+        resultPtr->setProperty(prop::ja3, handshakeData->ja3);
     if (!handshakeData->ja3s.empty())
-        resultPtr->setProperty("ja3s", handshakeData->ja3s);
+        resultPtr->setProperty(prop::ja3s, handshakeData->ja3s);
     if (!handshakeData->ja4.empty())
-        resultPtr->setProperty("ja4", handshakeData->ja4);
+        resultPtr->setProperty(prop::ja4, handshakeData->ja4);
     if (!handshakeData->ja4s.empty())
-        resultPtr->setProperty("ja4s", handshakeData->ja4s);
+        resultPtr->setProperty(prop::ja4s, handshakeData->ja4s);
     if (!handshakeData->ja4x.empty())
-        resultPtr->setProperty("ja4x", handshakeData->ja4x);
+        resultPtr->setProperty(prop::ja4x, handshakeData->ja4x);
     resultPtr->encryptThenMacEnabled = handshakeData->encryptThenMac;
     resultPtr->truncatedHmacEnabled = handshakeData->truncatedHmac;
     resultPtr->setTlsVersion(handshakeData->tlsVersion);
     resultPtr->setFilename("TLS");
-    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    resultPtr->setProperty("protocol", "tls");
+    resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
+    resultPtr->setProperty(prop::protocol, "tls");
     if (!handshakeData->serverName.empty())
-        resultPtr->setProperty("domain", handshakeData->serverName);
+        resultPtr->setProperty(prop::domain, handshakeData->serverName);
     resultPtr->setTimestamp(filePtr->connectionBreaks.at(handshakeData->iteration).second);
 
     if (filePtr->flags.test(pcapfs::flags::MISSING_DATA)) {

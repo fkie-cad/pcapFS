@@ -56,8 +56,8 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpFile::parse(FilePtr filePtr, Index &) {
 std::vector<pcapfs::FtpFileTransmissionData>
 pcapfs::FtpFile::getTransmissionDataForPort(pcapfs::FilePtr &filePtr) {
     ftp::FtpManager &manager = ftp::FtpManager::getInstance();
-    const uint16_t src_port = stoi(filePtr->getProperty("srcPort"));
-    const uint16_t dst_port = stoi(filePtr->getProperty("dstPort"));
+    const uint16_t src_port = stoi(filePtr->getProperty(prop::srcPort));
+    const uint16_t dst_port = stoi(filePtr->getProperty(prop::dstPort));
 
     std::vector<FtpFileTransmissionData> transmission_data = manager.getFileTransmissionData(dst_port);
     if (transmission_data.empty()) {
@@ -71,7 +71,7 @@ pcapfs::FtpFileTransmissionData
 pcapfs::FtpFile::getTransmissionFileData(const pcapfs::FilePtr &filePtr,
                                          const std::vector<pcapfs::FtpFileTransmissionData> &transmission_data) {
     FtpFileTransmissionData d;
-    const OffsetWithTime owt = filePtr->connectionBreaks.at(0);
+    const FragmentWithTime owt = filePtr->connectionBreaks.at(0);
     auto result = std::find_if(transmission_data.cbegin(), transmission_data.cend(),
                     [owt](const FtpFileTransmissionData &td){ return connectionBreaksInTimeSlot(owt.second, td.time_slot); });
     if (result != transmission_data.cend())
@@ -97,9 +97,9 @@ void pcapfs::FtpFile::handleMlsd(const FilePtr &filePtr, const std::string &file
 
             std::string fullFilePath;
             if (metadata.filename == "/")
-                fullFilePath = "FILES_FROM_" + filePtr->getProperty("dstIP");
+                fullFilePath = "FILES_FROM_" + filePtr->getProperty(prop::dstIP);
             else
-                fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + filePtr->getProperty("dstIP") + metadata.filename : filePath + metadata.filename;
+                fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + filePtr->getProperty(prop::dstIP) + metadata.filename : filePath + metadata.filename;
 
             if (fullFilePath.at(fullFilePath.size() - 1) == '/')
                 fullFilePath = fullFilePath.substr(0, fullFilePath.size() - 1);
@@ -163,13 +163,13 @@ void pcapfs::FtpFile::parseResult(const pcapfs::FilePtr &filePtr) {
 
 void pcapfs::FtpFile::fillGlobalProperties(const FilePtr &filePtr) {
     fsTimestamps[filePtr->connectionBreaks.at(0).second] = ZERO_TIME_POINT;
-    properties["protocol"] =  "ftp";
+    properties[prop::protocol] =  "ftp";
     filetype = "ftp";
     offsetType = filePtr->getFiletype();
-    properties["srcIP"] = filePtr->getProperty("srcIP");
-    properties["dstIP"] = filePtr->getProperty("dstIP");
-    properties["srcPort"] = filePtr->getProperty("srcPort");
-    properties["dstPort"] = filePtr->getProperty("dstPort");
+    properties[prop::srcIP] = filePtr->getProperty(prop::srcIP);
+    properties[prop::dstIP] = filePtr->getProperty(prop::dstIP);
+    properties[prop::srcPort] = filePtr->getProperty(prop::srcPort);
+    properties[prop::dstPort] = filePtr->getProperty(prop::dstPort);
     flags.set(flags::PROCESSED);
     idInIndex = ftp::FtpManager::getInstance().getNewId();
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;

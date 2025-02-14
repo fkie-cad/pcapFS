@@ -54,17 +54,17 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
             resultPtr->setFiletype("dhcp");
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             if (i % 2 == 0) {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
             } else {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::dstPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::srcPort));
             }
-            resultPtr->setProperty("protocol", "dhcp");
+            resultPtr->setProperty(prop::protocol, "dhcp");
             resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
             try {
@@ -97,8 +97,8 @@ std::vector<pcapfs::FilePtr> pcapfs::DhcpFile::parse(FilePtr filePtr, Index &idx
 
 
 bool pcapfs::DhcpFile::isDhcpTraffic(const FilePtr &filePtr) {
-    return filePtr->getProperty("protocol") == "udp" &&
-            ((filePtr->getProperty("srcPort") == "67" || filePtr->getProperty("srcPort") == "68"));
+    return filePtr->getProperty(prop::protocol) == "udp" &&
+            ((filePtr->getProperty(prop::srcPort) == "67" || filePtr->getProperty(prop::srcPort) == "68"));
 }
 
 

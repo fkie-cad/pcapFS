@@ -1,19 +1,9 @@
 #include <fstream>
 #include <iostream>
-#include <netinet/in.h>
-#include <set>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-
-#include "commontypes.h"
 #include "exceptions.h"
 #include "file.h"
-#include "index.h"
-#include "offsets.h"
 #include "logging.h"
 #include "pcapfs.h"
 #include "dirlayout.h"
@@ -23,8 +13,6 @@
 #include "keyfiles/cskey.h"
 #include "virtualfiles/tcp.h"
 #include "virtualfiles/udp.h"
-#include "virtualfiles/xor.h"
-#include "capturefiles/pcap.h"
 #include "virtualfiles/smb/smb_manager.h"
 #include "virtualfiles/ftp/ftp_manager.h"
 

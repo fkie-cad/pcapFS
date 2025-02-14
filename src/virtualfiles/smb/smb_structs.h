@@ -49,16 +49,16 @@ namespace pcapfs {
         struct ServerEndpoint {
             ServerEndpoint() = default;
             explicit ServerEndpoint(const FilePtr &filePtr) {
-                const uint16_t srcPort = strToUint16(filePtr->getProperty("srcPort"));
+                const uint16_t srcPort = strToUint16(filePtr->getProperty(prop::srcPort));
                 if (srcPort == 445 || srcPort == 139) {
-                    ipAddress = pcpp::IPAddress(filePtr->getProperty("srcIP"));
+                    ipAddress = pcpp::IPAddress(filePtr->getProperty(prop::srcIP));
                     port = srcPort;
                 } else {
                     // take dstIP and dstPort as server endpoint
                     // this might be client IP and client port if checkNonDefaultPorts config is set
                     // and the server does not use the default port 445 or 139
-                    ipAddress = pcpp::IPAddress(filePtr->getProperty("dstIP"));
-                    port = strToUint16(filePtr->getProperty("dstPort"));
+                    ipAddress = pcpp::IPAddress(filePtr->getProperty(prop::dstIP));
+                    port = strToUint16(filePtr->getProperty(prop::dstPort));
                 }
             }
             pcpp::IPAddress ipAddress;

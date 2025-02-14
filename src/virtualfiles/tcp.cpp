@@ -99,11 +99,11 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         tcpPointer->setFiletype("tcp");
         tcpPointer->connectionBreaks.emplace_back(0, state->currentTimestamp);
 
-        tcpPointer->setProperty("srcIP", tcpData.getConnectionData().srcIP.toString());
-        tcpPointer->setProperty("dstIP", tcpData.getConnectionData().dstIP.toString());
-        tcpPointer->setProperty("srcPort", std::to_string(tcpData.getConnectionData().srcPort));
-        tcpPointer->setProperty("dstPort", std::to_string(tcpData.getConnectionData().dstPort));
-        tcpPointer->setProperty("protocol", "tcp");
+        tcpPointer->setProperty(prop::srcIP, tcpData.getConnectionData().srcIP.toString());
+        tcpPointer->setProperty(prop::dstIP, tcpData.getConnectionData().dstIP.toString());
+        tcpPointer->setProperty(prop::srcPort, std::to_string(tcpData.getConnectionData().srcPort));
+        tcpPointer->setProperty(prop::dstPort, std::to_string(tcpData.getConnectionData().dstPort));
+        tcpPointer->setProperty(prop::protocol, "tcp");
         ++state->nextUniqueId;
     } else {
         tcpPointer = state->files[flowkey];

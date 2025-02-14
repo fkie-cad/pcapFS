@@ -169,13 +169,13 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
 
 void pcapfs::SmbControlFile::fillGlobalProperties(std::shared_ptr<SmbControlFile> &controlFilePtr, const FilePtr &filePtr) {
     controlFilePtr->setTimestamp(filePtr->connectionBreaks.at(0).second);
-    controlFilePtr->setProperty("protocol", "smb");
+    controlFilePtr->setProperty(prop::protocol, "smb");
     controlFilePtr->setFiletype("smbcontrol");
     controlFilePtr->setOffsetType(filePtr->getFiletype());
-    controlFilePtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    controlFilePtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    controlFilePtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    controlFilePtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    controlFilePtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    controlFilePtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    controlFilePtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    controlFilePtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
 }
 
 

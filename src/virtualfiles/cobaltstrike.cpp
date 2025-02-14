@@ -35,14 +35,14 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
     resultPtr->setOffsetType(filePtr->getFiletype());
     resultPtr->setFiletype("cobaltstrike");
     resultPtr->setTimestamp(filePtr->getTimestamp());
-    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    resultPtr->setProperty("protocol", "cobaltstrike");
-    resultPtr->setProperty("domain", filePtr->getProperty("domain"));
-    resultPtr->setProperty("uri", filePtr->getProperty("uri"));
-    resultPtr->setProperty("ja4h", filePtr->getProperty("ja4h"));
+    resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
+    resultPtr->setProperty(prop::protocol, "cobaltstrike");
+    resultPtr->setProperty(prop::domain, filePtr->getProperty(prop::domain));
+    resultPtr->setProperty(prop::uri, filePtr->getProperty(prop::uri));
+    resultPtr->setProperty(prop::ja4h, filePtr->getProperty(prop::ja4h));
 
     std::stringstream ss;
     ss << std::chrono::duration_cast<std::chrono::milliseconds>(filePtr->getTimestamp().time_since_epoch()).count();
@@ -50,7 +50,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
 
     if (isHttpPost(filePtr->getFilename())) {
         const CobaltStrikeConnectionPtr connData = CobaltStrikeManager::getInstance().getConnectionData(
-                                                    filePtr->getProperty("dstIP"), filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP"));
+                                                    filePtr->getProperty(prop::dstIP), filePtr->getProperty(prop::dstPort), filePtr->getProperty(prop::srcIP));
         resultPtr->cobaltStrikeKeys = connData->aesKeys;
         resultPtr->setFilename(timestamp + "-response");
         resultPtr->fromClient = true;
@@ -88,7 +88,7 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
 
     } else if (isHttpResponse(filePtr->getFilename())) {
         const CobaltStrikeConnectionPtr connData = CobaltStrikeManager::getInstance().getConnectionData(
-                                                    filePtr->getProperty("srcIP"), filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"));
+                                                    filePtr->getProperty(prop::srcIP), filePtr->getProperty(prop::srcPort), filePtr->getProperty(prop::dstIP));
         resultPtr->cobaltStrikeKeys = connData->aesKeys;
         resultPtr->fromClient = false;
 
@@ -163,10 +163,10 @@ std::vector<pcapfs::FilePtr> pcapfs::CobaltStrikeFile::parse(FilePtr filePtr, In
 
 bool pcapfs::CobaltStrikeFile::meetsParsingRequirements(const FilePtr &filePtr) {
     return (filePtr->getFiletype() == "http" && !filePtr->flags.test(pcapfs::flags::IS_METADATA) &&
-        (CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("dstIP"),
-                                    filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP")) ||
-        CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty("srcIP"),
-                                    filePtr->getProperty("srcPort"), filePtr->getProperty("dstIP"))));
+        (CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty(prop::dstIP),
+                                    filePtr->getProperty(prop::dstPort), filePtr->getProperty(prop::srcIP)) ||
+        CobaltStrikeManager::getInstance().isKnownConnection(filePtr->getProperty(prop::srcIP),
+                                    filePtr->getProperty(prop::srcPort), filePtr->getProperty(prop::dstIP))));
 }
 
 
@@ -210,13 +210,13 @@ void pcapfs::CobaltStrikeFile::fillEmbeddedFileProperties(CobaltStrikeFilePtr &e
     embeddedFilePtr->setOffsetType(filePtr->getFiletype());
     embeddedFilePtr->setFiletype("cobaltstrike");
     embeddedFilePtr->setTimestamp(filePtr->getTimestamp());
-    embeddedFilePtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    embeddedFilePtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    embeddedFilePtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    embeddedFilePtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    embeddedFilePtr->setProperty("domain", filePtr->getProperty("domain"));
-    embeddedFilePtr->setProperty("uri", filePtr->getProperty("uri"));
-    embeddedFilePtr->setProperty("protocol", "cobaltstrike");
+    embeddedFilePtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    embeddedFilePtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    embeddedFilePtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    embeddedFilePtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
+    embeddedFilePtr->setProperty(prop::domain, filePtr->getProperty(prop::domain));
+    embeddedFilePtr->setProperty(prop::uri, filePtr->getProperty(prop::uri));
+    embeddedFilePtr->setProperty(prop::protocol, "cobaltstrike");
     embeddedFilePtr->flags.set(pcapfs::flags::IS_EMBEDDED_FILE);
     embeddedFilePtr->flags.set(pcapfs::flags::PROCESSED);
 }
@@ -1140,13 +1140,13 @@ std::vector<pcapfs::FilePtr> pcapfs::CsUploadedFile::parse(FilePtr filePtr, Inde
     resultPtr->setOffsetType(filePtr->getFiletype());
     resultPtr->setFiletype("cs_uploadedfile");
     resultPtr->setTimestamp(filePtr->getTimestamp());
-    resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
-    resultPtr->setProperty("protocol", "cobaltstrike");
-    resultPtr->setProperty("domain", filePtr->getProperty("domain"));
-    resultPtr->setProperty("uri", filePtr->getProperty("uri"));
+    resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
+    resultPtr->setProperty(prop::protocol, "cobaltstrike");
+    resultPtr->setProperty(prop::domain, filePtr->getProperty(prop::domain));
+    resultPtr->setProperty(prop::uri, filePtr->getProperty(prop::uri));
     resultPtr->setFilename(filePtr->getFilename());
 
     LOG_DEBUG << "defragment cobalt strike file upload";

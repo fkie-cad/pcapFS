@@ -636,10 +636,10 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
     properties["protocol"] = "smb";
     filetype = "smb";
     offsetType = smbContext->offsetFile->getFiletype();
-    properties["srcIP"] = smbContext->offsetFile->getProperty("srcIP");
-    properties["dstIP"] = smbContext->offsetFile->getProperty("dstIP");
-    properties["srcPort"] = smbContext->offsetFile->getProperty("srcPort");
-    properties["dstPort"] = smbContext->offsetFile->getProperty("dstPort");
+    properties[prop::srcIP] = smbContext->offsetFile->getProperty(prop::srcIP);
+    properties[prop::dstIP] = smbContext->offsetFile->getProperty(prop::dstIP);
+    properties[prop::srcPort] = smbContext->offsetFile->getProperty(prop::srcPort);
+    properties[prop::dstPort] = smbContext->offsetFile->getProperty(prop::dstPort);
     clientIPs.insert(smbContext->clientIP);
     filesizeRaw = filesizeProcessed = 0;
     idInIndex = smb::SmbManager::getInstance().getNewId();

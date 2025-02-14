@@ -114,8 +114,8 @@ std::string const pcapfs::DnsFile::parseDnsToJson(pcapfs::Bytes data) {
 std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx) {
     std::vector<pcapfs::FilePtr> resultVector;
 
-    if (!((filePtr->getProperty("dstPort") == "53" || filePtr->getProperty("srcPort") == "53") &&
-        filePtr->getProperty("protocol") == "udp"))
+    if (!((filePtr->getProperty(prop::dstPort) == "53" || filePtr->getProperty(prop::srcPort) == "53") &&
+        filePtr->getProperty(prop::protocol) == "udp"))
         return resultVector;
 
     Bytes data = filePtr->getBuffer();
@@ -153,17 +153,17 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             resultPtr->setFiletype("dns");
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             if (i % 2 == 0) {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
             } else {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::dstPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::srcPort));
             }
-            resultPtr->setProperty("protocol", "dns");
+            resultPtr->setProperty(prop::protocol, "dns");
             resultPtr->flags.set(pcapfs::flags::PROCESSED);
 
             try {
@@ -177,9 +177,9 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
                 continue;
             }
 
-            if (resultPtr->getProperty("dstPort") == "53") {
+            if (resultPtr->getProperty(prop::dstPort) == "53") {
                 resultPtr->setFilename("REQ-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
-            } else if (resultPtr->getProperty("srcPort") == "53") {
+            } else if (resultPtr->getProperty(prop::srcPort) == "53") {
                 resultPtr->setFilename("RES-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
             }
             resultVector.push_back(resultPtr);

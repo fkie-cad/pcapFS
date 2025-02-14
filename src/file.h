@@ -12,9 +12,9 @@
 #include <boost/serialization/map.hpp>
 
 #include "commontypes.h"
+#include "properties.h"
 #include "config.h"
 #include "index.h"
-#include "offsets.h"
 
 
 namespace pcapfs {
@@ -33,7 +33,21 @@ namespace pcapfs {
         const unsigned char CS_DO_NOT_SHOW = 11;
     }
 
-    typedef std::pair<uint64_t, TimePoint> OffsetWithTime;
+    struct Fragment {
+        uint64_t id = 0L;
+        uint64_t start = 0L;
+        uint64_t length = 0L;
+
+        template<class Archive>
+        void serialize(Archive &archive, const unsigned int) {
+            archive & id;
+            archive & start;
+            archive & length;
+        }
+    };
+
+
+    typedef std::pair<uint64_t, TimePoint> FragmentWithTime;
 
     class Index;
 
@@ -92,7 +106,7 @@ namespace pcapfs {
 
         std::bitset<12> flags;
 
-        std::vector<OffsetWithTime> connectionBreaks; //TODO: are they good here?
+        std::vector<FragmentWithTime> connectionBreaks; //TODO: are they good here?
 
 
         virtual void serialize(boost::archive::text_oarchive &archive);

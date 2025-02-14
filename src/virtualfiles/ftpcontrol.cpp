@@ -57,25 +57,25 @@ std::vector<pcapfs::FilePtr> pcapfs::FtpControlFile::parse(FilePtr filePtr, Inde
 
 
 bool pcapfs::FtpControlFile::isClientCommand(FilePtr filePtr) {
-    return filePtr->getProperty("dstPort") == pcapfs::FtpControlFile::COMMAND_PORT;
+    return filePtr->getProperty(prop::dstPort) == pcapfs::FtpControlFile::COMMAND_PORT;
 }
 
 
 bool pcapfs::FtpControlFile::isServerResponse(FilePtr filePtr) {
-    return filePtr->getProperty("srcPort") == pcapfs::FtpControlFile::COMMAND_PORT;
+    return filePtr->getProperty(prop::srcPort) == pcapfs::FtpControlFile::COMMAND_PORT;
 }
 
 
 void pcapfs::FtpControlFile::fillGlobalProperties(std::shared_ptr<pcapfs::FtpControlFile> &result,
                                                          FilePtr &filePtr) {
     result->setTimestamp(filePtr->connectionBreaks.at(0).second);
-    result->setProperty("protocol", "ftp");
+    result->setProperty(prop::protocol, "ftp");
     result->setFiletype("ftpcontrol");
     result->setOffsetType(filePtr->getFiletype());
-    result->setProperty("srcIP", filePtr->getProperty("srcIP"));
-    result->setProperty("dstIP", filePtr->getProperty("dstIP"));
-    result->setProperty("srcPort", filePtr->getProperty("srcPort"));
-    result->setProperty("dstPort", filePtr->getProperty("dstPort"));
+    result->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+    result->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+    result->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+    result->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
 }
 
 
@@ -119,7 +119,7 @@ void pcapfs::FtpControlFile::parseCredentials(std::shared_ptr<pcapfs::FtpControl
 void pcapfs::FtpControlFile::parseResult(std::shared_ptr<pcapfs::FtpControlFile> result,
                                            pcapfs::FilePtr filePtr, size_t i) {
     const size_t numElements = filePtr->connectionBreaks.size();
-    const OffsetWithTime owt = filePtr->connectionBreaks.at(i);
+    const FragmentWithTime owt = filePtr->connectionBreaks.at(i);
     const uint64_t &offset = owt.first;
     const size_t size = calculateSize(filePtr, numElements, i, offset);
     const Bytes data = filePtr->getBuffer(); // copy of buffer ??
@@ -165,7 +165,7 @@ bool pcapfs::FtpControlFile::isLastElement(size_t numElements, size_t i) {
 }
 
 
-Fragment pcapfs::FtpControlFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
+pcapfs::Fragment pcapfs::FtpControlFile::parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size) {
     Fragment fragment;
     fragment.id = filePtr->getIdInIndex();
     fragment.start = offset;
@@ -269,7 +269,7 @@ pcapfs::FtpResponse pcapfs::FtpControlFile::getCommandResponse(const pcapfs::Fil
         return {0, "", TimePoint::min()};
     }
 
-    const OffsetWithTime owt = filePtr->connectionBreaks.at(i);
+    const FragmentWithTime owt = filePtr->connectionBreaks.at(i);
     const uint64_t &offset = owt.first;
     char *response_data = (char *) (data.data() + offset);
     const size_t size = calculateSize(filePtr, numElements, i, offset);
@@ -308,7 +308,7 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
     } else if (command == ftp::FtpCommands::PORT) {
         result->setProperty("activeDataPort", parsePassivePort(parameters.at(0)));
     } else if (command == ftp::FtpCommands::CWD && response.code == ftp::FtpResponseCodes::FileActionSuccessful && parameters.size() > 0) {
-        const std::string rootDirName = "FILES_FROM_" + result->getProperty("dstIP");
+        const std::string rootDirName = "FILES_FROM_" + result->getProperty(prop::dstIP);
         std::string dir = parameters.at(0);
         if (dir.at(dir.length() - 1) != '/')
              dir += "/";
@@ -323,14 +323,14 @@ void pcapfs::FtpControlFile::handleCommandTypes(std::shared_ptr<FtpControlFile> 
                 result->setProperty("cwd", rootDirName + "/" + dir);
         }
     } else if (command == ftp::FtpCommands::MLST && response.code == ftp::FtpResponseCodes::FileActionSuccessful) {
-        ftp::FtpManager::getInstance().updateFtpFilesFromMlst(constructDirPathString(parameters, result->getProperty("dstIP"), result->getProperty("cwd")),
+        ftp::FtpManager::getInstance().updateFtpFilesFromMlst(constructDirPathString(parameters, result->getProperty(prop::dstIP), result->getProperty("cwd")),
                                                                 response,
                                                                 filePtr);
 
     } else if (response.code == ftp::FtpResponseCodes::FileStatusOK && !result->getProperty("activeDataPort").empty()) {
         ftp::FtpManager::getInstance().addFileTransmissionData(stoi(result->getProperty("activeDataPort")),
                                                                 FtpFileTransmissionData{
-                                                                                        constructDirPathString(parameters, result->getProperty("dstIP"), result->getProperty("cwd")),
+                                                                                        constructDirPathString(parameters, result->getProperty(prop::dstIP), result->getProperty("cwd")),
                                                                                         command,
                                                                                         time_slot
                                                                                     });

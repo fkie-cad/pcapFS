@@ -103,9 +103,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultHeaderPtr->fillFileProperties(filePtr, true);
-            resultHeaderPtr->setProperty("domain", requestedHost);
-            resultHeaderPtr->setProperty("uri", requestedUri);
-            resultHeaderPtr->setProperty("ja4h", ja4h);
+            resultHeaderPtr->setProperty(prop::domain, requestedHost);
+            resultHeaderPtr->setProperty(prop::uri, requestedUri);
+            resultHeaderPtr->setProperty(prop::ja4h, ja4h);
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
 
             resultVector.push_back(resultHeaderPtr);
@@ -116,8 +116,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
                 // when no decode config for cobaltstrike is supplied but a cobaltstrike key, we check all HTTP GET cookies;
                 // when a cs decode config is supplied we only handle cookies belonging to a tcp file which meets the given config;
                 // if the flag --no-cs is set we handle the cookie nevertheless if the tcp file meets a given config
-                CobaltStrikeManager::getInstance().handleHttpGet(requestLayer.getFieldByName("Cookie")->getFieldValue(), filePtr->getProperty("dstIP"),
-                                                                    filePtr->getProperty("dstPort"), filePtr->getProperty("srcIP"), idx);
+                CobaltStrikeManager::getInstance().handleHttpGet(requestLayer.getFieldByName("Cookie")->getFieldValue(), filePtr->getProperty(prop::dstIP),
+                                                                    filePtr->getProperty(prop::dstPort), filePtr->getProperty(prop::srcIP), idx);
             }
 
             LOG_TRACE << "size: " << size << " - headerLength: " << headerLength;
@@ -141,9 +141,9 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
 
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultPtr->fillFileProperties(filePtr, true);
-            resultPtr->setProperty("domain", requestedHost);
-            resultPtr->setProperty("uri", requestedUri);
-            resultPtr->setProperty("ja4h", ja4h);
+            resultPtr->setProperty(prop::domain, requestedHost);
+            resultPtr->setProperty(prop::uri, requestedUri);
+            resultPtr->setProperty(prop::ja4h, ja4h);
 
             resultVector.push_back(resultPtr);
 
@@ -165,11 +165,11 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultHeaderPtr->setFilename(requestedFilename);
             resultHeaderPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultHeaderPtr->fillFileProperties(filePtr, false);
-            resultHeaderPtr->setProperty("domain", requestedHost);
-            resultHeaderPtr->setProperty("uri", requestedUri);
+            resultHeaderPtr->setProperty(prop::domain, requestedHost);
+            resultHeaderPtr->setProperty(prop::uri, requestedUri);
             if (!ja4h.empty()) {
-                resultHeaderPtr->setProperty("ja4h", ja4h);
-                resultPtr->setProperty("ja4h", ja4h);
+                resultHeaderPtr->setProperty(prop::ja4h, ja4h);
+                resultPtr->setProperty(prop::ja4h, ja4h);
             }
             resultHeaderPtr->flags.set(pcapfs::flags::IS_METADATA);
 
@@ -189,8 +189,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->setFilename(requestedFilename);
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultPtr->fillFileProperties(filePtr, false);
-            resultPtr->setProperty("domain", requestedHost);
-            resultPtr->setProperty("uri", requestedUri);
+            resultPtr->setProperty(prop::domain, requestedHost);
+            resultPtr->setProperty(prop::uri, requestedUri);
 
             if (responseLayer.getFieldByName("transfer-encoding") &&
                 responseLayer.getFieldByName("transfer-encoding")->getFieldValue() == "chunked") {
@@ -235,8 +235,8 @@ std::vector<pcapfs::FilePtr> pcapfs::HttpFile::parse(pcapfs::FilePtr filePtr, pc
             resultPtr->setFilename(requestedFilename);
             resultPtr->setTimestamp(filePtr->connectionBreaks.at(i).second);
             resultPtr->fillFileProperties(filePtr, false);
-            resultPtr->setProperty("domain", requestedHost);
-            resultPtr->setProperty("uri", requestedUri);
+            resultPtr->setProperty(prop::domain, requestedHost);
+            resultPtr->setProperty(prop::uri, requestedUri);
 
             // HTTP0.9 has no compression
             /**if (header["transfer-encoding"] == "chunked") {
@@ -666,30 +666,30 @@ void pcapfs::HttpFile::fillFileProperties(const FilePtr &filePtr, bool isRequest
     setOffsetType(filePtr->getFiletype());
     setFilesizeProcessed(filesizeRaw);
     setFiletype("http");
-    setProperty("protocol", "http");
-    if (!filePtr->getProperty("ja3").empty())
-        setProperty("ja3", filePtr->getProperty("ja3"));
-    if (!filePtr->getProperty("ja3s").empty())
-        setProperty("ja3s", filePtr->getProperty("ja3s"));
-    if (!filePtr->getProperty("ja4").empty())
-        setProperty("ja4", filePtr->getProperty("ja4"));
-    if (!filePtr->getProperty("ja4s").empty())
-        setProperty("ja4s", filePtr->getProperty("ja4s"));
-    if (!filePtr->getProperty("ja4x").empty())
-        setProperty("ja4x", filePtr->getProperty("ja4x"));
+    setProperty(prop::protocol, "http");
+    if (!filePtr->getProperty(prop::ja3).empty())
+        setProperty(prop::ja3, filePtr->getProperty(prop::ja3));
+    if (!filePtr->getProperty(prop::ja3s).empty())
+        setProperty(prop::ja3s, filePtr->getProperty(prop::ja3s));
+    if (!filePtr->getProperty(prop::ja4).empty())
+        setProperty(prop::ja4, filePtr->getProperty(prop::ja4));
+    if (!filePtr->getProperty(prop::ja4s).empty())
+        setProperty(prop::ja4s, filePtr->getProperty(prop::ja4s));
+    if (!filePtr->getProperty(prop::ja4x).empty())
+        setProperty("ja4x", filePtr->getProperty(prop::ja4x));
     if (filePtr->flags.test(pcapfs::flags::MISSING_DATA))
         flags.set(pcapfs::flags::MISSING_DATA);
 
     if (isRequest) {
-        setProperty("srcIP", filePtr->getProperty("srcIP"));
-        setProperty("dstIP", filePtr->getProperty("dstIP"));
-        setProperty("srcPort", filePtr->getProperty("srcPort"));
-        setProperty("dstPort", filePtr->getProperty("dstPort"));
+        setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+        setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+        setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+        setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
     } else {
-        setProperty("srcIP", filePtr->getProperty("dstIP"));
-        setProperty("dstIP", filePtr->getProperty("srcIP"));
-        setProperty("srcPort", filePtr->getProperty("dstPort"));
-        setProperty("dstPort", filePtr->getProperty("srcPort"));
+        setProperty(prop::srcIP, filePtr->getProperty(prop::dstIP));
+        setProperty(prop::dstIP, filePtr->getProperty(prop::srcIP));
+        setProperty(prop::srcPort, filePtr->getProperty(prop::dstPort));
+        setProperty(prop::dstPort, filePtr->getProperty(prop::srcPort));
     }
 }
 

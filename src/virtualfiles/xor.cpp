@@ -3,7 +3,6 @@
 #include "../filefactory.h"
 #include "../keyfiles/xorkey.h"
 #include "../logging.h"
-#include "../properties.h"
 
 
 namespace {
@@ -29,11 +28,11 @@ std::vector<pcapfs::FilePtr> pcapfs::XorFile::parse(FilePtr filePtr, Index &idx)
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setTimestamp(filePtr->getTimestamp());
         resultPtr->filename = FILE_TYPE_NAME;
-        resultPtr->setProperty(pcapfs::prop::srcIp, filePtr->getProperty(pcapfs::prop::srcIp));
-        resultPtr->setProperty(pcapfs::prop::dstIp, filePtr->getProperty(pcapfs::prop::dstIp));
+        resultPtr->setProperty(pcapfs::prop::srcIP, filePtr->getProperty(pcapfs::prop::srcIP));
+        resultPtr->setProperty(pcapfs::prop::dstIP, filePtr->getProperty(pcapfs::prop::dstIP));
         resultPtr->setProperty(pcapfs::prop::srcPort, filePtr->getProperty(pcapfs::prop::srcPort));
         resultPtr->setProperty(pcapfs::prop::dstPort, filePtr->getProperty(pcapfs::prop::dstPort));
-        resultPtr->setProperty(pcapfs::prop::proto, FILE_TYPE_NAME);
+        resultPtr->setProperty(pcapfs::prop::protocol, FILE_TYPE_NAME);
         resultPtr->setFiletype(FILE_TYPE_NAME);
 
         idx.insert(keyPtr);

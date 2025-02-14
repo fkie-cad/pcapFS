@@ -176,39 +176,39 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
         resultPtr->setFilename("SSH-" + std::to_string(i));
         resultPtr->setOffsetType(filePtr->getFiletype());
         resultPtr->setFiletype("ssh");
-        resultPtr->setProperty("protocol", "ssh");
+        resultPtr->setProperty(prop::protocol, "ssh");
 
         if (clientBeginsConnection) {
             if (!hasshEven.empty())
-                resultPtr->setProperty("hassh", hasshEven);
+                resultPtr->setProperty(prop::hassh, hasshEven);
             if (!hasshServerEven.empty())
-                resultPtr->setProperty("hasshServer", hasshServerOdd);
+                resultPtr->setProperty(prop::hasshServer, hasshServerOdd);
             if (i % 2 == 0) {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
             } else {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::dstPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::srcPort));
             }
         } else {
             if (!hasshOdd.empty())
-                resultPtr->setProperty("hassh", hasshOdd);
+                resultPtr->setProperty(prop::hassh, hasshOdd);
             if (!hasshServerOdd.empty())
-                resultPtr->setProperty("hasshServer", hasshServerEven);
+                resultPtr->setProperty(prop::hasshServer, hasshServerEven);
             if (i % 2 == 0) {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("dstPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("srcPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::dstPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::srcPort));
             } else {
-                resultPtr->setProperty("srcIP", filePtr->getProperty("srcIP"));
-                resultPtr->setProperty("dstIP", filePtr->getProperty("dstIP"));
-                resultPtr->setProperty("srcPort", filePtr->getProperty("srcPort"));
-                resultPtr->setProperty("dstPort", filePtr->getProperty("dstPort"));
+                resultPtr->setProperty(prop::srcIP, filePtr->getProperty(prop::srcIP));
+                resultPtr->setProperty(prop::dstIP, filePtr->getProperty(prop::dstIP));
+                resultPtr->setProperty(prop::srcPort, filePtr->getProperty(prop::srcPort));
+                resultPtr->setProperty(prop::dstPort, filePtr->getProperty(prop::dstPort));
             }
         }
 
@@ -220,7 +220,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SshFile::parse(pcapfs::FilePtr filePtr, pca
 
 
 bool pcapfs::SshFile::isSshTraffic(const FilePtr &filePtr) {
-    return filePtr->getProperty("dstPort") == "22" || filePtr->getProperty("srcPort") == "22";
+    return filePtr->getProperty(prop::dstPort) == "22" || filePtr->getProperty(prop::srcPort) == "22";
 }
 
 

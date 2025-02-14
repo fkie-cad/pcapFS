@@ -5,8 +5,8 @@
 #include <numeric>
 #include <boost/algorithm/string/split.hpp>
 
-#include "offsets.h"
 #include "logging.h"
+#include "properties.h"
 #include "virtualfiles/smb/smb_manager.h"
 #include "virtualfiles/ftp/ftp_manager.h"
 
@@ -188,8 +188,8 @@ namespace pcapfs_filesystem {
                     }
                     // "-" added to filename to avoid empty string after "/",
                     // no side-effect, because last vector element is popped anyway
-                    std::vector<std::string> path_v = pathVector(file->getProperty("uri") + "-");
-                    if (file->getProperty("uri") != "")
+                    std::vector<std::string> path_v = pathVector(file->getProperty(pcapfs::prop::uri) + "-");
+                    if (file->getProperty(pcapfs::prop::uri) != "")
                         path_v.pop_back();
                     if (path_v.empty()) {
                         continue;
@@ -202,7 +202,7 @@ namespace pcapfs_filesystem {
                     if (property == "") {
                         current = getOrCreateSubdir(current, "PCAPFS_PROP_NOT_AVAIL");
 
-                    } else if (file->flags.test(pcapfs::flags::IS_SERVERFILE) && category == "srcIP") {
+                    } else if (file->flags.test(pcapfs::flags::IS_SERVERFILE) && category == pcapfs::prop::srcIP) {
                         pcapfs::ServerFilePtr serverFilePtr = std::static_pointer_cast<pcapfs::ServerFile>(file);
                         std::vector<pcapfs::ServerFilePtr> parentDirs = serverFilePtr->getAllParentDirs();
 

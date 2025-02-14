@@ -9,7 +9,6 @@
 
 #include "commontypes.h"
 #include "file.h"
-#include "offsets.h"
 
 
 namespace pcapfs {

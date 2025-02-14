@@ -164,12 +164,12 @@ std::vector<pcapfs::FilePtr> pcapfs::UdpFile::createUDPVirtualFilesFromPcaps(
                     udpPointer->setFilesizeProcessed(udpLayer->getLayerPayloadSize());
                     udpPointer->setFiletype("udp");
 
-                    udpPointer->setProperty("srcIP", udpConn.endpoint1.ipAddress);
-                    udpPointer->setProperty("dstIP", udpConn.endpoint2.ipAddress);
-                    udpPointer->setProperty("srcPort", std::to_string(udpConn.endpoint1.port));
-                    udpPointer->setProperty("dstPort", std::to_string(udpConn.endpoint2.port));
+                    udpPointer->setProperty(prop::srcIP, udpConn.endpoint1.ipAddress);
+                    udpPointer->setProperty(prop::dstIP, udpConn.endpoint2.ipAddress);
+                    udpPointer->setProperty(prop::srcPort, std::to_string(udpConn.endpoint1.port));
+                    udpPointer->setProperty(prop::dstPort, std::to_string(udpConn.endpoint2.port));
 
-                    udpPointer->setProperty("protocol", "udp");
+                    udpPointer->setProperty(prop::protocol, "udp");
                     udpPointer->fragments.push_back(state.currentOffset);
                     udpPointer->connectionBreaks.emplace_back(0, state.currentTimestamp);
                     state.files.emplace(udpConn, udpPointer);
