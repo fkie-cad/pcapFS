@@ -441,7 +441,8 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
             newFile->setChangeTime(selectedTimestamps.changeTime);
             newFile->setModifyTime(selectedTimestamps.modifyTime);
 
-        } else if (config.timestampMode == pcapfs::options::TimestampMode::FS && currVersion->second.readOperation) {
+        } else {
+            // fs mode
             ServerFileTimestamps selectedTimestamps;
             if (options::UPPER_SNIP_SPECIFIED) {
                 // get the fs timestamp that was observed inside the snip interval and was observed
@@ -465,12 +466,6 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
             newFile->setAccessTime(selectedTimestamps.accessTime);
             newFile->setChangeTime(selectedTimestamps.changeTime);
             newFile->setModifyTime(selectedTimestamps.modifyTime);
-
-        } else {
-            // fs mode and write operation
-            newFile->setAccessTime(ZERO_TIME_POINT);
-            newFile->setChangeTime(ZERO_TIME_POINT);
-            newFile->setModifyTime(ZERO_TIME_POINT);
         }
 
         newFile->fragments = currVersion->second.fragments;
@@ -590,7 +585,7 @@ bool pcapfs::SmbFile::constructSnapshotFile() {
                                                     [](size_t counter, const auto &frag){ return counter + frag.length; });
         return true;
     } else {
-        LOG_DEBUG << "for smb file " << filename << ", the snapshot time is outside of the snip interval -> we do not display the file";
+        LOG_DEBUG << "for smb file " << filename << ", no matching timestamp could be found";
         return false;
     }
 }
@@ -654,14 +649,22 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
     // This function is called from the SMB manager during handling of read/write messages
 
     const TimePoint derivedFsTimestamp = currNetworkTimestamp + skew;
-    const auto fsTimestampsPos = std::find_if(fsTimestamps.crbegin(), fsTimestamps.crend(),
-                                            [currNetworkTimestamp](const auto &entry){ return entry.first <= currNetworkTimestamp; });
+    // fsTimestampPos comes, if there is one, from the following CREATE
+    const auto fsTimestampsPos = std::find_if(fsTimestamps.cbegin(), fsTimestamps.cend(),
+                                            [currNetworkTimestamp](const auto &entry){ return entry.first > currNetworkTimestamp; });
 
-    if (fsTimestampsPos == fsTimestamps.crend()) {
+    if (fsTimestampsPos == fsTimestamps.cend()) {
         // only happens in specific edge case
         timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
         // we don't add a hybrid timestamp in that case
     } else {
+        timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
+                                            std::max({fsTimestampsPos->second.accessTime,
+                                                        fsTimestampsPos->second.changeTime,
+                                                        fsTimestampsPos->second.modifyTime}),
+                                            currNetworkTimestamp
+        );
+
         // search latest (hybrid/fs) timestamp as reference for new hybrid timestamp
         // it can be the case that this does not correspond to the first entry <= currNetworkTimestamp
         // hence, we need to iterate further through possible reference timestamps
@@ -683,7 +686,6 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
             }
 
             if (writeOperation) {
-                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
                 hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
                                                   hybridPos.first->second.accessTime,
                                                   derivedFsTimestamp,
@@ -691,28 +693,12 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
                                                   hybridPos.first->second.birthTime
                 );
             } else {
-                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
-                                                    std::max({fsTimestampsPos->second.accessTime,
-                                                                fsTimestampsPos->second.changeTime,
-                                                                fsTimestampsPos->second.modifyTime}),
-                                                    currNetworkTimestamp);
                 hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
                                                     derivedFsTimestamp,
                                                     hybridPos.first->second.modifyTime,
                                                     hybridPos.first->second.changeTime,
                                                     hybridPos.first->second.birthTime
                 );
-            }
-        } else {
-            if (writeOperation) {
-                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
-
-            } else {
-                timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
-                                                        std::max({fsTimestampsPos->second.accessTime,
-                                                                    fsTimestampsPos->second.changeTime,
-                                                                    fsTimestampsPos->second.modifyTime}),
-                                                        currNetworkTimestamp);
             }
         }
     }
