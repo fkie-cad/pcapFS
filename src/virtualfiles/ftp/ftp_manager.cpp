@@ -157,6 +157,9 @@ void pcapfs::ftp::FtpManager::updateFtpFilesFromMlst(const std::string &filePath
 
 // TODO: make this function once for all server files
 void pcapfs::ftp::FtpManager::adjustServerFilesForDirLayout(std::vector<FilePtr> &indexFiles, TimePoint &snapshot, uint8_t timestampMode) {
+    (void) snapshot;
+    (void) timestampMode;
+
     std::vector<pcapfs::FilePtr> filesToAdd;
 
     for (size_t i = indexFiles.size() - 1; i != (size_t)-1; --i) {
@@ -166,6 +169,7 @@ void pcapfs::ftp::FtpManager::adjustServerFilesForDirLayout(std::vector<FilePtr>
 
         pcapfs::FtpFilePtr ftpFilePtr = std::static_pointer_cast<pcapfs::FtpFile>(indexFiles.at(i));
 
+        // to be implemented
         const std::vector<pcapfs::FilePtr> ftpFileVersions = ftpFilePtr->constructVersionFiles();
         //if (ftpFileVersions.size() != 0) {
         //    filesToAdd.insert(filesToAdd.end(), ftpFileVersions.begin(), ftpFileVersions.end());
