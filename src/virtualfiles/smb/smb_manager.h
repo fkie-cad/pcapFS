@@ -40,8 +40,6 @@ namespace pcapfs {
             void updateSmbFiles(const std::shared_ptr<WriteRequestData> &writeRequestData, const SmbContextPtr &smbContext);
             // SMB2_SET_INFO Request
             void updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId);
-            // SMB2_CLOSE Response
-            void updateSmbFiles(const std::string &fileId, const FileMetaDataPtr &metaData, const SmbContextPtr &smbContext);
 
             void serialize(boost::archive::text_oarchive &archive, const unsigned int&);
             void deserialize(boost::archive::text_iarchive &archive, const unsigned int&);
@@ -51,6 +49,9 @@ namespace pcapfs {
 
             void parseSmbConnectionMinimally(const FilePtr &tcpFile, const Bytes &data, size_t offsetAfterNbssSetup, uint16_t commandToParse);
             void parsePacketMinimally(const uint8_t* data, size_t len, uint16_t commandToParse, SmbContextPtr &smbContext);
+
+            // SMB2_CLOSE Response
+            void updateSmbFiles(const std::string &fileId, const FileMetaDataPtr &metaData, const SmbContextPtr &smbContext);
 
             ServerEndpointTree const getServerEndpointTree(const SmbContextPtr &smbContext);
 

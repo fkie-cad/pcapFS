@@ -84,6 +84,29 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
                     }
                     break;
 
+                case Smb2Commands::SMB2_CLOSE:
+                    if (isResponse) {
+                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS &&
+                            smbContext->closeRequestData.find(packetHeader->messageId) != smbContext->closeRequestData.end() &&
+                            smbContext->closeRequestData.count(packetHeader->messageId)) {
+
+                            const std::shared_ptr<CloseResponse> closeResponse = std::make_shared<CloseResponse>(&data[64], len - 64);
+                            if (closeResponse->postqueryAttrib) {
+                                updateSmbFiles(smbContext->closeRequestData[packetHeader->messageId], closeResponse->metaData, smbContext);
+                                smbContext->closeRequestData.erase(packetHeader->messageId);
+                            }
+                        }
+                    } else {
+                        const std::shared_ptr<CloseRequest> closeRequest = std::make_shared<CloseRequest>(&data[64], len - 64);
+                        if (closeRequest->postqueryAttrib) {
+                            const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
+                            if (fileHandles.count(endpointTree) && fileHandles[endpointTree].count(closeRequest->fileId)) {
+                                smbContext->closeRequestData[packetHeader->messageId] = closeRequest->fileId;
+                            }
+                        }
+                    }
+                    break;
+
                 default:
                     return;
             }
@@ -94,8 +117,7 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
 }
 
 
-void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile, const Bytes &data,
-                                                            size_t offsetAfterNbssSetup, uint16_t commandToParse) {
+void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile, const Bytes &data, size_t offsetAfterNbssSetup, uint16_t commandToParse) {
     bool hasNbssSessionSetup = (offsetAfterNbssSetup != 0);
     bool reachedOffsetAfterNbssSetup = false;
     smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(tcpFile, false);
@@ -181,6 +203,11 @@ void pcapfs::smb::SmbManager::extractMappings(const std::vector<FilePtr> &tcpFil
     for (const auto& tcpFileWithSmb: tcpFilesWithSmb) {
         parseSmbConnectionMinimally(tcpFileWithSmb.first, tcpFileWithSmb.first->getBuffer(),
                                     tcpFileWithSmb.second, Smb2Commands::SMB2_CREATE);
+    }
+
+    for (const auto& tcpFileWithSmb: tcpFilesWithSmb) {
+        parseSmbConnectionMinimally(tcpFileWithSmb.first, tcpFileWithSmb.first->getBuffer(),
+                                    tcpFileWithSmb.second, Smb2Commands::SMB2_CLOSE);
     }
 }
 

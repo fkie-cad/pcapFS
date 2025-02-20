@@ -64,11 +64,11 @@ namespace pcapfs {
         bool trySetAsMetadataFile(const ServerFileTimestampsMap &fsTimestamps, const ServerFileTimestampsMap &hybridTimestamps);
 
         // map network time - fs time
-        ServerFileTimestampsMap fsTimestamps; // TODO: also add that to serverfile.h?
+        ServerFileTimestampsMap fsTimestamps;
 
-        ServerFileTimestampsMap hybridTimestamps; // TODO: also add that to serverfile.h?
+        ServerFileTimestampsMap hybridTimestamps;
 
-        std::map<TimeTriple, ServerFileVersion<smb::SmbTimestamps>> fileVersions; // TODO: also add that to serverfile.h?
+        std::map<TimeTriple, ServerFileVersion<smb::SmbTimestamps>> fileVersions;
 
         // only needed for parsing
         TimeTriple timestampsOfCurrVersion;

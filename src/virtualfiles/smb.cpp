@@ -647,16 +647,26 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
 
 void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestamp, const std::chrono::seconds &skew, bool writeOperation) {
     // This function is called from the SMB manager during handling of read/write messages
-
     const TimePoint derivedFsTimestamp = currNetworkTimestamp + skew;
-    // fsTimestampPos comes, if there is one, from the following CREATE
-    const auto fsTimestampsPos = std::find_if(fsTimestamps.cbegin(), fsTimestamps.cend(),
+
+    // in the case of a write operation, fsTimestampPos comes, if there is one, from the next Close (or Create)
+    auto fsTimestampsPos = std::find_if(fsTimestamps.cbegin(), fsTimestamps.cend(),
                                             [currNetworkTimestamp](const auto &entry){ return entry.first > currNetworkTimestamp; });
+
+    if (!writeOperation) {
+        // in the case of read operation, the fsTimestamp reference comes from the preceding Create
+        if (fsTimestampsPos == fsTimestamps.cbegin()) {
+            timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
+            return;
+        }
+        else {
+            --fsTimestampsPos;
+        }
+    }
 
     if (fsTimestampsPos == fsTimestamps.cend()) {
         // only happens in specific edge case
         timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
-        // we don't add a hybrid timestamp in that case
     } else {
         timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,
                                             std::max({fsTimestampsPos->second.accessTime,
@@ -664,42 +674,42 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
                                                         fsTimestampsPos->second.modifyTime}),
                                             currNetworkTimestamp
         );
+    }
 
-        // search latest (hybrid/fs) timestamp as reference for new hybrid timestamp
-        // it can be the case that this does not correspond to the first entry <= currNetworkTimestamp
-        // hence, we need to iterate further through possible reference timestamps
-        const auto hybridRefTimestamps = getAllTimestamps();
-        auto tmpPos = std::find_if(hybridRefTimestamps.rbegin(), hybridRefTimestamps.rend(),
-                                            [currNetworkTimestamp](const auto &entry){ return entry.first <= currNetworkTimestamp; });
+    // search latest (hybrid/fs) timestamp as reference for new hybrid timestamp
+    // it can be the case that this does not correspond to the first entry <= currNetworkTimestamp
+    // hence, we need to iterate further through possible reference timestamps
+    const auto hybridRefTimestamps = getAllTimestamps();
+    auto tmpPos = std::find_if(hybridRefTimestamps.rbegin(), hybridRefTimestamps.rend(),
+                                        [currNetworkTimestamp](const auto &entry){ return entry.first <= currNetworkTimestamp; });
 
-        if (tmpPos != hybridRefTimestamps.rend()) {
-            std::pair<std::reverse_iterator<std::map<TimePoint, ServerFileTimestamps>::const_iterator>, TimePoint> hybridPos =
-                    std::make_pair(tmpPos, std::max({tmpPos->second.accessTime, tmpPos->second.changeTime, tmpPos->second.modifyTime}));
+    if (tmpPos != hybridRefTimestamps.rend()) {
+        std::pair<std::reverse_iterator<std::map<TimePoint, ServerFileTimestamps>::const_iterator>, TimePoint> hybridPos =
+                std::make_pair(tmpPos, std::max({tmpPos->second.accessTime, tmpPos->second.changeTime, tmpPos->second.modifyTime}));
+        ++tmpPos;
+
+        TimePoint currMax;
+        while (tmpPos != hybridRefTimestamps.rend()) {
+            currMax = std::max({tmpPos->second.accessTime, tmpPos->second.changeTime, tmpPos->second.modifyTime});
+            if (currMax > hybridPos.second)
+                hybridPos = std::make_pair(tmpPos, currMax);
             ++tmpPos;
+        }
 
-            TimePoint currMax;
-            while (tmpPos != hybridRefTimestamps.rend()) {
-                currMax = std::max({tmpPos->second.accessTime, tmpPos->second.changeTime, tmpPos->second.modifyTime});
-                if (currMax > hybridPos.second)
-                    hybridPos = std::make_pair(tmpPos, currMax);
-                ++tmpPos;
-            }
-
-            if (writeOperation) {
-                hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
-                                                  hybridPos.first->second.accessTime,
-                                                  derivedFsTimestamp,
-                                                  derivedFsTimestamp,
-                                                  hybridPos.first->second.birthTime
-                );
-            } else {
-                hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
-                                                    derivedFsTimestamp,
-                                                    hybridPos.first->second.modifyTime,
-                                                    hybridPos.first->second.changeTime,
-                                                    hybridPos.first->second.birthTime
-                );
-            }
+        if (writeOperation) {
+            hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
+                                              hybridPos.first->second.accessTime,
+                                              derivedFsTimestamp,
+                                              derivedFsTimestamp,
+                                              hybridPos.first->second.birthTime
+            );
+        } else {
+            hybridTimestamps[currNetworkTimestamp] = ServerFileTimestamps(
+                                                derivedFsTimestamp,
+                                                hybridPos.first->second.modifyTime,
+                                                hybridPos.first->second.changeTime,
+                                                hybridPos.first->second.birthTime
+            );
         }
     }
 }

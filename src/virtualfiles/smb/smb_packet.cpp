@@ -75,32 +75,10 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                     break;
 
                 case Smb2Commands::SMB2_CLOSE:
-                    if (isResponse) {
-                        if (packetHeader->status == StatusCodes::STATUS_SUCCESS &&
-                            smbContext->closeRequestData.find(packetHeader->messageId) != smbContext->closeRequestData.end() &&
-                            smbContext->closeRequestData[packetHeader->messageId]) {
-
-                            const std::shared_ptr<CloseResponse> closeResponse = std::make_shared<CloseResponse>(&data[64], len - 64);
-                            if (closeResponse->postqueryAttrib) {
-                                SmbManager::getInstance().updateSmbFiles(smbContext->closeRequestData[packetHeader->messageId]->fileId,
-                                                                            closeResponse->metaData, smbContext);
-                                smbContext->closeRequestData.erase(packetHeader->messageId);
-                            }
-
-                            message = closeResponse;
-                        } else {
-                            message = std::make_shared<CloseResponse>(&data[64], len - 64);
-                        }
-                    } else {
-                        const std::shared_ptr<CloseRequest> closeRequest = std::make_shared<CloseRequest>(&data[64], len - 64);
-                        if (closeRequest->postqueryAttrib) {
-                            std::shared_ptr<CloseRequestData> newCloseRequestData = std::make_shared<CloseRequestData>();
-                            newCloseRequestData->fileId = closeRequest->fileId;
-                            newCloseRequestData->postqueryAttrib = closeRequest->postqueryAttrib;
-                            smbContext->closeRequestData[packetHeader->messageId] = newCloseRequestData;
-                        }
-                        message = closeRequest;
-                    }
+                    if (isResponse)
+                        message = std::make_shared<CloseResponse>(&data[64], len - 64);
+                    else
+                        message = std::make_shared<CloseRequest>(&data[64], len - 64);
                     break;
 
                 case Smb2Commands::SMB2_FLUSH:
