@@ -665,7 +665,6 @@ void pcapfs::SmbFile::saveCurrentTimestamps(const TimePoint& currNetworkTimestam
     }
 
     if (fsTimestampsPos == fsTimestamps.cend()) {
-        // only happens in specific edge case
         timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp, ZERO_TIME_POINT, currNetworkTimestamp);
     } else {
         timestampsOfCurrVersion = TimeTriple(derivedFsTimestamp,

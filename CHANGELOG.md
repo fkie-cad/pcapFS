@@ -5,11 +5,13 @@
 - Mismatched Allocation warning for newer GCC versions
 
 ### Added
-- SMB: snapshot option
+- SMB2: option `--snapshot`
+- SMB2, FTP: option `--timestamp-mode`
+- FTP: more considered commands for server directory reconstruction
 - option `--snip`
 
 ### Changed
-- SMB: distinguish between network timestamps, filesystem timestamps and hybrid timestamps. By default, hybrid timestamps are considered. These are "smart" filesystem timestamps that are updated according to the recorded read/write operations.
+- SMB2: Improvement of parsing order and internal management of file versions and timestamps
 
 
 ## [0.6.0]

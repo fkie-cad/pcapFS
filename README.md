@@ -308,7 +308,7 @@ With the command line option `--no-cs` set, pcapFS does not try to decrypt Cobal
 ## Reconstruction of the Server-Side Directory Hierarchy for FTP and SMB2
 When analyzing a capture file that contains FTP or SMB2 traffic, pcapFS attempts to reconstruct the directory hierarchy of the corresponding FTP or SMB2 server including all files as far as possible. For this, pcapFS follows per connection the current working directory and parses all messages which indicate which files are located there.
 
-For FTP traffic, the reconstructed directory hierarchy only includes downloaded files and empty files whose metadata is extracted via `MLSD` commands.
+For FTP traffic, the reconstructed directory hierarchy only includes downloaded files and empty files whose metadata is extracted via `MLSD` and `MLST` commands.
 
 For SMB2 traffic, more information can be extracted, enabling a more detailed directory reconstruction. Files accessed directly via SMB2 Read/Write messages are populated with the corresponding file content that is read or written. Additionally, during the handling of SMB2 Read/Write messages, different file versions are created (indicated by the file name tag `@<file version number>`) each time the content changes. All other files, which are known to exist only from context, are created as empty files with the extracted metadata set. To also display these empty files, the `--show-metadata` option must be enabled. More infos on how pcapFS reconstructs SMB shares can be found in our paper [Mount SMB.pcap: Reconstructing file systems and file operations from network traffic](https://www.sciencedirect.com/science/article/pii/S2666281724001318) and in the [wiki page](https://github.com/fkie-cad/pcapFS/wiki/SMB-Documentation)
 
