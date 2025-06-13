@@ -26,6 +26,9 @@ Vagrant.configure("2") do |config|
   config.vm.define "fedora-40" do |fedora40|
     fedora40.vm.box = "bento/fedora-40"
   end
+  config.vm.define "fedora-41" do |fedora41|
+    fedora41.vm.box = "bento/fedora-41"
+  end
 
   # Kali boxes
   config.vm.define "kali" do |kali|

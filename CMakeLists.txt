@@ -16,9 +16,9 @@ find_package(Boost COMPONENTS filesystem iostreams log program_options regex sys
 find_package(cpptoml REQUIRED)
 find_package(FUSE3 REQUIRED)
 find_package(Fusepp REQUIRED)
-find_package(nlohmann_json 3.11.3 REQUIRED)
+find_package(nlohmann_json 3.12.0 REQUIRED)
 find_package(OpenSSL 3 REQUIRED)
-find_package(PcapPlusPlus 23.09 REQUIRED)
+find_package(PcapPlusPlus 25.05 REQUIRED)
 find_package(ZLIB REQUIRED)
 
 set(PCAPFS_COMMON_SOURCES

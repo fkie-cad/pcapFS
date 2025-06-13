@@ -28,7 +28,7 @@ common_pkgs='
 '
 
 if [ "${distro}" = 'Fedora' ]; then
-    if [[ "${release_major}" =~ ^3[7-9]|40 ]]; then
+    if [[ "${release_major}" =~ ^3[7-9]|4[0-2] ]]; then
         sudo dnf install -y ${common_pkgs}
         if [[ "${release_major}" =~ ^3[7-9] ]]; then
             sudo dnf install -y cpptoml-devel
@@ -43,7 +43,7 @@ if [ "${distro}" = 'Fedora' ]; then
     fi
     ${here}/install-fusepp.sh
     ${here}/install-json.sh
-    if [ "${release_major}" = '37' ]; then
+    if [ "${release_major}" = '42' ]; then
         ${here}/install-pcap-plus-plus-precompiled.sh
     else
         ${here}/install-pcap-plus-plus.sh

@@ -12,7 +12,6 @@
 namespace pcapfs {
     namespace ja4 {
         const std::unordered_map<uint16_t, std::string> tlsVersionMap = {
-                    {pcpp::SSLVersion::SSL2, "s2"},
                     {pcpp::SSLVersion::SSL3, "s3"},
                     {pcpp::SSLVersion::TLS1_0, "10"},
                     {pcpp::SSLVersion::TLS1_1, "11"},

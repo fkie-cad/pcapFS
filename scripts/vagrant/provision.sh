@@ -18,6 +18,11 @@ fi
 distro="$(lsb_release -is)"
 release="$(lsb_release -rs)"
 
+# Kali had to roll a new signing key: https://www.kali.org/blog/new-kali-archive-signing-key/
+if [[ "${distro}" = 'Kali' ]]; then
+    sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
+fi
+
 if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
     sudo DEBIAN_FRONTEND=noninteractive apt-get update
     if [[ "${distro}" = 'Ubuntu' && "${distro}" = 1* ]]; then
