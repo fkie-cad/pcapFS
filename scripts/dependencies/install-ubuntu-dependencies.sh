@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -eu
 
-distro="$(lsb_release -is)"
-release="$(lsb_release -rs)"
+distro="$(lsb_release -is | tail -n 1)"
+release="$(lsb_release -rs | tail -n 1)"
 here=$(dirname $(readlink -e $0))
 
 common_pkgs='
@@ -11,6 +11,8 @@ common_pkgs='
     libpcap-dev
     pkg-config
     zlib1g-dev
+    cmake
+    ninja-build
 '
 boost_pkgs='
     libboost-filesystem-dev
@@ -20,30 +22,30 @@ boost_pkgs='
     libboost-system-dev
 '
 
-if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
+if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' || "${distro}" = 'Linuxmint' ]]; then
     while sudo fuser /var/lib/apt/lists/lock; do
         sleep 1
     done
     sudo DEBIAN_FRONTEND=noninteractive apt-get update
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${common_pkgs}
-    if [[ "${release}" = '18.04' ]]; then
-        sudo apt-get install -y \
-                    cmake \
-                    ninja-build \
-                    python3-pip
+    if [[ "${distro}" = 'Ubuntu' && "${release}" = '18.04' ]]; then
+
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip
         LC_ALL='C' pip3 install --upgrade meson
         . ~/.profile
         ${here}/install-boost.sh
         ${here}/install-cpptoml.sh
         ${here}/install-openssl.sh
         ${here}/install-fuse.sh
-    elif [[ "${release}" =~ ^2[0-4]\.04 || "${release}" =~ ^20[1,2][0-9]\.[0-9] ]]; then
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                    ${boost_pkgs} \
-                    cmake \
-                    meson \
-                    ninja-build
-        if [[ "${release}" =~ ^2[2-4]\.04 || "${distro}" = 'Kali' ]]; then
+
+    elif { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^2[0-4]\.04$ ]]; } \
+      || { [[ "${distro}" = 'Kali' && "${release}" =~ ^20[1-2][0-9]\.[0-9]$ ]]; } \
+      || { [[ "${distro}" = 'Linuxmint' && "${release}" =~ ^2[1-2](\.[0-3])?$ ]]; }; then
+
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${boost_pkgs} meson
+        if [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^2[2-4]\.04$ ]] \
+          || [[ "${distro}" = 'Kali' ]] \
+          || [[ "${distro}" = 'Linuxmint' ]]; then
             sudo DEBIAN_FRONTEND=noninteractive apt install -y \
                     fuse3 \
                     libfuse3-dev \

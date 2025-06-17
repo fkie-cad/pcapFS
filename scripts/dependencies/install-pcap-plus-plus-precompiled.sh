@@ -5,8 +5,8 @@ SAVED_PWD="$(pwd -P)"
 HERE=$(dirname $(readlink -e $0))
 source "${HERE}/install-helpers.sh"
 
-distro="$(lsb_release -is)"
-release="$(lsb_release -rs)"
+distro="$(lsb_release -is | tail -n 1)"
+release="$(lsb_release -rs | tail -n 1)"
 
 if [[ "${distro}" = 'Ubuntu' ]]; then
     libdir='lib'
@@ -15,6 +15,17 @@ if [[ "${distro}" = 'Ubuntu' ]]; then
     elif [[ "${release}" = '22.04' ]]; then
         package='pcapplusplus-25.05-ubuntu-22.04-gcc-11.4.0-x86_64'
     elif [[ "${release}" = '24.04' ]]; then
+        package='pcapplusplus-25.05-ubuntu-24.04-gcc-13.3.0-x86_64'
+    else
+        ${HERE}/install-pcap-plus-plus.sh
+        exit 0
+    fi
+
+elif [[ "${distro}" = 'Linuxmint' ]]; then
+    libdir='lib'
+    if [[ "${release}" =~ ^21(\.[0-3])?$ ]]; then
+        package='pcapplusplus-25.05-ubuntu-22.04-gcc-11.4.0-x86_64'
+    elif [[ "${release}" =~ ^22(\.[0-3])?$ ]]; then
         package='pcapplusplus-25.05-ubuntu-24.04-gcc-13.3.0-x86_64'
     else
         ${HERE}/install-pcap-plus-plus.sh

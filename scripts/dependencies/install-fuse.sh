@@ -7,13 +7,9 @@ source "${HERE}/install-helpers.sh"
 
 pkgdir="fuse-3.16.2"
 
-#URL='https://github.com/libfuse/libfuse.git'
 URL="https://github.com/libfuse/libfuse/releases/download/${pkgdir}/${pkgdir}.tar.gz"
 
 wget "${URL}" -O- | tar -xzf-
-
-#pkgdir="${LOCAL_REPO_PATH}/libfuse"
-#clone_or_update_git_repo "${URL}" "${pkgdir}"
 
 set +e
 ninja="$(which ninja 2> /dev/null)"
