@@ -39,15 +39,14 @@ Building pcapFS works best on a rather modern Linux distribution. See the [secti
 
 # Building pcapFS
 As already mentioned, there are some dependencies which are not packaged for most Linux distributions. Moreover, you
-need a reasonably modern C++ compiler supporting at least C++14. Depending on your Linux distribution there are
-different steps required to get all dependencies of pcapFS. Have a look at the scripts [here](scripts/dependencies).
+need a reasonably modern C++ compiler supporting at least C++14. When you are on an Ubuntu, Kali or Fedora system, you can simply run [scripts/dependencies/install-all-dependencies.sh](scripts/dependencies/install-all-dependencies.sh). Otherwise, have a look at the scripts [here](scripts/dependencies).
 
 Afterwards you can build pcapFS like:
 ```
 $ mkdir build
 $ cd build
 $ cmake ..
-$ make
+$ make -j$(nproc)
 ```
 
 # Using pcapFS
