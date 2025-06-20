@@ -7,12 +7,14 @@ declare -A PLATFORMS=(
     ['fedora-39']="Fedora 39"
     ['fedora-40']="Fedora 40"
     ['fedora-41']="Fedora 41"
-    ['ubuntu-18.04']="Ubuntu 18.04"
     ['ubuntu-20.04']="Ubuntu 20.04"
     ['ubuntu-22.04']="Ubuntu 22.04"
     ['ubuntu-24.04']="Ubuntu 24.04"
+    ['debian-11']="Debian 11"
+    ['debian-12']="Debian 12"
     ['kali']="Kali"
-    ['centos-7']="CentOS 7"
+    ['centos-7']="CentOS Stream 9"
+    ['centos-10']="CentOS Stream 10"
 )
 
 

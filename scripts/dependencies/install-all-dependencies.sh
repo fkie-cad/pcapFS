@@ -4,30 +4,22 @@ set -eu
 saved_pwd="$(pwd -P)"
 
 function determine_distro() {
-    lsb_release="$(which lsb_release 2> /dev/null)"
-    if [[ -n "${lsb_release}" ]]; then
-        echo "$(lsb_release -is | tail -n 1)"
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "$ID"
         return
     fi
-    if [[ -f '/etc/centos-release' ]]; then
-        echo 'CentOS'
-        return
-    fi
-    if [[ -f '/etc/fedora-release' ]]; then
-        echo 'Fedora'
-        return
-    fi
+    echo "unknown"
 }
 
 distro="$(determine_distro)"
 
 install_dependencies=''
-if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' || "${distro}" = 'Linuxmint' ]]; then
-    install_dependencies='install-ubuntu-dependencies.sh'
-elif [[ "${distro}" = 'CentOS' ]]; then
-    sudo yum install -y redhat-lsb-core
+if [[ "${distro}" = 'ubuntu' || "${distro}" = 'kali' || "${distro}" = 'linuxmint' || "${distro}" = 'debian' ]]; then
+    install_dependencies='install-debian-dependencies.sh'
+elif [[ "${distro}" = 'centos' ]]; then
     install_dependencies='install-centos-dependencies.sh'
-elif [[ "${distro}" = 'Fedora' ]]; then
+elif [[ "${distro}" = 'fedora' ]]; then
     sudo dnf install -y lsb_release
     install_dependencies='install-fedora-dependencies.sh'
 else

@@ -18,16 +18,12 @@ common_pkgs='
     fuse3-devel
     git
     libpcap-devel
-    perl-File-Compare
-    perl-File-Copy
-    perl-FindBin
-    perl-Pod-Html
-    perl-IPC-Cmd
     zlib-devel
     openssl-devel
 '
 
 if [ "${distro}" = 'Fedora' ]; then
+    sudo dnf update -y
     if [[ "${release_major}" =~ ^3[7-9]|4[0-2] ]]; then
         sudo dnf install -y ${common_pkgs}
         if [[ "${release_major}" =~ ^3[7-9] ]]; then
@@ -36,18 +32,13 @@ if [ "${distro}" = 'Fedora' ]; then
             sudo dnf install -y patch
             ${here}/install-cpptoml.sh
         fi
-
     else
         echo "Unsupported Fedora release ${release}." >&2
         exit 2
     fi
     ${here}/install-fusepp.sh
     ${here}/install-json.sh
-    if [ "${release_major}" = '42' ]; then
-        ${here}/install-pcap-plus-plus-precompiled.sh
-    else
-        ${here}/install-pcap-plus-plus.sh
-    fi
+    ${here}/install-pcap-plus-plus-precompiled.sh
 else
     echo 'This script is supposed to run on Fedora systems only.' >&2
     exit 3

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -eu
 
-lsb_release="$(which lsb_release 2> /dev/null)"
-if [[ -n "${lsb_release}" ]]; then
-    distro="$(lsb_release -is)"
-    if [[ "${distro}" = 'Fedora' ]]; then
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    distro="${ID}"
+    release="${VERSION_ID}"
+
+    # we need Catch2 version 3, not version 3
+    if [[ "${distro}" = 'fedora' ]]; then
         sudo dnf install -y catch2-devel
         exit 0
-    elif [[ ( "${distro}" = 'Ubuntu' ) && "$(lsb_release -rs)" != "24.04" ]]; then
+    elif [[ "${distro}" = 'ubuntu' && "${release}" = "22.04" ]]; then
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y catch2
         exit 0
     fi

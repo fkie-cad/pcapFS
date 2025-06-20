@@ -3,8 +3,19 @@ set -u
 
 here="$(dirname $(readlink -e $0))"
 venv="${here}/venv"
-virtualenv="$(which virtualenv)"
-python='python3.8'
+
+if [[ ! -d "${venv}" ]]; then
+    echo '[NOTE] No virtualenv found. Creating one for you.' >&2
+    python3 -m venv "${venv}"
+fi
+
+set +u
+source "${venv}/bin/activate"
+set -u
+
+if [[ ! -f "${venv}/bin/pytest" ]]; then
+    pip install -U -r "${here}/requirements.txt" > /dev/null
+fi
 
 if ! (type pcapfs > /dev/null 2>&1); then
     echo "[NOTE] pcapfs is not in your PATH. Adding default build directory (PROJECT_ROOT/build)." >&2
@@ -16,24 +27,6 @@ if ! (which fusermount3 > /dev/null 2>&1); then
 fi
 
 set -e
-
-if [[ -z "${virtualenv}" ]]; then
-    echo 'virtualenv is required to run this script.' >&2
-    exit 1
-fi
-
-if [[ ! -d "${venv}" ]]; then
-    echo '[NOTE] No virtualenv found. Creating one for you.' >&2
-    ${virtualenv} -p"${python}" "${venv}" > /dev/null
-    set +u
-    source "${venv}/bin/activate"
-    set -u
-    pip install -U -r "${here}/requirements.txt" > /dev/null
-fi
-
-set +u
-source "${venv}/bin/activate"
-set -u
 
 if [[ $# -eq 0 ]]; then
     python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv

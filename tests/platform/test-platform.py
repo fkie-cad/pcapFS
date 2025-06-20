@@ -16,12 +16,14 @@ PLATFORMS = {
     "fedora-39": "Fedora 39",
     "fedora-40": "Fedora 40",
     "fedora-41": "Fedora 41",
-    "ubuntu-18.04": "Ubuntu 18.04",
     "ubuntu-20.04": "Ubuntu 20.04",
     "ubuntu-22.04": "Ubuntu 22.04",
     "ubuntu-24.04": "Ubuntu 24.04",
+    "debian-11": "Debian 11",
+    "debian-12": "Debian 12",
     "kali": "Kali",
-    "centos-7": "CentOS 7",
+    "centos-9": "CentOS Stream 9",
+    "centos-10": "CentOS Stream 10",
 }
 
 LOG_FILE_NAME_PREFIX = "platform-tests"
@@ -101,28 +103,6 @@ def run_build_test(platform, log):
 
 
 def run_system_tests(platform, log):
-    if platform == "centos-7":
-        package_manager = "yum"
-    elif platform.startswith("fedora"):
-        package_manager = "dnf"
-    else:
-        package_manager = "DEBIAN_FRONTEND=noninteractive apt-get"
-    try:
-        subprocess.check_call(
-            [
-                "vagrant",
-                "ssh",
-                platform,
-                "-c",
-                "sudo "
-                + package_manager
-                + " -y install python3-pip python3-virtualenv python3-pytest",
-            ],
-            stdout=log,
-            stderr=log,
-        )
-    except subprocess.CalledProcessError:
-        pass
     test_command = [
         "vagrant",
         "ssh",
@@ -150,7 +130,7 @@ def run_unit_tests(platform, log):
         "ssh",
         platform,
         "-c",
-        "make -C /home/vagrant/pcapfs/ unittests",
+        "/home/vagrant/pcapfs/build/unittests",
     ]
     return _run_test(platform, log, test_command, test_name="unit")
 

@@ -8,7 +8,8 @@
 - SMB2: option `--snapshot`
 - SMB2, FTP: option `--timestamp-mode`
 - FTP: more considered commands for server directory reconstruction
-- option `--snip`
+- Option `--snip`
+- Automatic dependency installation for more Linux distributions
 
 ### Changed
 - SMB2: Improvement of parsing order and internal management of file versions and timestamps

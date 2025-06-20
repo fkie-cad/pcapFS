@@ -6,31 +6,31 @@ mkdir pcapfs
 (cd /vagrant && tar -cf - \
     --exclude=./3rdparty \
     --exclude=./build \
-    --exclude=./cmake-build-debug \
     --exclude=./dependencies \
+    --exclude=./tests/system/venv \
+    --exclude=./tests/crypto/venv \
     --exclude=.git \
+    --exclude=.vscode \
     --exclude=.vagrant .) | tar -C pcapfs -xf -
 
-if [[ -f '/etc/fedora-release' ]]; then
-    sudo dnf install -y lsb_release python3-virtualenv
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    distro="${ID}"
+else
+    echo "Cannot determine distribution. /etc/os-release not found." >&2
+    exit 1
 fi
 
-distro="$(lsb_release -is)"
-release="$(lsb_release -rs)"
-
-# Kali had to roll a new signing key: https://www.kali.org/blog/new-kali-archive-signing-key/
-if [[ "${distro}" = 'Kali' ]]; then
-    sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
-fi
-
-if [[ "${distro}" = 'Ubuntu' || "${distro}" = 'Kali' ]]; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get update
-    if [[ "${distro}" = 'Ubuntu' && "${distro}" = 1* ]]; then
-        virtualenv_pkg='python-virtualenv'
-    else
-        virtualenv_pkg='virtualenv'
+if [[ "${distro}" = 'fedora' || "${distro}" = 'centos' ]]; then
+    sudo dnf update -y
+    sudo dnf install -y python3-pip
+else
+    # Kali had to roll a new signing key: https://www.kali.org/blog/new-kali-archive-signing-key/
+    if [[ "${distro}" = 'kali' ]]; then
+        sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
     fi
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${virtualenv_pkg}"
-elif [[ "${distro}" = 'CentOS' ]]; then
-    sudo yum install -y python-virtualenv
+
+    sudo DEBIAN_FRONTEND=noninteractive apt-get update
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y python3-pip
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y python3-venv
 fi

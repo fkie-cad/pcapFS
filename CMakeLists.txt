@@ -94,7 +94,7 @@ target_link_libraries(pcapfs PRIVATE ${PCAPFS_LINK_LIBRARIES})
 target_compile_definitions(pcapfs PRIVATE "DEBUG=$<CONFIG:Debug>")
 
 if (BUILD_TESTING)
-    find_package(Catch2 REQUIRED)
+    find_package(Catch2 2 REQUIRED)
     include(CTest)
     include(Catch)
     set(TEST_PCAP_PATH ${CMAKE_SOURCE_DIR}/tests/system/system-tests.pcap)

@@ -1,14 +1,18 @@
 # Dependency Helper Scripts
-The scripts provided in this directory will install the dependencies required to build pcapFS. We mainly use them in
-our [build tests](../../tests/build). While you are free to use them on your own system, here's a word of
-caution: especially on the older platforms we perform some actions that you would not want on a production system
-(e.g. adding third party repositories, globally installing packages via pip etc.). We recommend not to use the scripts
-without checking whether what they do is okay for you and your system!
+This directory contains scripts to install all dependencies required to build pcapFS. These scripts are primarily used in our [build tests](../../tests/build), but you can also use them yourself.
 
-The `install-some-package.sh` scripts are less risky to use---they download and install the corresponding packages
-to `3rdparty` (downloads) and `dependencies` (install prefix) in the root directory of your cloned repository.
+If you are using one of the operating systems listed below, simply run [install-all-dependencies.sh](install-all-dependencies.sh) to install all necessary dependencies:
 
-If you have Ubuntu, Kali, Fedora or CentOS, you can just run [install-all-dependencies.sh](install-all-dependencies.sh) and all necessary dependencies are installed automatically.
+| Distribution    | Supported Releases       |
+|-----------------|--------------------------|
+| Fedora          | 37 and newer             |
+| Ubuntu          | 20.04 and newer          |
+| Debian          | 11, 12                   |
+| Kali            | Rolling                  |
+| Linux Mint      | 21 and newer             |
+| CentOS Stream   | 9, 10                    |
 
 ## Disclaimer
-Use these scripts at your own risk!
+Use these scripts at your own risk. We recommend to first look at what they do and check if they are okay for you and your system.
+
+Most dependencies are either common packages (such as OpenSSL) installed from your distribution’s package repository, or are installed locally to the `3rdparty` (downloads) and `dependencies` (install prefix) directories in the root of your cloned repository.

@@ -38,8 +38,7 @@ available as packages in most of the Linux distribution around. So, for the mome
 Building pcapFS works best on a rather modern Linux distribution. See the [section below](#building-pcapfs) for further details.
 
 # Building pcapFS
-As already mentioned, there are some dependencies which are not packaged for most Linux distributions. Moreover, you
-need a reasonably modern C++ compiler supporting at least C++14. When you are on an Ubuntu, Kali or Fedora system, you can simply run [scripts/dependencies/install-all-dependencies.sh](scripts/dependencies/install-all-dependencies.sh). Otherwise, have a look at the scripts [here](scripts/dependencies).
+As already mentioned, there are some dependencies which are not packaged for most Linux distributions. Moreover, you need a reasonably modern C++ compiler supporting at least C++14. For many current Linux distributions, you can simply run [scripts/dependencies/install-all-dependencies.sh](scripts/dependencies/install-all-dependencies.sh) to automatically install all required dependencies. Have a look at the scripts [here](scripts/dependencies).
 
 Afterwards you can build pcapFS like:
 ```
