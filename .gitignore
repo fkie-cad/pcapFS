@@ -1,5 +1,7 @@
 /.vagrant/
 /.vscode/
+/.claude/
+/.pytest_cache/
 /3rdparty/
 /build/
 /cmake-build-*/

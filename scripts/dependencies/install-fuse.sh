@@ -9,6 +9,7 @@ pkgdir="fuse-3.16.2"
 
 URL="https://github.com/libfuse/libfuse/releases/download/${pkgdir}/${pkgdir}.tar.gz"
 
+cd "${LOCAL_REPO_PATH}"
 wget "${URL}" -O- | tar -xzf-
 
 set +e

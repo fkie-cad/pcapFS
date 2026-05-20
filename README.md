@@ -31,22 +31,28 @@ In pcapFS each protocol and decoder is implemented as a *virtual file*. These vi
 - XOR
 - Cobalt Strike C2 (default profile, see [below](#decrypting-cobalt-strike-c2-traffic))
 
-# Getting pcapFS
-We do not provide any precompiled packages yet. This is mainly because some dependencies of pcapFS are also not
-available as packages in most of the Linux distribution around. So, for the moment you have to build pcapFS from source.
-
-Building pcapFS works best on a rather modern Linux distribution. See the [section below](#building-pcapfs) for further details.
-
 # Building pcapFS
-As already mentioned, there are some dependencies which are not packaged for most Linux distributions. Moreover, you need a reasonably modern C++ compiler supporting at least C++14. For many current Linux distributions, you can simply run [scripts/dependencies/install-all-dependencies.sh](scripts/dependencies/install-all-dependencies.sh) to automatically install all required dependencies. Have a look at the scripts [here](scripts/dependencies).
+pcapFS is currently distributed as source only. On a supported Linux distribution, a clone-and-build takes one command:
 
-Afterwards you can build pcapFS like:
 ```
-$ mkdir build
-$ cd build
-$ cmake ..
-$ make -j$(nproc)
+$ git clone https://github.com/fkie-cad/pcapFS.git
+$ cd pcapFS
+$ ./bootstrap.sh --install
 ```
+
+`bootstrap.sh` installs the system dependencies via `scripts/dependencies/install-all-dependencies.sh`, then configures, builds, and installs pcapFS to `/usr/local/bin/pcapfs`.
+
+## Supported Distributions
+| Distribution    | Supported Releases |
+|-----------------|--------------------|
+| Ubuntu          | 20.04 and newer    |
+| Debian          | 11, 12             |
+| Linux Mint      | 21 and newer       |
+| Kali            | Rolling            |
+| Fedora          | 37 and newer       |
+| CentOS Stream   | 9, 10              |
+
+Other distributions may work if you install the dependencies manually; see [scripts/dependencies](scripts/dependencies).
 
 # Using pcapFS
 

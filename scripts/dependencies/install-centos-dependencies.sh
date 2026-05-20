@@ -38,9 +38,6 @@ if [ "${distro}" = 'centos' ]; then
         sudo dnf config-manager --set-enabled crb
         sudo dnf install -y ${common_pkgs}
         sudo dnf config-manager --set-disabled crb
-        ${here}/install-fusepp.sh
-        ${here}/install-json.sh
-        ${here}/install-cpptoml.sh
         ${here}/install-pcap-plus-plus.sh
     else
         echo "Unsupported CentOS release ${release}." >&2

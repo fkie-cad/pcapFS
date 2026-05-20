@@ -29,6 +29,7 @@ fi
 set -e
 
 if [[ $# -eq 0 ]]; then
+    cd "${here}"
     echo -e "\033[1;33mTesting pcap file...\033[0m"
     python3 -m pytest "${here}/pcapfs-system-tests.py" -vv --testpcap system-tests.pcap
     echo -e "\n\n\033[1;33mTesting pcapng file...\033[0m"

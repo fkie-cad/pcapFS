@@ -6,7 +6,7 @@ if [[ -f /etc/os-release ]]; then
     distro="${ID}"
     release="${VERSION_ID}"
 
-    # we need Catch2 version 3, not version 3
+    # we need Catch2 version 2, not version 3
     if [[ "${distro}" = 'fedora' ]]; then
         sudo dnf install -y catch2-devel
         exit 0
