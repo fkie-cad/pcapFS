@@ -43,7 +43,7 @@ fi
 
 URL="https://github.com/seladb/PcapPlusPlus/releases/download/v25.05/${package}.tar.gz"
 
-mkdir -p "${PREFIX}"/$libdir
+mkdir -p "${PREFIX}"/$libdir "${PREFIX}"/include
 cd "${PREFIX}"
 wget "${URL}" -O- | tar -xzf-
 sed -i "1s#.*#prefix=\"${PREFIX}\"#" $package/$libdir/pkgconfig/PcapPlusPlus.pc
