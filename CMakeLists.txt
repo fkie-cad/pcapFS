@@ -77,7 +77,7 @@ if(NOT nlohmann_json_FOUND)
     endif()
 endif()
 
-find_package(Boost COMPONENTS filesystem iostreams log program_options regex system serialization REQUIRED)
+find_package(Boost COMPONENTS filesystem iostreams log program_options regex serialization REQUIRED)
 find_package(FUSE3 REQUIRED)
 find_package(OpenSSL 3 REQUIRED)
 find_package(PcapPlusPlus 25.05 REQUIRED)
@@ -137,7 +137,7 @@ set(PCAPFS_COMMON_SOURCES
         )
 
 set(PCAPFS_LINK_LIBRARIES
-        Boost::filesystem Boost::iostreams Boost::log Boost::program_options Boost::regex Boost::system Boost::serialization
+        Boost::filesystem Boost::iostreams Boost::log Boost::program_options Boost::regex Boost::serialization
         cpptoml::cpptoml
         FUSE3::FUSE3
         Fusepp::Fusepp

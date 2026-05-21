@@ -1,4 +1,4 @@
-name: build
+name: Platform Tests
 
 on:
   push:
@@ -7,20 +7,45 @@ on:
     branches: [main, dev]
 
 jobs:
-  bootstrap:
-    name: bootstrap on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
+        include:
+          - name: Ubuntu 20.04
+            image: ubuntu:20.04
+          - name: Ubuntu 22.04
+            image: ubuntu:22.04
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+          - name: Ubuntu 26.04
+            image: ubuntu:26.04
+          - name: Debian 11
+            image: debian:bullseye
+          - name: Debian 12
+            image: debian:bookworm
+          - name: Debian 13
+            image: debian:trixie
+          - name: Kali Linux
+            image: kalilinux/kali-rolling
+          - name: Fedora 43
+            image: fedora:43
+          - name: Fedora 44
+            image: fedora:44
+          - name: CentOS Stream 9
+            image: quay.io/centos/centos:stream9
+          - name: CentOS Stream 10
+            image: quay.io/centos/centos:stream10
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install prerequisites
+      - name: Run tests
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y lsb-release python3-venv
-
-      - name: Bootstrap, build and test
-        run: ./bootstrap.sh --tests
+          docker run --rm --privileged --device /dev/fuse \
+            -v "$GITHUB_WORKSPACE:/pcapfs" \
+            -w /pcapfs \
+            "${{ matrix.image }}" \
+            ./.github/scripts/ci-run.sh

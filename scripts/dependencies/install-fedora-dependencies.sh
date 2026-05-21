@@ -15,7 +15,6 @@ common_pkgs='
     boost-program-options
     boost-regex
     boost-serialization
-    boost-system
     gcc-c++
     cmake
     fuse3
@@ -29,7 +28,7 @@ common_pkgs='
 
 if [ "${distro}" = 'Fedora' ]; then
     sudo dnf update -y
-    if [[ "${release_major}" =~ ^3[7-9]|4[0-2] ]]; then
+    if [[ "${release_major}" =~ ^4[0-9]$ ]]; then
         sudo dnf install -y ${common_pkgs}
     else
         echo "Unsupported Fedora release ${release}." >&2

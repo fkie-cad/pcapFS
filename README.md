@@ -43,14 +43,13 @@ $ ./bootstrap.sh --install
 `bootstrap.sh` installs the system dependencies via `scripts/dependencies/install-all-dependencies.sh`, then configures, builds, and installs pcapFS to `/usr/local/bin/pcapfs`.
 
 ## Supported Distributions
-| Distribution    | Supported Releases |
-|-----------------|--------------------|
-| Ubuntu          | 20.04 and newer    |
-| Debian          | 11, 12             |
-| Linux Mint      | 21 and newer       |
-| Kali            | Rolling            |
-| Fedora          | 37 and newer       |
-| CentOS Stream   | 9, 10              |
+| Distribution    | Supported Releases             |
+|-----------------|--------------------------------|
+| Ubuntu          | 20.04, 22.04, 24.04, 26.04     |
+| Debian          | 11, 12, 13                     |
+| Kali            | Rolling                        |
+| Fedora          | 43, 44                         |
+| CentOS Stream   | 9, 10                          |
 
 Other distributions may work if you install the dependencies manually; see [scripts/dependencies](scripts/dependencies).
 

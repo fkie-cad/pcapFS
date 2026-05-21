@@ -28,11 +28,5 @@ fi
 
 set -e
 
-if [[ $# -eq 0 ]]; then
-    python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
-    python3 -m pytest "${here}/pcapfs-crypto-tests-features.py" -vv
-elif [[ "$1" = "vagrant" ]]; then
-    cd /home/vagrant/pcapfs/tests/system/
-    python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
-    python3 -m pytest "${here}/pcapfs-crypto-tests-features.py" -vv
-fi
+python3 -m pytest "${here}/pcapfs-crypto-tests-all-ciphers.py" -vv
+python3 -m pytest "${here}/pcapfs-crypto-tests-features.py" -vv

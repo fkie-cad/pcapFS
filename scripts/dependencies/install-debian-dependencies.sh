@@ -21,13 +21,12 @@ boost_pkgs='
     libboost-log-dev
     libboost-program-options-dev
     libboost-serialization-dev
-    libboost-system-dev
 '
 
-if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-5]\.04|23\.10)$ ]]; } \
+if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-6]\.04|23\.10)$ ]]; } \
     || { [[ "${distro}" = 'Kali' ]]; } \
-    || { [[ "${distro}" = 'Linuxmint' && "${release}" =~ ^2[1-2](\.[0-3])?$ ]]; } \
-    || { [[ "${distro}" = 'Debian' && ( "${release}" = '11' || "${release}" = '12' ) ]]; }; then
+    || { [[ "${distro}" = 'Linuxmint' && "${release}" =~ ^2[1-2](\.[0-9])?$ ]]; } \
+    || { [[ "${distro}" = 'Debian' && ( "${release}" = '11' || "${release}" = '12' || "${release}" = '13' ) ]]; }; then
 
     while sudo fuser /var/lib/apt/lists/lock; do
         sleep 1
@@ -36,7 +35,8 @@ if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-5]\.04|23\.10)$ ]]; } \
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${common_pkgs}
 
     if [[ "${distro}" = 'Ubuntu' && "${release}" = '20.04' ]]; then
-        sudo pip3 install --upgrade meson
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip
+        sudo pip3 install --upgrade meson cmake
         ${here}/install-boost.sh
         ${here}/install-openssl.sh
         ${here}/install-fuse.sh
@@ -47,6 +47,9 @@ if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-5]\.04|23\.10)$ ]]; } \
                     libfuse3-dev
 
         if [[ "${distro}" = 'Debian' && "${release}" = '11' ]]; then
+            # Bullseye ships CMake 3.18; pcapFS needs >= 3.21.
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip
+            sudo pip3 install --upgrade cmake
             ${here}/install-openssl.sh
         else
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev
