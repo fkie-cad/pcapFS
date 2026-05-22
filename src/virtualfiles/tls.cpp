@@ -884,7 +884,6 @@ size_t pcapfs::TlsFile::readDecryptedContent(uint64_t startOffset, size_t length
  */
 size_t pcapfs::TlsFile::getFullCipherText(const Index &idx, std::vector<CiphertextPtr> &outputCipherTextVector) {
     size_t fragment = 0;
-    size_t position = 0;
     int counter = 0;
 
     while (fragment < fragments.size()) {
@@ -921,8 +920,6 @@ size_t pcapfs::TlsFile::getFullCipherText(const Index &idx, std::vector<Cipherte
                 LOG_INFO << "NO KEYS FOUND FOR " << counter;
             }
         }
-        // set run variables in case next fragment is needed
-        position += toRead;
         fragment++;
     }
 
@@ -935,11 +932,10 @@ size_t pcapfs::TlsFile::getFullCipherText(const Index &idx, std::vector<Cipherte
                                                         [](size_t counter, auto elem){ return counter + elem->getLength(); });
                 const size_t counter_for_fragments = std::accumulate(fragments.begin(), fragments.end(), 0,
                                                         [](size_t counter, Fragment frag){ return counter + frag.length; });
-                if (position == counter_for_bytes_output_ciphertext && position == counter_for_fragments) {
+                if (counter_for_bytes_output_ciphertext == counter_for_fragments) {
                     return true;
                 } else {
                     LOG_ERROR << "+++ ASSERTION TRIGGERED +++";
-                    LOG_ERROR << "position: " << position;
                     LOG_ERROR << "counter_for_bytes_output_ciphertext: " << counter_for_bytes_output_ciphertext;
                     LOG_ERROR << "counter_for_fragments: " << counter_for_fragments;
                     return false;

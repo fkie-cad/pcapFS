@@ -32,7 +32,7 @@ file(COPY
         ${fusepp_SOURCE_DIR}/Fuse-impl.h
         DESTINATION ${fusepp_include_dir}/Fusepp)
 add_library(fusepp_iface INTERFACE)
-target_include_directories(fusepp_iface INTERFACE ${fusepp_include_dir})
+target_include_directories(fusepp_iface SYSTEM INTERFACE ${fusepp_include_dir})
 add_library(Fusepp::Fusepp ALIAS fusepp_iface)
 
 # get toml++; header-only

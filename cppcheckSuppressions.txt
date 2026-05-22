@@ -10,3 +10,5 @@ unreadVariable:src/virtualfiles/dhcp.cpp
 unreadVariable:src/virtualfiles/dns.cpp
 missingInclude:src/config.cpp
 missingInclude:src/index.cpp
+missingInclude:tests/unit/test-command-line-options.cpp
+missingInclude:tests/unit/test-index.cpp

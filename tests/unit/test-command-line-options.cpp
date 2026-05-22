@@ -5,6 +5,7 @@
 #include "../../src/commontypes.h"
 #include "../../src/config.h"
 #include "../../src/exceptions.h"
+#include "constants.h"
 
 using Catch::Equals;
 

@@ -4,9 +4,9 @@ set -u
 here="$(dirname $(readlink -e $0))"
 venv="${here}/venv"
 
-if [[ ! -d "${venv}" ]]; then
-    echo '[NOTE] No virtualenv found. Creating one for you.' >&2
-    python3 -m venv "${venv}"
+if [[ ! -f "${venv}/bin/activate" ]] || ! grep -qF "VIRTUAL_ENV=\"${venv}\"" "${venv}/bin/activate"; then
+    echo '[NOTE] No usable virtualenv found. Creating one for you.' >&2
+    python3 -m venv --clear "${venv}"
 fi
 
 set +u
