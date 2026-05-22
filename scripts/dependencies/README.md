@@ -14,4 +14,3 @@ If you are using one of the operating systems listed below, simply run [install-
 
 ## Disclaimer
 Use these scripts at your own risk. We recommend to first look at what they do and check if they are okay for you and your system.
-

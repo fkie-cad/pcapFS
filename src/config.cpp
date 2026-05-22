@@ -10,7 +10,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <cpptoml.h>
+#include <toml++/toml.hpp>
 
 #include "exceptions.h"
 #include "fuse.h"
@@ -25,108 +25,72 @@ namespace {
 
     namespace fs = boost::filesystem;
     namespace po = boost::program_options;
-    namespace toml = cpptoml;
 
     using pcapfs::options::ConfigFileOptions;
 
 
-    class PropertiesConfigVisitor {
-    public:
-        void visit(const toml::table_array &table_array) {
-            decodeMapEntry.clear();
-            for (const auto &ta : table_array) {
-                ta->accept(*this);
+    pcapfs::DecodeMapEntry parseDecodeMapEntry(const toml::array &arr) {
+        pcapfs::DecodeMapEntry result;
+        for (const auto &elem : arr) {
+            if (const auto *row = elem.as_table()) {
+                std::unordered_map<std::string, std::string> entry;
+                for (auto &[key, val] : *row) {
+                    if (val.is_string())
+                        entry[std::string(key)] = val.as_string()->get();
+                    else if (val.is_integer())
+                        entry[std::string(key)] = std::to_string(val.as_integer()->get());
+                }
+                result.push_back(entry);
             }
         }
-
-        void visit(const toml::table &table) {
-            decodeMapEntry.emplace_back();
-            for (const auto &t : table) {
-                currentKey = t.first;
-                t.second->accept(*this);
-            }
-        }
-
-        void visit(const toml::value<std::string> &v) {
-            decodeMapEntry.back()[currentKey] = v.get();
-        }
-
-        void visit(const toml::value<int64_t> &v) {
-            decodeMapEntry.back()[currentKey] = std::to_string(v.get());
-        }
-
-        pcapfs::DecodeMapEntry getDecodeMapEntry() const {
-            return decodeMapEntry;
-        };
-
-        void visit(const toml::value<toml::local_date> &) {}
-
-        void visit(const toml::value<toml::local_time> &) {}
-
-        void visit(const toml::value<toml::local_datetime> &) {}
-
-        void visit(const toml::value<toml::offset_datetime> &) {}
-
-        void visit(const toml::value<bool> &) {}
-
-        void visit(const toml::value<double> &) {}
-
-        void visit(const toml::array &) {}
-
-    private:
-        pcapfs::DecodeMapEntry decodeMapEntry;
-        std::string currentKey;
-    };
+        return result;
+    }
 
 
-    void parseGeneralSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config) {
+    void parseGeneralSection(const toml::table *section, ConfigFileOptions &config) {
         if (!section) { return; }
 
-        for (const auto &opt : *section) {
-            if (opt.first == "sortby") {
-                const auto sortby = section->get_as<std::string>("sortby");
-                if (sortby)
-                    config.sortby = *sortby;
+        for (auto &[key, val] : *section) {
+            if (key == "sortby") {
+                if (auto v = (*section)["sortby"].value<std::string>())
+                    config.sortby = *v;
             } else
-                LOG_WARNING << "Invalid general option in config file: " << opt.first;
+                LOG_WARNING << "Invalid general option in config file: " << key;
         }
     }
 
 
-
-    pcapfs::Paths getKeyFiles(const std::shared_ptr<toml::table> &section, const pcapfs::Path &configPath) {
+    pcapfs::Paths getKeyFiles(const toml::table *section, const pcapfs::Path &configPath) {
         pcapfs::Paths files;
 
-        for (const auto &entry : *section) {
-            if (entry.first != "keyfiles")
-                LOG_WARNING << "Invalid keys option in config file: " << entry.first;
-            else {
-                const auto keyfiles = section->get_array_of<std::string>("keyfiles");
-                if (keyfiles) {
-                    for (const auto &k : *keyfiles) {
-                        boost::filesystem::path path;
-                        try {
-                            path = boost::filesystem::canonical(k, configPath);
-                        } catch (boost::filesystem::filesystem_error &err) {
-                            LOG_ERROR << "Invalid key file path in config file: " << err.what();
-                            continue;
+        for (auto &[key, val] : *section) {
+            if (key != "keyfiles") {
+                LOG_WARNING << "Invalid keys option in config file: " << key;
+            } else {
+                if (const auto *arr = val.as_array()) {
+                    for (const auto &elem : *arr) {
+                        if (auto k = elem.value<std::string>()) {
+                            boost::filesystem::path path;
+                            try {
+                                path = boost::filesystem::canonical(*k, configPath);
+                            } catch (boost::filesystem::filesystem_error &err) {
+                                LOG_ERROR << "Invalid key file path in config file: " << err.what();
+                                continue;
+                            }
+                            const auto paths = pcapfs::utils::getFilesFromPath(path, "");
+                            files.insert(files.end(), paths.cbegin(), paths.cend());
                         }
-                        const auto paths = pcapfs::utils::getFilesFromPath(path, "");
-                        files.insert(files.end(), paths.cbegin(), paths.cend());
                     }
-                } else {
-                    const auto keyfile = section->get_as<std::string>("keyfiles");
+                } else if (auto keyfile = val.value<std::string>()) {
                     boost::filesystem::path path;
                     try {
                         path = boost::filesystem::canonical(*keyfile, configPath);
                     } catch (boost::filesystem::filesystem_error &err) {
                         LOG_ERROR << "Invalid key file path in config file: " << err.what();
-                        return files;
+                        continue;
                     }
-                    if (keyfile) {
-                        const auto paths = pcapfs::utils::getFilesFromPath(path, "");
-                        files.insert(files.end(), paths.cbegin(), paths.cend());
-                    }
+                    const auto paths = pcapfs::utils::getFilesFromPath(path, "");
+                    files.insert(files.end(), paths.cbegin(), paths.cend());
                 }
             }
         }
@@ -134,7 +98,7 @@ namespace {
     }
 
 
-    void parseKeysSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config,
+    void parseKeysSection(const toml::table *section, ConfigFileOptions &config,
                           const pcapfs::Path &configPath) {
         if (!section) { return; }
         const auto keyFilePaths = getKeyFiles(section, configPath);
@@ -142,63 +106,48 @@ namespace {
     }
 
 
-    pcapfs::DecodeMapEntry parseDecodeMapEntryFromPropertyList(const toml::table_array &properties) {
-        PropertiesConfigVisitor visitor;
-        properties.accept(visitor);
-        return visitor.getDecodeMapEntry();
-    }
-
-
-    void parseDecodeSection(const std::shared_ptr<toml::table> &section, ConfigFileOptions &config, const pcapfs::Path &configPath) {
+    void parseDecodeSection(const toml::table *section, ConfigFileOptions &config, const pcapfs::Path &configPath) {
         if (!section) { return; }
 
         const std::set<std::string> validDecodeTypes = {"xor", "tls", "cobaltstrike"};
 
-        for (const auto &subsection : *section) {
-            if (std::find_if(validDecodeTypes.begin(), validDecodeTypes.end(), [subsection](const std::string &s){
-                            return subsection.first == s; }) == validDecodeTypes.end()) {
-                LOG_WARNING << "Invalid decode type in config file: " << subsection.first;
+        for (auto &[name, node] : *section) {
+            if (std::find(validDecodeTypes.begin(), validDecodeTypes.end(), std::string(name)) == validDecodeTypes.end()) {
+                LOG_WARNING << "Invalid decode type in config file: " << name;
                 continue;
             }
 
-            const auto &subsectionTable = subsection.second->as_table();
+            const auto *subsectionTable = node.as_table();
             if (!subsectionTable) {
                 LOG_WARNING << "Empty decode table in config file";
                 continue;
             }
-            const auto &subsectionKey = subsectionTable->get_as<std::string>("withKey");
-            if (subsectionKey) {
+
+            if (auto withKey = (*subsectionTable)["withKey"].value<std::string>()) {
                 //TODO
             }
 
-            const auto &properties = subsectionTable->get_table_array("properties");
+            const auto *properties = (*subsectionTable)["properties"].as_array();
             if (properties) {
-                if (!properties->is_table_array()) {  //TODO: fix this check work!
-                    throw pcapfs::ConfigFileError(
-                            "properties have to be specified using a TOML list. Maybe you forgot "
-                            "to use double brackets?");
-                }
-                config.decodeMap[subsection.first] = parseDecodeMapEntryFromPropertyList(*properties);
+                config.decodeMap[std::string(name)] = parseDecodeMapEntry(*properties);
 
-                // add xor key files to keyFiles
-                if (subsection.first == "xor") {
-                    for(const auto &table : properties->get()) {
-                        cpptoml::option<std::string> keyfile;
-                        try {
-                            keyfile = table->get_as<std::string>("keyfile");
-                        } catch (std::out_of_range &err) {
-                            LOG_ERROR << "No keyfile property provided in xor decode config";
-                            continue;
-                        }
-                        boost::filesystem::path path;
-                        try {
-                            path = boost::filesystem::canonical(*keyfile, configPath);
-                        } catch (boost::filesystem::filesystem_error &err) {
-                            LOG_ERROR << "Invalid key file path in config file: " << err.what();
-                            continue;
-                        }
-                        if (keyfile)
+                if (name == "xor") {
+                    for (const auto &tableElem : *properties) {
+                        if (const auto *tbl = tableElem.as_table()) {
+                            auto keyfile = (*tbl)["keyfile"].value<std::string>();
+                            if (!keyfile) {
+                                LOG_ERROR << "No keyfile property provided in xor decode config";
+                                continue;
+                            }
+                            boost::filesystem::path path;
+                            try {
+                                path = boost::filesystem::canonical(*keyfile, configPath);
+                            } catch (boost::filesystem::filesystem_error &err) {
+                                LOG_ERROR << "Invalid key file path in config file: " << err.what();
+                                continue;
+                            }
                             config.keyFiles.push_back(path);
+                        }
                     }
                 }
             }
@@ -539,22 +488,22 @@ const pcapfs::options::ConfigFileOptions pcapfs::options::configfile::parse(cons
     }
 
     ConfigFileOptions config;
-    std::shared_ptr<toml::table> conf;
+    toml::table conf;
     try {
         conf = toml::parse_file(configfile.string());
-    } catch (toml::parse_exception &err) {
+    } catch (const toml::parse_error &err) {
         LOG_ERROR << "Failed to parse config file: " << err.what();
         return config;
     }
-    for (const auto &c : *conf) {
-        if (c.first == "general")
-            parseGeneralSection(conf->get_table("general"), config);
-        else if (c.first == "keys")
-            parseKeysSection(conf->get_table("keys"), config, configfile.parent_path());
-        else if (c.first == "decode")
-            parseDecodeSection(conf->get_table("decode"), config, configfile.parent_path());
+    for (auto &[key, val] : conf) {
+        if (key == "general")
+            parseGeneralSection(conf["general"].as_table(), config);
+        else if (key == "keys")
+            parseKeysSection(conf["keys"].as_table(), config, configfile.parent_path());
+        else if (key == "decode")
+            parseDecodeSection(conf["decode"].as_table(), config, configfile.parent_path());
         else
-            LOG_WARNING << "Invalid config file option: " << c.first;
+            LOG_WARNING << "Invalid config file option: " << key;
     }
     return config;
 }

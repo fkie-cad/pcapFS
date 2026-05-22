@@ -35,28 +35,12 @@ add_library(fusepp_iface INTERFACE)
 target_include_directories(fusepp_iface INTERFACE ${fusepp_include_dir})
 add_library(Fusepp::Fusepp ALIAS fusepp_iface)
 
-# get cpptoml; needs a patch on top of the unmaintained skystrife/cpptoml repo.
-set(CPPTOML_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-set(ENABLE_LIBCXX OFF CACHE INTERNAL "")
-FetchContent_Declare(cpptoml
-        GIT_REPOSITORY https://github.com/skystrife/cpptoml.git
-        GIT_TAG        fededad7169e538ca47e11a9ee9251bc361a9a65
-        GIT_SHALLOW    TRUE
-        PATCH_COMMAND  patch -p1 -N -i ${PROJECT_SOURCE_DIR}/cmake/patches/cpptoml.patch || true)
-# EXCLUDE_FROM_ALL suppresses cpptoml's own install rules so its header and
-# CMake config files don't leak into our `cmake --install` output. Replace
-# with `FetchContent_MakeAvailable(cpptoml EXCLUDE_FROM_ALL)` once the
-# minimum CMake is >= 3.28.
-FetchContent_GetProperties(cpptoml)
-if(NOT cpptoml_POPULATED)
-    FetchContent_Populate(cpptoml)
-    add_subdirectory(${cpptoml_SOURCE_DIR} ${cpptoml_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-# cpptoml's own CMakeLists exposes an INTERFACE target named `cpptoml`;
-# alias it to match the cpptoml::cpptoml convention used by the source.
-if(NOT TARGET cpptoml::cpptoml)
-    add_library(cpptoml::cpptoml ALIAS cpptoml)
-endif()
+# get toml++; header-only
+FetchContent_Declare(tomlplusplus
+        GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+        GIT_TAG        v3.4.0
+        GIT_SHALLOW    TRUE)
+FetchContent_MakeAvailable(tomlplusplus)
 
 # get nlohmann_json. Prefer system version if available.
 option(PCAPFS_USE_SYSTEM_JSON "Use system nlohmann_json if available" ON)
@@ -69,7 +53,8 @@ if(NOT nlohmann_json_FOUND)
             GIT_TAG        v3.12.0
             GIT_SHALLOW    TRUE)
     set(JSON_BuildTests OFF CACHE INTERNAL "")
-    # See cpptoml block above re: EXCLUDE_FROM_ALL
+    # EXCLUDE_FROM_ALL prevents nlohmann_json's install rules from leaking into our cmake --install output.
+    # Replace with FetchContent_MakeAvailable(nlohmann_json EXCLUDE_FROM_ALL) once CMake >= 3.28 is required.
     FetchContent_GetProperties(nlohmann_json)
     if(NOT nlohmann_json_POPULATED)
         FetchContent_Populate(nlohmann_json)
@@ -138,7 +123,7 @@ set(PCAPFS_COMMON_SOURCES
 
 set(PCAPFS_LINK_LIBRARIES
         Boost::filesystem Boost::iostreams Boost::log Boost::program_options Boost::regex Boost::serialization
-        cpptoml::cpptoml
+        tomlplusplus::tomlplusplus
         FUSE3::FUSE3
         Fusepp::Fusepp
         nlohmann_json::nlohmann_json
@@ -148,7 +133,8 @@ set(PCAPFS_LINK_LIBRARIES
         ZLIB::ZLIB
         )
 
-set(COMPILE_FEATURES cxx_std_14)
+# needed by toml++
+set(COMPILE_FEATURES cxx_std_17)
 
 add_library(pcapfs_obj OBJECT ${PCAPFS_COMMON_SOURCES})
 target_compile_features(pcapfs_obj PUBLIC ${COMPILE_FEATURES})

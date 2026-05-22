@@ -53,7 +53,7 @@ $ ./bootstrap.sh --install
 
 Other distributions may work if you install the dependencies manually; see [scripts/dependencies](scripts/dependencies).
 
-pcapFS is Linux-only because it depends on FUSE3. On Windows, install pcapFS inside a [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) Linux distribution (e.g. Ubuntu) and access the mountpoint from Windows via `\\wsl$\<distro>\…`. 
+pcapFS is Linux-only because it depends on FUSE3. On Windows, install pcapFS inside a [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) Linux distribution (e.g. Ubuntu) and access the mountpoint from Windows via `\\wsl$\<distro>\…`.
 
 # Using pcapFS
 
