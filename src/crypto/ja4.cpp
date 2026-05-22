@@ -307,7 +307,7 @@ std::string const pcapfs::ja4::calculateJa4H(const pcpp::HttpRequestLayer& reque
         // only take first entry if comma-separated
         size_t commaPos = langResult.find(',');
         if (commaPos != std::string::npos)
-            langResult = langResult.substr(0, commaPos);
+            langResult.resize(commaPos);
 
         // pad with '0' to make length 4
         if (langResult.length() < 4)

@@ -130,7 +130,7 @@ void pcapfs::ftp::FtpManager::updateFtpFilesFromMlst(const std::string &filePath
         fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + offsetFilePtr->getProperty(prop::dstIP) + metadata.filename : filePath + metadata.filename;
 
     if (fullFilePath.at(fullFilePath.size() - 1) == '/')
-        fullFilePath = fullFilePath.substr(0, fullFilePath.size() - 1);
+        fullFilePath.pop_back();
 
     FtpFilePtr ftpFilePtr = std::static_pointer_cast<FtpFile>(serverFiles[SERVER_FILE_TREE_DUMMY][fullFilePath]);
     if (ftpFilePtr) {

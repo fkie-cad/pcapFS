@@ -6,15 +6,13 @@
 #include "../../src/config.h"
 #include "../../src/exceptions.h"
 
-#include "constants.h"
-
 using Catch::Equals;
 
 
 template<class T>
 class HasSameElements : public Catch::MatcherBase<T> {
 public:
-    explicit HasSameElements(const T expected) : expected(expected) {
+    explicit HasSameElements(const T& expected) : expected(expected) {
         std::sort(this->expected.begin(), this->expected.end());
     }
 
@@ -43,7 +41,7 @@ private:
 
 
 template<typename T>
-inline HasSameElements<T> HasSameElementsAs(T expected) {
+inline HasSameElements<T> HasSameElementsAs(const T& expected) {
     return HasSameElements<T>(expected);
 }
 

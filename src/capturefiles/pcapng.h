@@ -30,7 +30,7 @@ namespace pcapfs {
         void parsePacketOffsets(Index &idx);
 
     private:
-        const std::vector<FilePtr> extractEmbeddedKeyFiles(const Bytes blockBody);
+        const std::vector<FilePtr> extractEmbeddedKeyFiles(const Bytes& blockBody);
 
         std::vector<size_t> packetOffsets;
         static bool registeredAtFactory;

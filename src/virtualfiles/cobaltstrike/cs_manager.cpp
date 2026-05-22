@@ -1,5 +1,6 @@
 #include "cs_manager.h"
 
+#include <algorithm>
 #include <boost/beast/core/detail/base64.hpp>
 #include "../../crypto/cryptutils.h"
 #include "../../keyfiles/cskey.h"
@@ -70,13 +71,15 @@ void pcapfs::CobaltStrikeManager::addConnectionData(const Bytes &rawKey, const s
     if (digest.empty())
         return;
 
-    for (CobaltStrikeConnectionPtr &conn : connections)  {
-        if ((conn->serverIp == dstIp && conn->serverPort == dstPort && conn->clientIp == srcIp)) {
-            // connection is already known, extend keys and cookies vector
-            conn->aesKeys.push_back(Bytes(digest.begin(), digest.begin()+16));
-            conn->httpCookies.push_back(httpCookie);
-            return;
-        }
+    const auto it = std::find_if(connections.begin(), connections.end(),
+        [&](const CobaltStrikeConnectionPtr& conn) {
+            return conn->serverIp == dstIp && conn->serverPort == dstPort && conn->clientIp == srcIp;
+        });
+    if (it != connections.end()) {
+        // connection is already known, extend keys and cookies vector
+        (*it)->aesKeys.push_back(Bytes(digest.begin(), digest.begin()+16));
+        (*it)->httpCookies.push_back(httpCookie);
+        return;
     }
 
     // connection not known priorly

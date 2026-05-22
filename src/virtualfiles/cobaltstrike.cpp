@@ -173,7 +173,7 @@ bool pcapfs::CobaltStrikeFile::meetsParsingRequirements(const FilePtr &filePtr) 
 bool pcapfs::CobaltStrikeFile::isHttpPost(const std::string &filename) {
     try {
         return std::regex_search(filename, std::regex("^[0-9\\-]+_POST"));
-    } catch (std::regex_error &err) {
+    } catch (const std::regex_error &err) {
         return false;
     }
 }
@@ -195,7 +195,7 @@ bool pcapfs::CobaltStrikeFile::isHttpResponse(const std::string &filename) {
     try {
         return std::none_of(requestMethods.begin(), requestMethods.end(), [filename](const std::string &s){
                             return std::regex_search(filename, std::regex("^[0-9\\-]+_" + s)); });
-    } catch (std::regex_error &err) {
+    } catch (const std::regex_error &err) {
         return false;
     }
 }
@@ -347,7 +347,7 @@ std::string const pcapfs::CobaltStrikeFile::handleKeystrokes(const std::string& 
     std::string result;
     try {
         result = std::regex_replace(input, std::regex("\x03[A-Z0-9]|\x0f"), "");
-    } catch (std::regex_error &err) {
+    } catch (const std::regex_error &err) {
         return input;
     }
     return result;
@@ -437,13 +437,11 @@ pcapfs::CsContentInfoPtr const pcapfs::CobaltStrikeFile::extractServerContent(co
             const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
             privPayload.erase(privPayload.begin(), privPayload.begin()+2);
             ss << "Privileges:\n";
-            uint32_t currPrivLen;
-            std::string currPriv;
             for (uint16_t i = 0; i < numPrivs; ++i) {
-                currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
+                const uint32_t currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
                 if (currPrivLen > privPayload.size() - 4)
                     break;
-                currPriv.assign(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
+                const std::string currPriv(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
                 ss << currPriv << std::endl;
                 privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
             }
@@ -835,13 +833,11 @@ pcapfs::Bytes const pcapfs::CobaltStrikeFile::readServerContent(const Bytes &inp
             const uint16_t numPrivs = be16toh(*((uint16_t*) privPayload.data()));
             privPayload.erase(privPayload.begin(), privPayload.begin()+2);
             ss << "Privileges:\n";
-            uint32_t currPrivLen;
-            std::string currPriv;
             for (uint16_t i = 0; i < numPrivs; ++i) {
-                currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
+                const uint32_t currPrivLen = be32toh(*((uint32_t*) privPayload.data()));
                 if (currPrivLen > privPayload.size() - 4)
                     break;
-                currPriv.assign(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
+                const std::string currPriv(privPayload.begin()+4, privPayload.begin()+4+currPrivLen);
                 ss << currPriv << std::endl;
                 privPayload.erase(privPayload.begin(), privPayload.begin()+4+currPrivLen);
             }
@@ -1076,7 +1072,7 @@ std::string const pcapfs::CobaltStrikeFile::extractServerCommand(const std::stri
     std::smatch match;
     try {
         std::regex_search(input, match, std::regex("COMMAND_([A-Z0-9_]+)"));
-    } catch (std::regex_error &err) {
+    } catch (const std::regex_error &err) {
         return "command";
     }
     if (match.size() == 2)

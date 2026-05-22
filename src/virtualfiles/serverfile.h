@@ -139,7 +139,7 @@ namespace pcapfs {
 
         std::vector<std::shared_ptr<ServerFile>> getAllParentDirs();
 
-        bool isDirectory;
+        bool isDirectory = false;
 
     protected:
         TimePoint accessTime = TimePoint{};

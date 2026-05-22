@@ -47,7 +47,7 @@ size_t pcapfs::CaptureFile::read(uint64_t startOffset, size_t length, const Inde
 }
 
 
-std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(pcapfs::Paths pcapPaths, Index &idx) {
+std::vector<pcapfs::FilePtr> pcapfs::CaptureFile::createFromPaths(const pcapfs::Paths& pcapPaths, Index &idx) {
     std::vector<pcapfs::FilePtr> result;
     for (const auto &pcapName: pcapPaths) {
         uint8_t captureFileType = determineCaptureFileType(pcapName, idx);

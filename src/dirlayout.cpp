@@ -19,12 +19,11 @@ namespace pcapfs_filesystem {
 
 
     pcapfs_filesystem::DirTreeNode *DirectoryLayout::findDirectory(const std::vector<std::string> &path_v) {
-        DirTreeNode *current = ROOT;
         try {
-            for (const std::string &dirname: path_v) {
-                current = current->subdirs.at(dirname);
-            }
-            return current;
+            return std::accumulate(path_v.begin(), path_v.end(), ROOT,
+                [](DirTreeNode* curr, const std::string& dirname) {
+                    return curr->subdirs.at(dirname);
+                });
         }
         catch (std::out_of_range &x) {
             LOG_INFO << "Directory " << path_v.back() << " requested but not found";

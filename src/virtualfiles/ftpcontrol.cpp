@@ -175,7 +175,7 @@ pcapfs::Fragment pcapfs::FtpControlFile::parseOffset(pcapfs::FilePtr &filePtr, c
 }
 
 
-bool pcapfs::FtpControlFile::isResponse(char *raw_data) {
+bool pcapfs::FtpControlFile::isResponse(const char *raw_data) {
     for (uint8_t i = 0; i < RESPONSE_CODE_LN; i++) {
         if (!charIsInt(raw_data[i])) return false;
     }
@@ -211,7 +211,7 @@ void pcapfs::FtpControlFile::handleResponseTypes(const FtpResponse &response,
  * message format: "Entering Passive Mode (127,0,0,1,000,255)".
  * The last two numbers represent the port being two signs of a hex value.
  */
-std::string const pcapfs::FtpControlFile::parsePassivePort(std::string message) {
+std::string const pcapfs::FtpControlFile::parsePassivePort(const std::string& message) {
     const size_t last_colon = message.rfind(',');
     const size_t blast_colon = message.rfind(',', last_colon - 1);
     const size_t closing_bracket = message.rfind(')');
@@ -227,7 +227,7 @@ std::string const pcapfs::FtpControlFile::parsePassivePort(std::string message) 
  * message format: "Entering Extended Passive Mode (|||1337|)".
  * 1337 is the respective port.
  */
-std::string const pcapfs::FtpControlFile::parseExtendedPassivePort(std::string message) {
+std::string const pcapfs::FtpControlFile::parseExtendedPassivePort(const std::string& message) {
     const auto last_delim = message.rfind('|');
     const auto second_last_delim = message.rfind('|', last_delim - 1);
 
@@ -358,7 +358,7 @@ size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *bu
     size_t i = 0;
     size_t read_count = 0;
 
-    for (Fragment &fragment : fragments) {
+    for (const Fragment &fragment : fragments) {
         Bytes rawData = readRawData(idx, fragment);
         const uint8_t nr_of_lines = insertDirectionPrefixes(rawData, i);
         const uint16_t length_of_prefixes = nr_of_lines * DATA_DIRECTION_PREFIX_LN;

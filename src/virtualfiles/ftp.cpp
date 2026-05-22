@@ -102,7 +102,7 @@ void pcapfs::FtpFile::handleMlsd(const FilePtr &filePtr, const std::string &file
                 fullFilePath = metadata.filename.at(0) == '/' ? "FILES_FROM_" + filePtr->getProperty(prop::dstIP) + metadata.filename : filePath + metadata.filename;
 
             if (fullFilePath.at(fullFilePath.size() - 1) == '/')
-                fullFilePath = fullFilePath.substr(0, fullFilePath.size() - 1);
+                fullFilePath.pop_back();
 
             ftp::FtpManager::getInstance().updateFtpFilesFromMlsd(fullFilePath, metadata.isDir, metadata.modifyTime, filePtr);
         } catch (const PcapFsException &err){

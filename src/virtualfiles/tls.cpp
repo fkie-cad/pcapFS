@@ -72,7 +72,7 @@ size_t pcapfs::TlsFile::calculateProcessedSize(const Index &idx) {
     decryptCiphertextVecToPlaintextVec(cipherTextVector, result);
 
     return std::accumulate(result.begin(), result.end(), 0,
-                            [](size_t counter, Bytes elem){ return counter + elem.size(); });
+                            [](size_t counter, const Bytes& elem){ return counter + elem.size(); });
 }
 
 

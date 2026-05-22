@@ -3,6 +3,7 @@
 #include "smb/smb_manager.h"
 #include "../index.h"
 
+#include <algorithm>
 #include <numeric>
 #include <boost/serialization/set.hpp>
 
@@ -486,12 +487,10 @@ std::vector<pcapfs::FilePtr> const pcapfs::SmbFile::constructVersionFiles() {
         // Then, we want to display the file as metadata file
         bool displayAsMetadataFile = false;
 
-        for (auto currVersion = fileVersions.rbegin(); currVersion != fileVersions.rend(); ++currVersion) {
-            if (tryMatchTimestampsToSnip(currVersion->second.timestamps.fsTimestamps, currVersion->second.timestamps.hybridTimestamps)) {
-                displayAsMetadataFile = true;
-                break;
-            }
-        }
+        displayAsMetadataFile = std::any_of(fileVersions.rbegin(), fileVersions.rend(),
+            [this](const auto& v) {
+                return tryMatchTimestampsToSnip(v.second.timestamps.fsTimestamps, v.second.timestamps.hybridTimestamps);
+            });
 
         if (displayAsMetadataFile ||
             (!fileVersions.begin()->second.readOperation && tryMatchTimestampsToSnip(fsTimestamps, hybridTimestamps))) {

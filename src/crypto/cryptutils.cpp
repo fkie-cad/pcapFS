@@ -521,10 +521,7 @@ bool pcapfs::crypto::loadLegacyProvider() {
     if (OSSL_PROVIDER_available(nullptr, "legacy"))
         return true;
 
-    OSSL_PROVIDER *legacy;
-    OSSL_PROVIDER *deflt;
-
-    legacy = OSSL_PROVIDER_load(nullptr, "legacy");
+    const OSSL_PROVIDER *legacy = OSSL_PROVIDER_load(nullptr, "legacy");
     if (!legacy) {
         LOG_ERROR << "Openssl: failed to load legacy provider";
         return false;
@@ -532,7 +529,7 @@ bool pcapfs::crypto::loadLegacyProvider() {
 
     // Once the legacy provider is explicitly loaded into the library context,
     // we also need to explicitly load the default provider
-    deflt = OSSL_PROVIDER_load(nullptr, "default");
+    const OSSL_PROVIDER *deflt = OSSL_PROVIDER_load(nullptr, "default");
     if (!deflt) {
         LOG_ERROR << "Openssl: failed to load default provider";
         return false;

@@ -34,6 +34,7 @@ namespace pcapfs {
         class TCPContent {
         public:
             TCPContent(const TCPContent &other);
+            TCPContent& operator=(const TCPContent &other);
 
             TCPContent(const uint8_t *copy_from, size_t datalen);
 

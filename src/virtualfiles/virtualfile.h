@@ -37,7 +37,7 @@ namespace pcapfs {
 
     protected:
         std::string offsetType;
-        uint64_t firstPacketNumber;
+        uint64_t firstPacketNumber = 0;
     };
 
 

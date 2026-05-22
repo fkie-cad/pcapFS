@@ -56,7 +56,7 @@ void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
     Bytes fileContent(filesizeRaw);
     PcapNgBlockHdr currBlock;
     size_t currPos = 0;
-    uint32_t currBlockLength, offsetToLastPacketBlock = 0;
+    uint32_t offsetToLastPacketBlock = 0;
 
     fileHandle.read((char*) fileContent.data(), filesizeRaw);
     if (memcmp(fileContent.data(), SHB_MAGIC, 4) != 0)
@@ -64,7 +64,7 @@ void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
 
     while (currPos < filesizeRaw) {
         memcpy(&currBlock, &fileContent.at(currPos), 8);
-        currBlockLength = *((uint32_t*) currBlock.blockLength);
+        const uint32_t currBlockLength = *((uint32_t*) currBlock.blockLength);
         if (currPos + currBlockLength > filesizeRaw)
             throw pcapfs::PcapFsException("packet block in pcapng file " + filename + " has invalid size");
 
@@ -92,7 +92,7 @@ void pcapfs::PcapNgFile::parsePacketOffsets(Index &idx) {
 }
 
 
-const std::vector<pcapfs::FilePtr> pcapfs::PcapNgFile::extractEmbeddedKeyFiles(const Bytes blockBody) {
+const std::vector<pcapfs::FilePtr> pcapfs::PcapNgFile::extractEmbeddedKeyFiles(const Bytes& blockBody) {
     std::vector<FilePtr> result(0);
     if (memcmp(blockBody.data(), TLSKEYLOG_SECRET_TYPE, 4) != 0) {
         LOG_INFO << "Found Decryption Secrets Block with unsupported Secrets Type. We skip that.";

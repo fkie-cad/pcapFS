@@ -213,9 +213,8 @@ void pcapfs::smb::SmbManager::extractMappings(const std::vector<FilePtr> &tcpFil
 
 
 pcapfs::smb::ServerEndpointTree const pcapfs::smb::SmbManager::getServerEndpointTree(const SmbContextPtr &smbContext) {
-    if (treeNames[smbContext->serverEndpoint].count(smbContext->currentTreeId) == 0) {
-        treeNames[smbContext->serverEndpoint][smbContext->currentTreeId] = "treeId_" + std::to_string(smbContext->currentTreeId);
-    }
+    treeNames[smbContext->serverEndpoint].try_emplace(
+        smbContext->currentTreeId, "treeId_" + std::to_string(smbContext->currentTreeId));
     return ServerEndpointTree(smbContext->serverEndpoint, treeNames[smbContext->serverEndpoint][smbContext->currentTreeId]);
 }
 
@@ -311,7 +310,7 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
                 if (tmpServerFilePtr->getParentDir()) {
                     const size_t backslashPos = filePath.rfind("\\");
                     if (backslashPos != std::string::npos) {
-                        filePath = std::string(filePath.begin(), filePath.begin()+backslashPos);
+                        filePath.resize(backslashPos);
                     } else
                         continue;
                 } else {

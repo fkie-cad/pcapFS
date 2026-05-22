@@ -84,7 +84,7 @@ int pcapfs::PcapFs::readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
     int cnt = 2;
     std::vector<std::string> path_v = pcapfs_filesystem::DirectoryLayout::pathVector(path);
-    pcapfs_filesystem::DirTreeNode *dir = pcapfs_filesystem::DirectoryLayout::findDirectory(path_v);
+    const pcapfs_filesystem::DirTreeNode *dir = pcapfs_filesystem::DirectoryLayout::findDirectory(path_v);
     LOG_TRACE << "Directory depth: " << path_v.size();
     // List directories
     for (const auto &map_it : dir->subdirs) {

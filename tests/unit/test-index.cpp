@@ -3,7 +3,6 @@
 
 #include "../../src/index.h"
 #include "../../src/commontypes.h"
-#include "constants.h"
 
 using Catch::Equals;
 using pcapfs::Index;

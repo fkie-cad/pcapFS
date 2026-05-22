@@ -271,8 +271,24 @@ pcapfs::TcpFile::TCPContent::TCPContent(const TCPContent &other) {
     datalen = other.datalen;
     if (other.data != nullptr) {
         data = new uint8_t[datalen];
-        memcpy(this->data, other.data, this->datalen);
+        memcpy(data, other.data, datalen);
+    } else {
+        data = nullptr;
     }
+}
+
+pcapfs::TcpFile::TCPContent& pcapfs::TcpFile::TCPContent::operator=(const TCPContent &other) {
+    if (this != &other) {
+        delete[] data;
+        datalen = other.datalen;
+        if (other.data != nullptr) {
+            data = new uint8_t[datalen];
+            memcpy(data, other.data, datalen);
+        } else {
+            data = nullptr;
+        }
+    }
+    return *this;
 }
 
 pcapfs::TcpFile::TCPContent::TCPContent(const uint8_t *copy_from, size_t datalen) {

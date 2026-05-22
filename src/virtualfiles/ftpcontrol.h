@@ -58,7 +58,7 @@ namespace pcapfs {
 
         static Fragment parseOffset(pcapfs::FilePtr &filePtr, const uint64_t &offset, size_t size);
 
-        static bool isResponse(char *raw_data);
+        static bool isResponse(const char *raw_data);
 
         static uint8_t handleResponse(std::shared_ptr<FtpControlFile> &result, size_t size,
                                       char *raw_data, TimePoint timestamp);
@@ -68,9 +68,9 @@ namespace pcapfs {
         static void
         handleResponseTypes(const FtpResponse &response, std::shared_ptr<pcapfs::FtpControlFile> &result);
 
-        static std::string const parsePassivePort(std::string message);
+        static std::string const parsePassivePort(const std::string& message);
 
-        static std::string const  parseExtendedPassivePort(std::string message);
+        static std::string const parseExtendedPassivePort(const std::string& message);
 
         static uint8_t
         handleCommand(const std::shared_ptr<pcapfs::FtpControlFile> &result, const pcapfs::FilePtr &filePtr,
