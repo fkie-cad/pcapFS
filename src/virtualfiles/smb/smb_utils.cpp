@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <chrono>
 #include <algorithm>
-#include <cmath>
+#include <cstring>
 
 
 bool pcapfs::smb::isSmbOverTcp(const FilePtr &filePtr, const Bytes &data, bool checkNonDefaultPorts) {
@@ -39,27 +39,86 @@ size_t pcapfs::smb::calculate311NegotiateMessageLength(const Bytes &rawData, uin
                                                         uint16_t negotiateContextCount) {
     size_t currPos = negotiateContextOffset - 64;
     for (size_t i = 0; i < negotiateContextCount; ++i) {
-        double tmpLen = (*(uint16_t*) &rawData.at(currPos + 2)) + 8;
-        if (i == (size_t)(negotiateContextCount - 1)) {
-            // no alignment for last context entry
+        if (currPos + 8 > rawData.size())
+            throw SmbError("Invalid negotiate context values in SMB Negotiate Message");
+        uint16_t entryDataLen;
+        std::memcpy(&entryDataLen, &rawData.at(currPos + 2), sizeof(entryDataLen));
+        const size_t tmpLen = static_cast<size_t>(entryDataLen) + 8;
+        if (i == static_cast<size_t>(negotiateContextCount - 1)) {
+            // no 8-byte alignment for last context entry
             if (tmpLen > rawData.size() - currPos)
                 throw SmbError("Invalid negotiate context values in SMB Negotiate Message");
             currPos += tmpLen;
         } else {
-            uint16_t dataLength = std::ceil(tmpLen / 8) * 8;
-            if (dataLength > rawData.size() - currPos)
+            const size_t aligned = (tmpLen + 7u) & ~static_cast<size_t>(7u);
+            if (aligned > rawData.size() - currPos)
                 throw SmbError("Invalid negotiate context values in SMB Negotiate Message");
-            currPos += dataLength;
+            currPos += aligned;
         }
     }
     return currPos;
 }
 
 
+static void appendUtf8(std::string &out, uint32_t cp) {
+    if (cp <= 0x7F) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0x10FFFF) {
+        out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        // U+FFFD REPLACEMENT CHARACTER
+        out.append("\xEF\xBF\xBD");
+    }
+}
+
+
+std::string const pcapfs::smb::wstrToStr(const uint8_t* data, size_t len) {
+    // SMB strings are UTF-16LE per MS-SMB2; convert to UTF-8.
+    std::string result;
+    result.reserve(len);
+    const size_t units = len / 2;
+    for (size_t i = 0; i < units; ++i) {
+        uint16_t hi = static_cast<uint16_t>(data[2 * i]) |
+                      (static_cast<uint16_t>(data[2 * i + 1]) << 8);
+        uint32_t cp;
+        if (hi >= 0xD800 && hi <= 0xDBFF) {
+            // high surrogate, look for matching low surrogate
+            if (i + 1 < units) {
+                uint16_t lo = static_cast<uint16_t>(data[2 * (i + 1)]) |
+                              (static_cast<uint16_t>(data[2 * (i + 1) + 1]) << 8);
+                if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                    cp = 0x10000 + ((static_cast<uint32_t>(hi - 0xD800) << 10) | (lo - 0xDC00));
+                    ++i;
+                } else {
+                    cp = 0xFFFD;
+                }
+            } else {
+                cp = 0xFFFD;
+            }
+        } else if (hi >= 0xDC00 && hi <= 0xDFFF) {
+            // stray low surrogate
+            cp = 0xFFFD;
+        } else {
+            cp = hi;
+        }
+        appendUtf8(result, cp);
+    }
+    return result;
+}
+
+
 std::string const pcapfs::smb::wstrToStr(const Bytes &input) {
-    Bytes temp(input.begin(), input.end());
-    temp.erase(std::remove(temp.begin(), temp.end(), (unsigned char)0x00), temp.end());
-    return std::string(temp.begin(), temp.end());
+    return wstrToStr(input.data(), input.size());
 }
 
 

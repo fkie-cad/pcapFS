@@ -51,7 +51,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
 
         // We have a 4 byte NBSS header indicating the NBSS message type
         // and the size of the following SMB data
-        if (data.at(offset) != 0) {
+        if (offset + 4 > data.size() || data.at(offset) != 0) {
             // message type has to be zero
             continue;
         }
@@ -142,7 +142,7 @@ std::vector<pcapfs::FilePtr> pcapfs::SmbControlFile::parse(FilePtr filePtr, Inde
             }
 
             // fully parsed this connection break
-            if (offset >= data.size())
+            if (offset + 4 > data.size())
                 break;
 
             // get size of next SMB2 data
@@ -181,35 +181,36 @@ void pcapfs::SmbControlFile::fillGlobalProperties(std::shared_ptr<SmbControlFile
 
 size_t pcapfs::SmbControlFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
 
-    bool buffer_needs_content = std::all_of(buffer.cbegin(), buffer.cend(),
-                                            [](const auto &elem) { return elem == 0; });
-    if(buffer_needs_content == false) {
+    if (!buffer.empty()) {
         LOG_TRACE << "BUFFER HIT for read in SMB control file";
-        if (buffer.size() >= startOffset + length) {
-            memcpy(buf, (const char*) buffer.data() + startOffset, length);
-            return length;
-        } else {
-            const size_t toRead = buffer.size() - startOffset;
-            memcpy(buf, (const char*) buffer.data() + startOffset, toRead);
-            return toRead;
-        }
-    } else {
-        LOG_TRACE << "no buffer hit for read in SMB control file, starting read cascade";
-        std::stringstream ss;
-        const FilePtr filePtr = idx.get({offsetType, fragments.at(0).id});
-        smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr, false);
-
-        for (const Fragment fragment: fragments) {
-            Bytes rawData(fragment.length);
-            filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-            smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
-            ss << smbPacket.toString(smbContext);
-        }
-        const std::string outputString = ss.str();
-        memcpy(buf, outputString.c_str() + startOffset, length);
-        buffer.assign(outputString.begin(), outputString.end());
-        return std::min((size_t) outputString.length() - startOffset, length);
+        if (startOffset >= buffer.size())
+            return 0;
+        const size_t toRead = std::min<size_t>(buffer.size() - startOffset, length);
+        memcpy(buf, buffer.data() + startOffset, toRead);
+        return toRead;
     }
+
+    LOG_TRACE << "no buffer hit for read in SMB control file, starting read cascade";
+    std::stringstream ss;
+    if (fragments.empty())
+        return 0;
+    const FilePtr filePtr = idx.get({offsetType, fragments.at(0).id});
+    smb::SmbContextPtr smbContext = std::make_shared<smb::SmbContext>(filePtr, false);
+
+    for (const Fragment fragment: fragments) {
+        Bytes rawData(fragment.length);
+        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
+        smb::SmbPacket smbPacket(rawData.data(), rawData.size(), smbContext);
+        ss << smbPacket.toString(smbContext);
+    }
+    const std::string outputString = ss.str();
+    buffer.assign(outputString.begin(), outputString.end());
+
+    if (startOffset >= buffer.size())
+        return 0;
+    const size_t toRead = std::min<size_t>(buffer.size() - startOffset, length);
+    memcpy(buf, buffer.data() + startOffset, toRead);
+    return toRead;
 }
 
 

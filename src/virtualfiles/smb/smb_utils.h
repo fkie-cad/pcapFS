@@ -8,7 +8,12 @@ namespace pcapfs {
     namespace smb {
         size_t calculate311NegotiateMessageLength(const Bytes &rawData, uint32_t negotiateContextOffset,
                                                     uint16_t negotiateContextCount);
+
+        // Convert a UTF-16LE byte buffer to UTF-8. Handles surrogate pairs.
+        // Invalid sequences are replaced with U+FFFD. Trailing odd byte is dropped.
+        std::string const wstrToStr(const uint8_t* data, size_t len);
         std::string const wstrToStr(const Bytes &input);
+
         std::string const bytesToHexString(const Bytes &input);
         uint16_t strToUint16(const std::string& str);
         TimePoint winFiletimeToTimePoint(uint64_t winFiletime);

@@ -15,7 +15,9 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
         const std::shared_ptr<Smb2Header> packetHeader = std::make_shared<Smb2Header>(data);
         if (!(packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_ASYNC_COMMAND)) {
-            // TODO: could this lead to errors/bugs?
+            // For SYNC commands the field at offset 36 is TreeId. For ASYNC commands the same
+            // four bytes are part of AsyncId, so we deliberately skip the assignment there
+            // (per MS-SMB2 2.2.1.2 SMB2 Packet Header).
             smbContext->currentTreeId = packetHeader->treeId;
         }
 
@@ -118,11 +120,11 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
 
                         if (packetHeader->status == StatusCodes::STATUS_SUCCESS && smbContext->createServerFiles &&
                             smbContext->writeRequestData.find(packetHeader->messageId) != smbContext->writeRequestData.end()) {
-                                const std::shared_ptr<WriteRequestData> matchingWriteRequestData = smbContext->writeRequestData[packetHeader->messageId];
-                                if (matchingWriteRequestData && matchingWriteRequestData->writeLength != 0)
-                                    SmbManager::getInstance().updateSmbFiles(matchingWriteRequestData, smbContext);
-                            }
-                            smbContext->writeRequestData.erase(packetHeader->messageId);
+                            const std::shared_ptr<WriteRequestData> matchingWriteRequestData = smbContext->writeRequestData[packetHeader->messageId];
+                            if (matchingWriteRequestData && matchingWriteRequestData->writeLength != 0)
+                                SmbManager::getInstance().updateSmbFiles(matchingWriteRequestData, smbContext);
+                        }
+                        smbContext->writeRequestData.erase(packetHeader->messageId);
                     } else {
                         const std::shared_ptr<WriteRequest> writeRequest = std::make_shared<WriteRequest>(&data[64], len - 64);
                         std::shared_ptr<WriteRequestData> newWriteRequestData = std::make_shared<WriteRequestData>();
@@ -243,9 +245,9 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                         if (packetHeader->status == StatusCodes::STATUS_SUCCESS &&
                             smbContext->setInfoRequestData.find(packetHeader->messageId) != smbContext->setInfoRequestData.end() &&
                             smbContext->setInfoRequestData[packetHeader->messageId]) {
-                                SmbManager::getInstance().updateSmbFiles(smbContext, packetHeader->messageId);
-                                smbContext->queryInfoRequestData.erase(packetHeader->messageId);
+                            SmbManager::getInstance().updateSmbFiles(smbContext, packetHeader->messageId);
                         }
+                        smbContext->setInfoRequestData.erase(packetHeader->messageId);
                         message = std::make_shared<SetInfoResponse>(&data[64], len - 64);
 
                     } else {
@@ -338,6 +340,8 @@ pcapfs::smb::SmbPacket::SmbPacket(const uint8_t* data, size_t len, SmbContextPtr
                 throw SmbError("Invalid SMB2 Compression Transform Header");
 
             if (compressionTransformHeaderChained->usesOriginalPayloadSizeField()) {
+                if (compressionTransformHeaderChained->length < 4)
+                    throw SmbError("Invalid SMB2 Compression Transform Header");
                 message = std::make_shared<SmbMessage>(compressionTransformHeaderChained->length - 4);
                 size = 16 + 4 + message->totalSize;
             } else {

@@ -16,7 +16,6 @@ void pcapfs::smb::SmbManager::parsePacketMinimally(const uint8_t* data, size_t l
             return ;
 
         if (!(packetHeader->flags & Smb2HeaderFlags::SMB2_FLAGS_ASYNC_COMMAND)) {
-            // TODO: could this lead to errors/bugs?
             smbContext->currentTreeId = packetHeader->treeId;
         }
 
@@ -150,7 +149,7 @@ void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile
 
         // We have a 4 byte NBSS header indicating the NBSS message type
         // and the size of the following SMB data
-        if (data.at(offset) != 0) {
+        if (offset + 4 > data.size() || data.at(offset) != 0) {
             // message type has to be zero
             continue;
         }
@@ -169,7 +168,7 @@ void pcapfs::smb::SmbManager::parseSmbConnectionMinimally(const FilePtr &tcpFile
             currPos += smbDataSize;
 
             // fully parsed this connection break
-            if (offset >= data.size())
+            if (offset + 4 > data.size())
                 break;
 
             // get size of next SMB2 data
@@ -303,24 +302,15 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::vector<std::shared_ptr<F
                 continue;
             }
 
-            if (fileInfo->filename == ".." && serverFiles.count(endpointTree) && serverFiles[endpointTree].count(filePath) &&
-                serverFiles[endpointTree][filePath]) {
-                // analyze FileInfo of parent directory only when the parent directory is already known as SmbFile
-                const SmbFilePtr tmpServerFilePtr = std::static_pointer_cast<SmbFile>(serverFiles[endpointTree][filePath]);
-                if (tmpServerFilePtr->getParentDir()) {
-                    const size_t backslashPos = filePath.rfind("\\");
-                    if (backslashPos != std::string::npos) {
-                        filePath.resize(backslashPos);
-                    } else
-                        continue;
-                } else {
-                    // real file path of ".." is beyond root
+            if (fileInfo->filename == "..") {
+                // walk one level up; if filePath has no backslash separator we're already at the
+                // tree root and there is no real parent to update
+                const size_t backslashPos = filePath.rfind("\\");
+                if (backslashPos == std::string::npos)
                     continue;
-                }
-            } else {
-                // real file path of ".." could not be determined
-                continue;
+                filePath.resize(backslashPos);
             }
+            // for ".", filePath is the directory itself and falls through to the normal update below
         }
         else if (directoryNameKnown)
             filePath = fileHandles[endpointTree].at(currentQueryDirectoryRequestData->fileId) + "\\" + fileInfo->filename;
@@ -526,7 +516,10 @@ void pcapfs::smb::SmbManager::updateSmbFiles(const std::shared_ptr<WriteRequestD
 void pcapfs::smb::SmbManager::updateSmbFiles(const SmbContextPtr &smbContext, uint64_t messageId) {
     // update server files with file metadata obtained from set info message
 
-    const std::shared_ptr<SetInfoRequestData> setInfoRequestData = smbContext->setInfoRequestData[messageId];
+    const auto it = smbContext->setInfoRequestData.find(messageId);
+    if (it == smbContext->setInfoRequestData.end() || !it->second)
+        return;
+    const std::shared_ptr<SetInfoRequestData> setInfoRequestData = it->second;
 
     const ServerEndpointTree endpointTree = getServerEndpointTree(smbContext);
     if (fileHandles[endpointTree].find(setInfoRequestData->fileId) == fileHandles[endpointTree].end()) {
@@ -588,32 +581,39 @@ void pcapfs::smb::SmbManager::adjustServerFilesForDirLayout(std::vector<FilePtr>
     }
 
     LOG_DEBUG << "preparing smb files for dir layout";
-    for (size_t i = indexFiles.size() - 1; i != (size_t)-1; --i) {
-        FilePtr currFile = indexFiles.at(i);
-        if (!currFile->isFiletype("smb"))
+    // Build a "keep" vector in one pass to avoid O(n^2) behavior of repeated mid-vector erases.
+    std::vector<FilePtr> keep;
+    keep.reserve(indexFiles.size());
+    for (FilePtr &currFile : indexFiles) {
+        if (!currFile->isFiletype("smb")) {
+            keep.push_back(std::move(currFile));
             continue;
+        }
 
-        pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(indexFiles.at(i));
-        if (!smbFilePtr->processFileForDirLayout())
+        pcapfs::SmbFilePtr smbFilePtr = std::static_pointer_cast<pcapfs::SmbFile>(currFile);
+        if (!smbFilePtr->processFileForDirLayout()) {
+            keep.push_back(std::move(currFile));
             continue;
+        }
 
         if (options::SNAPSHOT_SPECIFIED) {
-            if (!smbFilePtr->constructSnapshotFile()) {
-                // constructSnapshotFile returns false if no file version fits the snapshot time
-                indexFiles.erase(indexFiles.begin()+i);
+            if (smbFilePtr->constructSnapshotFile()) {
+                keep.push_back(std::move(currFile));
             }
+            // else: no file version fits the snapshot time -> drop
         } else {
             // no snapshot time specified -> create separate smb file for each version
             const std::vector<pcapfs::FilePtr> smbFileVersions = smbFilePtr->constructVersionFiles();
-            if (smbFileVersions.size() != 0) {
+            if (smbFileVersions.empty()) {
+                keep.push_back(std::move(currFile));
+            } else {
+                // old smb file is replaced by its per-version files
                 filesToAdd.insert(filesToAdd.end(), smbFileVersions.begin(), smbFileVersions.end());
-                // old smb file is not needed anymore since we now have all versions of it as separate files
-                indexFiles.erase(indexFiles.begin()+i);
             }
         }
     }
-
-    indexFiles.insert(indexFiles.end(), filesToAdd.begin(), filesToAdd.end());
+    keep.insert(keep.end(), filesToAdd.begin(), filesToAdd.end());
+    indexFiles = std::move(keep);
 }
 
 

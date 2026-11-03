@@ -53,8 +53,10 @@ namespace pcapfs {
 
                 if (contains311Dialect(dialectCount, rawData)) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(28);
-                    const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(32);
-                    if ((size_t)(negotiateContextOffset + (8*negotiateContextCount) - 64) > len)
+                    const uint16_t negotiateContextCount = *(uint16_t*) &rawData.at(32);
+                    if (negotiateContextOffset < 64 ||
+                        (size_t)(negotiateContextOffset - 64) > len ||
+                        (size_t)(8 * negotiateContextCount) > len - (negotiateContextOffset - 64))
                         throw SmbError("Invalid negotiate context values in SMB2 Negotiate Request");
 
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
@@ -86,9 +88,11 @@ namespace pcapfs {
                 dialect = *(uint16_t*) &rawData.at(4);
                 if (dialect == Version::SMB_VERSION_3_1_1) {
                     const uint32_t negotiateContextOffset = *(uint32_t*) &rawData.at(60);
-                    const uint16_t negotiateContextCount = *(uint32_t*) &rawData.at(6);
+                    const uint16_t negotiateContextCount = *(uint16_t*) &rawData.at(6);
                     // each negotiate context is at least 8 bytes long
-                    if ((size_t)(negotiateContextOffset + (8*negotiateContextCount)  - 64) > len)
+                    if (negotiateContextOffset < 64 ||
+                        (size_t)(negotiateContextOffset - 64) > len ||
+                        (size_t)(8 * negotiateContextCount) > len - (negotiateContextOffset - 64))
                         throw SmbError("Invalid negotiate context values in SMB2 Negotiate Response");
 
                     totalSize = calculate311NegotiateMessageLength(rawData, negotiateContextOffset, negotiateContextCount);
@@ -164,14 +168,15 @@ namespace pcapfs {
                         throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
 
                 if (pathOffset != 0 && pathLength != 0)
-                    pathName = wstrToStr(Bytes(&rawData.at(pathOffset - 64), &rawData.at(pathOffset-64+pathLength-1)));
+                    pathName = wstrToStr(&rawData.at(pathOffset - 64), pathLength);
 
                 const uint16_t flags = *(uint16_t*) &rawData.at(2);
                 if (dialect == Version::SMB_VERSION_3_1_1 && (flags & 4)) {
                     // SMB2_TREE_CONNECT_FLAG_EXTENSION_PRESENT
                     const uint32_t treeConnectContextOffset = *(uint32_t*) &rawData.at(8);
-                    const uint16_t treeConnectContextCount = *(uint32_t*) &rawData.at(12);
-                    if ((size_t)(treeConnectContextOffset + (8*treeConnectContextCount)) > len)
+                    const uint16_t treeConnectContextCount = *(uint16_t*) &rawData.at(12);
+                    if (treeConnectContextOffset > len ||
+                        (size_t)(8 * treeConnectContextCount) > len - treeConnectContextOffset)
                         throw SmbError("Invalid buffer values in SMB2 Tree Connect Request");
 
                     if (treeConnectContextOffset == 0 || treeConnectContextCount == 0) {
@@ -232,7 +237,7 @@ namespace pcapfs {
                             throw SmbError("Invalid buffer values in SMB2 Create Request");
 
                         totalSize = nameOffset + nameLength - 64;
-                        filename = wstrToStr(Bytes(&rawData.at(nameOffset - 64), &rawData.at(nameOffset - 64 + nameLength - 1)));
+                        filename = wstrToStr(&rawData.at(nameOffset - 64), nameLength);
                     } else {
                         totalSize = 57;
                     }
@@ -244,12 +249,12 @@ namespace pcapfs {
                     if (nameOffset != 0 && nameLength != 0) {
                         if ((size_t)(nameOffset + nameLength - 64) > len)
                             throw SmbError("Invalid buffer values in SMB2 Create Request");
-                        filename = wstrToStr(Bytes(&rawData.at(nameOffset - 64), &rawData.at(nameOffset - 64 + nameLength - 1)));
-                        filename = sanitizeFilename(filename);
+                        filename = wstrToStr(&rawData.at(nameOffset - 64), nameLength);
                     }
                 } else {
                     totalSize = 57;
                 }
+                filename = sanitizeFilename(filename);
 
                 const uint32_t extractedDisposition = *(uint32_t*) &rawData.at(36);
                 disposition = extractedDisposition <= 5 ? extractedDisposition : CreateDisposition::DISPOSITION_UNKNOWN;
@@ -559,7 +564,8 @@ namespace pcapfs {
                 else
                     fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
                 fileId = bytesToHexString(Bytes(&rawData.at(8), &rawData.at(24)));
-                searchPattern = wstrToStr(Bytes(&rawData.at(fileNameOffset - 64), &rawData.at(fileNameOffset - 64 + fileNameLength - 1)));
+                if (fileNameOffset != 0 && fileNameLength != 0)
+                    searchPattern = wstrToStr(&rawData.at(fileNameOffset - 64), fileNameLength);
             }
             uint8_t fileInfoClass = FileInfoClass::FILE_UNKNOWN_INFORMATION;
             std::string fileId = "";
@@ -733,8 +739,7 @@ namespace pcapfs {
                                     const uint32_t filenameLen = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 96);
                                     if (100 + filenameLen > outputBufferLength)
                                         throw SmbError("Invalid size of FILE_ALL_INFORMATION in SMB2 Query Info Response");
-                                    filename = wstrToStr(Bytes(&rawData.at((outputBufferOffset - 64) + 100),
-                                                                &rawData.at((outputBufferOffset - 64) + 100 + filenameLen - 1)));
+                                    filename = wstrToStr(&rawData.at((outputBufferOffset - 64) + 100), filenameLen);
                                     filename = sanitizeFilename(filename);
 
                                     const uint32_t extractedFileAttributes = *(uint32_t*) &rawData.at((outputBufferOffset - 64) + 32);

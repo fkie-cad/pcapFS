@@ -218,37 +218,39 @@ namespace pcapfs {
                 const uint32_t extractedFileAttributes = *(uint32_t*) &rawContent.at(56);
                 metaData->isDirectory = extractedFileAttributes & 0x10;
                 const uint32_t extractedFileNameLength = *(uint32_t*) &rawContent.at(60);
+                size_t nameOffset = 0;
+                const char* contextName = nullptr;
                 switch (fileInfoClass) {
                     case FileInfoClass::FILE_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 64 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(64), &rawContent.at(64 + extractedFileNameLength - 1)));
+                        nameOffset = 64;
+                        contextName = "FileDirectoryInformation";
                         break;
                     case FileInfoClass::FILE_FULL_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 68 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileFullDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(68), &rawContent.at(68 + extractedFileNameLength - 1)));
+                        nameOffset = 68;
+                        contextName = "FileFullDirectoryInformation";
                         break;
                     case FileInfoClass::FILE_ID_FULL_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 80 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileIdFullDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(80), &rawContent.at(80 + extractedFileNameLength - 1)));
+                        nameOffset = 80;
+                        contextName = "FileIdFullDirectoryInformation";
                         break;
                     case FileInfoClass::FILE_BOTH_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 94 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileBothDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(94), &rawContent.at(94 + extractedFileNameLength - 1)));
+                        nameOffset = 94;
+                        contextName = "FileBothDirectoryInformation";
                         break;
                     case FileInfoClass::FILE_ID_BOTH_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 104 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileIdBothDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(104), &rawContent.at(104 + extractedFileNameLength - 1)));
+                        nameOffset = 104;
+                        contextName = "FileIdBothDirectoryInformation";
                         break;
                     case FileInfoClass::FILE_ID_EXTD_DIRECTORY_INFORMATION:
-                        if (extractedFileNameLength + 88 > rawContent.size())
-                            throw SmbError("Invalid file name length in FileIdExtdDirectoryInformation");
-                        filename = wstrToStr(Bytes(&rawContent.at(88), &rawContent.at(88 + extractedFileNameLength - 1)));
+                        nameOffset = 88;
+                        contextName = "FileIdExtdDirectoryInformation";
                         break;
+                }
+                if (contextName) {
+                    if (extractedFileNameLength > rawContent.size() ||
+                        nameOffset > rawContent.size() - extractedFileNameLength)
+                        throw SmbError(std::string("Invalid file name length in ") + contextName);
+                    filename = wstrToStr(&rawContent.at(nameOffset), extractedFileNameLength);
                 }
                 filename = sanitizeFilename(filename);
             };

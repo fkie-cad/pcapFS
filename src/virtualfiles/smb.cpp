@@ -37,15 +37,33 @@ size_t pcapfs::SmbFile::read(uint64_t startOffset, size_t length, const Index &i
         return 0;
     }
 
-    Bytes totalContent(0);
-    for (Fragment fragment: fragments) {
-        Bytes rawData(fragment.length);
+    // Walk fragments lazily and copy only the requested window.
+    uint64_t cursor = 0;
+    size_t written = 0;
+    for (const Fragment &fragment: fragments) {
+        if (written == length)
+            break;
+        const uint64_t fragEnd = cursor + fragment.length;
+        if (fragEnd <= startOffset) {
+            cursor = fragEnd;
+            continue;
+        }
+        // overlap of [startOffset + written, startOffset + length) with [cursor, fragEnd)
+        const uint64_t wantStart = startOffset + written;
+        if (wantStart >= fragEnd) {
+            cursor = fragEnd;
+            continue;
+        }
+        const uint64_t intoFragment = wantStart - cursor;
+        const uint64_t available = fragment.length - intoFragment;
+        const size_t toCopy = static_cast<size_t>(std::min<uint64_t>(available, length - written));
+
         FilePtr filePtr = idx.get({offsetType, fragment.id});
-        filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
-        totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
+        filePtr->read(fragment.start + intoFragment, toCopy, idx, buf + written);
+        written += toCopy;
+        cursor = fragEnd;
     }
-    memcpy(buf, totalContent.data() + startOffset, length);
-    return std::min(totalContent.size() - startOffset, length);
+    return written;
 }
 
 
@@ -64,13 +82,8 @@ pcapfs::Bytes const pcapfs::SmbFile::getContentForFragments(const Index &idx, co
 
 
 std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> const pcapfs::SmbFile::getAllTimestamps() {
-    // returns union of hybridTimestamps and fsTimestamps
-    std::map<pcapfs::TimePoint, pcapfs::ServerFileTimestamps> result = hybridTimestamps;
-    for (const auto &entry: fsTimestamps) {
-        if (!result.count(entry.first))
-            result[entry.first] = entry.second;
-    }
-    return result;
+    // delegates to SmbTimestamps::getAllTimestamps to keep the union logic in one place
+    return smb::SmbTimestamps(fsTimestamps, hybridTimestamps).getAllTimestamps();
 }
 
 
@@ -638,7 +651,6 @@ void pcapfs::SmbFile::initializeFilePtr(const smb::SmbContextPtr &smbContext, co
     filesizeRaw = filesizeProcessed = 0;
     idInIndex = smb::SmbManager::getInstance().getNewId();
     parentDirId = parentDir ? parentDir->getIdInIndex() : (uint64_t)-1;
-    clientIPs.insert(smbContext->clientIP);
     flags.set(pcapfs::flags::IS_METADATA);
     flags.set(pcapfs::flags::PROCESSED);
 }
