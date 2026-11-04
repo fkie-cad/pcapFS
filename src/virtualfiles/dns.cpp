@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <pcapplusplus/Packet.h>
 #include <pcapplusplus/DnsResourceData.h>
+#include <endian.h>
 
 #include "../filefactory.h"
 #include "../logging.h"
@@ -72,7 +73,7 @@ std::string const pcapfs::DnsFile::parseDnsToJson(pcapfs::Bytes data) {
     pcpp::Packet packet;
     const pcpp::DnsLayer newDnsLayer(data.data(), data.size(), nullptr, &packet);
     nlohmann::json output_json;
-    output_json["ID"] = std::to_string(newDnsLayer.getDnsHeader()->transactionID);
+    output_json["ID"] = std::to_string(be16toh(newDnsLayer.getDnsHeader()->transactionID));
     //process queries in dns packet (for requests and responses)
     std::vector<nlohmann::json> queries;
 
@@ -178,9 +179,9 @@ std::vector<pcapfs::FilePtr> pcapfs::DnsFile::parse(FilePtr filePtr, Index &idx)
             }
 
             if (resultPtr->getProperty(prop::dstPort) == "53") {
-                resultPtr->setFilename("REQ-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
+                resultPtr->setFilename("REQ-" + std::to_string(be16toh(dnsLayer.getDnsHeader()->transactionID)));
             } else if (resultPtr->getProperty(prop::srcPort) == "53") {
-                resultPtr->setFilename("RES-" + std::to_string(dnsLayer.getDnsHeader()->transactionID));
+                resultPtr->setFilename("RES-" + std::to_string(be16toh(dnsLayer.getDnsHeader()->transactionID)));
             }
             resultVector.push_back(resultPtr);
 
