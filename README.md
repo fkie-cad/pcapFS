@@ -46,7 +46,7 @@ $ ./bootstrap.sh --install
 | Distribution    | Supported Releases             |
 |-----------------|--------------------------------|
 | Ubuntu          | 20.04, 22.04, 24.04, 26.04     |
-| Debian          | 11, 12, 13                     |
+| Debian          | 12, 13                         |
 | Kali            | Rolling                        |
 | Fedora          | 43, 44                         |
 | CentOS Stream   | 9, 10                          |
