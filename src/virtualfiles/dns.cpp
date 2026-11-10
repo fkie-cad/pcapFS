@@ -210,8 +210,12 @@ size_t pcapfs::DnsFile::read(uint64_t startOffset, size_t length, const Index &i
     const FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
     const std::string output_string = parseDnsToJson(rawData);
-    memcpy(buf, output_string.c_str() + startOffset, length);
-    return std::min((size_t) output_string.length() - startOffset, length);
+    if (startOffset >= output_string.length()) {
+        return 0;
+    }
+    const size_t bytesToCopy = std::min(output_string.length() - startOffset, length);
+    memcpy(buf, output_string.c_str() + startOffset, bytesToCopy);
+    return bytesToCopy;
 }
 
 
