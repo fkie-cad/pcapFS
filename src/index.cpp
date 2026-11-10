@@ -178,53 +178,59 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
         throw IndexError("Index could not be opened for reading");
     }
     namespace bio = boost::iostreams;
-    std::stringstream inputIndex;
-    bio::filtering_istreambuf out;
-    out.push(bio::gzip_decompressor());
-    out.push(f);
-    bio::copy(out, inputIndex);
-    f.close();
+    try {
+        std::stringstream inputIndex;
+        bio::filtering_istreambuf out;
+        out.push(bio::gzip_decompressor());
+        out.push(f);
+        bio::copy(out, inputIndex);
+        f.close();
 
-    boost::archive::text_iarchive archive(inputIndex);
+        boost::archive::text_iarchive archive(inputIndex);
 
-    IndexHeader header;
-    archive >> header;
-    assertIndexHeaderIsCompatible(header);
+        IndexHeader header;
+        archive >> header;
+        assertIndexHeaderIsCompatible(header);
 
-    smb::SmbManager::getInstance().deserialize(archive, 0);
+        smb::SmbManager::getInstance().deserialize(archive, 0);
 
-    uint64_t numberOfFiles;
-    archive >> numberOfFiles;
+        uint64_t numberOfFiles;
+        archive >> numberOfFiles;
 
-    FilePtr currentPtr;
-    std::string type;
-    std::string indexFilename;
-    for (uint64_t i = 0; i < numberOfFiles; ++i) {
-        archive >> indexFilename;
-        archive >> type;
-        currentPtr = pcapfs::FileFactory::createFilePtr(type);
-        if (!currentPtr) {
-            throw IndexError("File of type " + type + " couldnot be created");
+        FilePtr currentPtr;
+        std::string type;
+        std::string indexFilename;
+        for (uint64_t i = 0; i < numberOfFiles; ++i) {
+            archive >> indexFilename;
+            archive >> type;
+            currentPtr = pcapfs::FileFactory::createFilePtr(type);
+            if (!currentPtr) {
+                throw IndexError("File of type " + type + " couldnot be created");
+            }
+            currentPtr->deserialize(archive);
+            currentPtr->filetype = type;
+            if (type == "pcap" || type == "pcapng") {
+                storedPcaps.push_back(currentPtr);
+            }
+            files.insert({indexFilename, currentPtr});
         }
-        currentPtr->deserialize(archive);
-        currentPtr->filetype = type;
-        if (type == "pcap" || type == "pcapng") {
-            storedPcaps.push_back(currentPtr);
-        }
-        files.insert({indexFilename, currentPtr});
-    }
 
-    // set parent dirs for serverfiles
-    for (const auto &entry : files) {
-        if (entry.second->flags.test(flags::IS_SERVERFILE)) {
-            ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
-            const uint64_t parentDirId = serverFilePtr->getParentDirId();
-            if (parentDirId != (uint64_t)-1) {
-                serverFilePtr->setParentDir(get({serverFilePtr->getFiletype(), parentDirId}));
-            } else {
-                serverFilePtr->setParentDir(nullptr);
+        // set parent dirs for serverfiles
+        for (const auto &entry : files) {
+            if (entry.second->flags.test(flags::IS_SERVERFILE)) {
+                ServerFilePtr serverFilePtr = std::static_pointer_cast<ServerFile>(entry.second);
+                const uint64_t parentDirId = serverFilePtr->getParentDirId();
+                if (parentDirId != (uint64_t)-1) {
+                    serverFilePtr->setParentDir(get({serverFilePtr->getFiletype(), parentDirId}));
+                } else {
+                    serverFilePtr->setParentDir(nullptr);
+                }
             }
         }
+    } catch (const pcapfs::IndexError &) {
+        throw;
+    } catch (const std::exception &err) {
+        throw IndexError("Index file is corrupt or has an invalid format: " + std::string(err.what()));
     }
 }
 
