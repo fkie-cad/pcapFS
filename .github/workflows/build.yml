@@ -38,7 +38,7 @@ jobs:
           - name: CentOS Stream 10
             image: quay.io/centos/centos:stream10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run tests
         run: |
