@@ -23,8 +23,6 @@ jobs:
             image: ubuntu:24.04
           - name: Ubuntu 26.04
             image: ubuntu:26.04
-          - name: Debian 11
-            image: debian:bullseye
           - name: Debian 12
             image: debian:bookworm
           - name: Debian 13
