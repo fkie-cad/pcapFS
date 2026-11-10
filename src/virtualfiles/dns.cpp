@@ -30,7 +30,7 @@ std::string const pcapfs::DnsFile::dnsTypeToString(pcpp::DnsType type) {
             {"Unknown (0)", "A", "NS", "MD", "MF", "CNAME", "SOA", "MB", "MG", "MR", "NULL_R", "WKS", "PTR",
              "HINFO", "MINFO",
              "MX", "TXT", "RP", "AFSDB", "X25", "ISDN", "RT", "NSAP", "NSAP_PTR", "SIG", "KEY", "PX", "GPOS",
-             "AAAA", "LOC", "NXT", "EID", "NIMLOC", "SRV", "ATMA", "NAPTR", "KX", "CERT", "A6", "DNAM", "SINK",
+             "AAAA", "LOC", "NXT", "EID", "NIMLOC", "SRV", "ATMA", "NAPTR", "KX", "CERT", "A6", "DNAME", "SINK",
              "OPT", "APL", "DS", "SSHFP", "IPSECKEY", "RRSIG", "NSEC", "DNSKEY", "DHCID", "NSEC3", "NSEC3PARAM"};
     static const size_t dnsTypesAvailable = 52;
 
