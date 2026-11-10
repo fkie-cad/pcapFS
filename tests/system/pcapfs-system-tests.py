@@ -48,8 +48,8 @@ class TestSortByOption:
         expected_files = (
             "67/0-0_REQ-15645",
             "68/1-0_RES-15645",
-            "53/2-0_REQ-28663",
-            "32795/2-28_RES-28663",
+            "53/2-0_REQ-63343",
+            "32795/2-28_RES-63343",
             "52240/8-308_png",
             "52236/7-311_jpeg",
             "52230/6-309_json",
@@ -71,8 +71,8 @@ class TestSortByOption:
         expected_files = (
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-0_REQ-15645",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/1-0_RES-15645",
-            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-0_REQ-28663",
-            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-28_RES-28663",
+            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-0_REQ-63343",
+            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-28_RES-63343",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/8-308_png",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/7-311_jpeg",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/6-309_json",
@@ -94,8 +94,8 @@ class TestSortByOption:
         expected_files = (
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/0-0_REQ-15645",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/1-0_RES-15645",
-            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-0_REQ-28663",
-            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-28_RES-28663",
+            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-0_REQ-63343",
+            "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/2-28_RES-63343",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/8-308_png",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/7-311_jpeg",
             "PCAPFS_PROP_NOT_AVAIL/PCAPFS_PROP_NOT_AVAIL/6-309_json",
@@ -213,8 +213,8 @@ class TestFileContents:
     def test_dns_file(self, testpcap, content_dns_file):
         with mount_pcap(testpcap) as mountpoint:
             files = get_file_list(mountpoint)
-            assert "dns/2-0_REQ-28663" in files
-            with open(os.path.join(mountpoint, "dns/2-0_REQ-28663"), "rb") as f:
+            assert "dns/2-0_REQ-63343" in files
+            with open(os.path.join(mountpoint, "dns/2-0_REQ-63343"), "rb") as f:
                 content = f.read()
                 data = binascii.hexlify(content)
                 hexdata = str(data, "UTF-8")
@@ -295,8 +295,8 @@ def expected_files():
         [
             "dhcp/0-0_REQ-15645",
             "dhcp/1-0_RES-15645",
-            "dns/2-0_REQ-28663",
-            "dns/2-28_RES-28663",
+            "dns/2-0_REQ-63343",
+            "dns/2-28_RES-63343",
             "http/8-308_png",
             "http/7-311_jpeg",
             "http/6-309_json",
@@ -472,7 +472,7 @@ def content_dhcp_file():
 @pytest.fixture
 def content_dns_file():
     content_dns_file = (
-        "7b0a09224944223a20223238363633222c0a092251756572696573223a20"
+        "7b0a09224944223a20223633333433222c0a092251756572696573223a20"
         "5b0a09097b0a09090922636c617373223a2022494e222c0a090909226e61"
         "6d65223a2022676f6f676c652e636f6d222c0a0909092274797065223a20"
         "224d58220a09097d0a095d0a7d"
