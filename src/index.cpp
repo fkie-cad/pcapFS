@@ -205,7 +205,7 @@ void pcapfs::Index::read(const pcapfs::Path &path) {
             archive >> type;
             currentPtr = pcapfs::FileFactory::createFilePtr(type);
             if (!currentPtr) {
-                throw IndexError("File of type " + type + " couldnot be created");
+                throw IndexError("File of type " + type + " could not be created");
             }
             currentPtr->deserialize(archive);
             currentPtr->filetype = type;
