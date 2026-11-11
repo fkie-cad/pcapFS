@@ -354,22 +354,23 @@ std::string const pcapfs::FtpControlFile::constructDirPathString(const std::vect
 }
 
 
-size_t pcapfs::FtpControlFile::read(uint64_t, size_t, const Index &idx, char *buf) {
+size_t pcapfs::FtpControlFile::read(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
     size_t i = 0;
-    size_t read_count = 0;
+    Bytes totalContent;
 
     for (const Fragment &fragment : fragments) {
         Bytes rawData = readRawData(idx, fragment);
-        const uint8_t nr_of_lines = insertDirectionPrefixes(rawData, i);
-        const uint16_t length_of_prefixes = nr_of_lines * DATA_DIRECTION_PREFIX_LN;
-
-        memcpy(&buf[read_count], (char *) rawData.data(), fragment.length + length_of_prefixes);
-
-        read_count += fragment.length + length_of_prefixes;
+        insertDirectionPrefixes(rawData, i);
+        totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
         i++;
     }
 
-    return read_count;
+    if(startOffset >= totalContent.size()) {
+        return 0;
+    }
+    const size_t bytesToCopy = std::min(totalContent.size() - startOffset, length);
+    memcpy(buf, totalContent.data() + startOffset, bytesToCopy);
+    return bytesToCopy;
 }
 
 
