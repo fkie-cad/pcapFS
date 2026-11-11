@@ -184,8 +184,12 @@ size_t pcapfs::FtpFile::read(uint64_t startOffset, size_t length, const Index &i
         filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
         totalContent.insert(totalContent.end(), rawData.begin(), rawData.end());
     }
-    memcpy(buf, totalContent.data() + startOffset, length);
-    return std::min(totalContent.size() - startOffset, length);
+    if (startOffset >= totalContent.size()) {
+        return 0;
+    }
+    const size_t bytesToCopy = std::min(totalContent.size() - startOffset, length);
+    memcpy(buf, totalContent.data() + startOffset, bytesToCopy);
+    return bytesToCopy;
 }
 
 
