@@ -162,15 +162,15 @@ std::string const pcapfs::ja4::calculateJa4X(const Bytes &rawCertData) {
 
     std::string tmpString = "";
     // get issuer OIDs and hash them
-    X509_NAME *issuer = X509_get_issuer_name(cert);
+    const X509_NAME *issuer = X509_get_issuer_name(cert);
     for (int i = 0; i < X509_NAME_entry_count(issuer); ++i) {
-        X509_NAME_ENTRY *entry = X509_NAME_get_entry(issuer, i);
+        const X509_NAME_ENTRY *entry = X509_NAME_get_entry(issuer, i);
         if (!entry) {
             X509_free(cert);
             return "";
         }
 
-        ASN1_OBJECT *obj =  X509_NAME_ENTRY_get_object(entry);
+        const ASN1_OBJECT *obj =  X509_NAME_ENTRY_get_object(entry);
         if (!issuer) {
             X509_free(cert);
             return "";
@@ -190,15 +190,15 @@ std::string const pcapfs::ja4::calculateJa4X(const Bytes &rawCertData) {
 
     tmpString = "";
     // get subject OIDs and hash them
-    X509_NAME *subject = X509_get_subject_name(cert);
+    const X509_NAME *subject = X509_get_subject_name(cert);
     for (int i = 0; i < X509_NAME_entry_count(subject); ++i) {
-        X509_NAME_ENTRY *entry = X509_NAME_get_entry(subject, i);
+        const X509_NAME_ENTRY *entry = X509_NAME_get_entry(subject, i);
         if (!entry) {
             X509_free(cert);
             return "";
         }
 
-        ASN1_OBJECT *obj =  X509_NAME_ENTRY_get_object(entry);
+        const ASN1_OBJECT *obj =  X509_NAME_ENTRY_get_object(entry);
         if (!obj) {
             X509_free(cert);
             return "";
@@ -226,7 +226,7 @@ std::string const pcapfs::ja4::calculateJa4X(const Bytes &rawCertData) {
             return "";
         }
 
-        ASN1_OBJECT *obj =  X509_EXTENSION_get_object(ext);
+        const ASN1_OBJECT *obj =  X509_EXTENSION_get_object(ext);
         if (!obj) {
             X509_free(cert);
             return "";
