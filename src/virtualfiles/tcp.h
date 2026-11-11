@@ -28,8 +28,25 @@ namespace pcapfs {
         static bool registeredAtFactory;
 
         typedef std::shared_ptr<pcapfs::TcpFile> TCPPtr;
-        typedef std::map<uint32_t, TCPPtr> TCPStreamMap;
-        typedef std::map<uint32_t, int> sideMap;
+        // key: (connection generation << 32) | flow key of the reassembly library
+        typedef std::map<uint64_t, TCPPtr> TCPStreamMap;
+        typedef std::map<uint64_t, int> sideMap;
+
+        // A 5-tuple can be used by several consecutive connections (e.g. the Linux NFS client reconnects from the
+        // same reserved source port). Each such connection is one "generation" of the flow.
+        static constexpr uint32_t MAX_CONNECTION_GENERATIONS = 65536;
+        struct FlowGeneration {
+            uint32_t generation = 0;
+            bool sawNonSyn = false;
+            bool sawFinOrRst = false;
+            bool sawSynAck = false;
+            // initial sequence numbers of the SYNs seen in this generation (two in a simultaneous open)
+            uint8_t synSeqCount = 0;
+            uint32_t synSeqs[2] = {0, 0};
+            bool knowsSynSeq(uint32_t seq) const {
+                return (synSeqCount > 0 && synSeqs[0] == seq) || (synSeqCount > 1 && synSeqs[1] == seq);
+            }
+        };
 
         class TCPContent {
         public:
@@ -69,6 +86,8 @@ namespace pcapfs {
             TimePoint currentTimestamp;
             sideMap currentSide;
             bool isPcapng;
+            uint32_t currentGeneration = 0;
+            std::map<uint32_t, FlowGeneration> flowGenerations;
         };
 
         static void messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie);
