@@ -1,6 +1,7 @@
 #include "tcp.h"
 
 #include <netinet/in.h>
+#include <memory>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -9,6 +10,7 @@
 #include <pcapplusplus/IPv4Layer.h>
 #include <pcapplusplus/IPv6Layer.h>
 #include <pcapplusplus/TcpLayer.h>
+#include <pcapplusplus/PacketUtils.h>
 
 #include "../dirlayout.h"
 #include "../utils.h"
@@ -64,7 +66,7 @@ size_t pcapfs::TcpFile::read(uint64_t startOffset, size_t length, const Index &i
 void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStreamData &tcpData, void *userCookie) {
     TCPIndexerState *state = static_cast<pcapfs::TcpFile::TCPIndexerState *>(userCookie);
 
-    uint32_t flowkey = tcpData.getConnectionData().flowKey;
+    const uint64_t flowkey = (static_cast<uint64_t>(state->currentGeneration) << 32) | tcpData.getConnectionData().flowKey;
     pcapfs::TcpFile::TCPPtr tcpPointer;
 
     if (tcpData.getDataLength() == 0) {
@@ -86,7 +88,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
         LOG_TRACE << "New file with key: " << flowkey;
 
         state->files.emplace(flowkey, std::make_shared<pcapfs::TcpFile>());
-        state->currentSide.insert(std::pair<uint32_t, signed char>(flowkey, side));
+        state->currentSide.insert(std::pair<uint64_t, signed char>(flowkey, side));
         tcpPointer = state->files[flowkey];
 
         tcpPointer->setFirstPacketNumber(state->currentFragment.frameNr);
@@ -172,7 +174,10 @@ std::vector<pcapfs::FilePtr>
 pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> &pcapFiles) {
 
     TCPIndexerState state;
-    pcpp::TcpReassembly reassembly(&messageReadycallback, &state);
+    // One reassembly instance per connection generation: the library ignores every packet of a flow it has seen
+    // closing, so a new connection on the same 5-tuple is handed to the next instance (see FlowGeneration).
+    std::vector<std::unique_ptr<pcpp::TcpReassembly>> reassemblies;
+    reassemblies.push_back(std::make_unique<pcpp::TcpReassembly>(&messageReadycallback, &state));
 
     std::shared_ptr<CaptureFile> pcapPtr;
 
@@ -218,7 +223,46 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
                 pcpp::TcpLayer *tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
                 state.currentFragment.fragment.length = tcpLayer->getLayerPayloadSize();
 
-                reassembly.reassemblePacket(parsedPacket);
+                if (!parsedPacket.isPacketOfType(pcpp::ICMP)) {
+                    FlowGeneration &flow = state.flowGenerations[pcpp::hash5Tuple(&parsedPacket)];
+                    const pcpp::tcphdr *tcpHeader = tcpLayer->getTcpHeader();
+                    if (tcpHeader->synFlag && !tcpHeader->ackFlag) {
+                        const uint32_t synSeq = ntohl(tcpHeader->sequenceNumber);
+                        // a SYN after the connection was closed, or a SYN with another initial sequence number
+                        // after data/ACKs were exchanged, starts a new connection (a retransmitted SYN does not)
+                        // (bounded, because every generation costs about 1 KB: beyond the limit a flow behaves as
+                        // it did before generations existed, i.e. packets after the close are ignored)
+                        if (flow.generation + 1 < MAX_CONNECTION_GENERATIONS &&
+                            (flow.sawFinOrRst || (flow.sawNonSyn && !flow.knowsSynSeq(synSeq)))) {
+                            const uint32_t next = flow.generation + 1;
+                            flow = FlowGeneration();
+                            flow.generation = next;
+                        }
+                        if (!flow.knowsSynSeq(synSeq) && flow.synSeqCount < 2)
+                            flow.synSeqs[flow.synSeqCount++] = synSeq;
+                        state.currentGeneration = flow.generation;
+                    } else if ((tcpHeader->finFlag || tcpHeader->rstFlag) && flow.generation > 0 && !flow.sawSynAck &&
+                               !flow.sawNonSyn &&
+                               !(tcpHeader->ackFlag && flow.knowsSynSeq(ntohl(tcpHeader->ackNumber) - 1))) {
+                        // a FIN/RST right after the SYN of a reconnect that does not answer that SYN is a late
+                        // packet of the previous connection: it must not close the new one
+                        // (only while nothing but SYNs was seen of the new connection: in a capture without the
+                        // SYN-ACK, e.g. of one direction only, a later FIN/RST belongs to the new connection)
+                        state.currentGeneration = flow.generation - 1;
+                    } else {
+                        flow.sawNonSyn = true;
+                        if (tcpHeader->synFlag)
+                            flow.sawSynAck = true;
+                        if (tcpHeader->finFlag || tcpHeader->rstFlag)
+                            flow.sawFinOrRst = true;
+                        state.currentGeneration = flow.generation;
+                    }
+                    while (reassemblies.size() <= state.currentGeneration)
+                        reassemblies.push_back(std::make_unique<pcpp::TcpReassembly>(&messageReadycallback, &state));
+                } else {
+                    state.currentGeneration = 0;
+                }
+                reassemblies[state.currentGeneration]->reassemblePacket(parsedPacket);
 
                 if (!state.gotCallback) {
                     if (tcpLayer->getLayerPayloadSize() > 0) {
@@ -237,7 +281,10 @@ pcapfs::TcpFile::createVirtualFilesFromPcaps(const std::vector<pcapfs::FilePtr> 
         pcapPtr->closeReader();
     }
     state.gotCallback = true;
-    reassembly.closeAllConnections();
+    for (size_t generation = 0; generation < reassemblies.size(); ++generation) {
+        state.currentGeneration = static_cast<uint32_t>(generation);
+        reassemblies[generation]->closeAllConnections();
+    }
 
     if (icmpPackets > 0) {
         LOG_TRACE << "DEBUG: TCP inside of ICMP found -> " << icmpPackets << " packets skipped";
