@@ -124,7 +124,7 @@ void pcapfs::TcpFile::messageReadycallback(signed char side, const pcpp::TcpStre
     unsigned long missing_str_len = 0;
     if (datastr.find("bytes missing]") != std::string::npos) {
         missing_str_len = datastr.find(']') + 1;
-        sscanf((char *) tcpData.getData(), "[ %lu bytes missing]", &missing_count);
+        sscanf(datastr.c_str(), "[ %lu bytes missing]", &missing_count);
         LOG_TRACE << missing_count << " bytes of missing TCP-data found";
         /* Which side is the missing data?? -> The last side seen
          * What if missing data at start of stream? -> No information, assuming(!!) first side seen after
