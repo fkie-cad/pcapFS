@@ -4,7 +4,7 @@
 ### Fixed
 - Mismatched Allocation warning for newer GCC versions
 - TCP: a new connection that reuses the addresses and ports of a closed one was ignored; it now gets its own TCP file
-  
+
 ### Added
 - SMB2: option `--snapshot`
 - SMB2, FTP: option `--timestamp-mode`
