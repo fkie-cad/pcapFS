@@ -396,6 +396,7 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
         if (zlib_return == Z_DATA_ERROR) {
             if (inflateReset2(&zs, -MAX_WBITS) != Z_OK) {
                 LOG_ERROR << "ZLIB reset error";
+                inflateEnd(&zs);
                 delete[] inflated;
                 return 0;
             }
@@ -422,10 +423,12 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
         if (zlib_return != Z_STREAM_END) {
             LOG_ERROR << "Zlib uncompress error, zlib-errno: " << zlib_return;
+            inflateEnd(&zs);
             delete[] inflated;
             return 0;
         }
         const ulong infl_size = outlen - zs.avail_out;
+        inflateEnd(&zs);
         delete[] inflated;
         return infl_size;
     }
@@ -538,6 +541,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     if (zlib_return == Z_DATA_ERROR) {
         if (inflateReset2(&zs, -MAX_WBITS) != Z_OK) {
             LOG_ERROR << "ZLIB reset error";
+            inflateEnd(&zs);
             delete[] inflated;
             return 0;
         }
@@ -564,6 +568,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
 
     if (zlib_return != Z_STREAM_END) {
         LOG_ERROR << "Zlib uncompress error, zlib-errno: " << zlib_return;
+        inflateEnd(&zs);
         delete[] inflated;
         return 0;
     }
@@ -571,6 +576,7 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     const ulong infl_size = outlen - zs.avail_out;
     if (buf == nullptr) {
         LOG_ERROR << "no buffer specified in readDeflate!";
+        inflateEnd(&zs);
         delete[] inflated;
         return 0;
     }
@@ -578,11 +584,13 @@ int pcapfs::HttpFile::readDeflate(uint64_t startOffset, size_t length, const Ind
     //size_t read_count = std::min((size_t) infl_size - startOffset, length);
     const int read_count = std::min(infl_size - startOffset, length);
     if (read_count <= 0) {
+        inflateEnd(&zs);
         delete[] inflated;
         return 0;
     }
 
     memcpy(buf, inflated + startOffset, read_count);
+    inflateEnd(&zs);
     delete[] inflated;
     return (int) read_count;
 }
