@@ -255,6 +255,7 @@ pcapfs::Bytes const pcapfs::crypto::rsaPrivateDecrypt(const Bytes &input, const 
             LOG_ERROR << "Openssl: Failed to init RSA decryption context";
             ERR_print_errors_fp(stderr);
         }
+        EVP_PKEY_CTX_free(ctx);
         EVP_PKEY_free(pkey);
         return result;
     }
@@ -300,6 +301,7 @@ pcapfs::Bytes const pcapfs::crypto::rsaPrivateDecrypt(const Bytes &input, const 
             break;
     }
 
+    EVP_PKEY_CTX_free(ctx);
     EVP_PKEY_free(pkey);
     return result;
 }
