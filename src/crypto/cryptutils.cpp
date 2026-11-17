@@ -462,6 +462,7 @@ pcapfs::Bytes const pcapfs::crypto::calculateSha256(const Bytes &input) {
         return Bytes();
     }
 
+    EVP_MD_CTX_free(mdctx);
     return digest;
 }
 
