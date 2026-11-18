@@ -4,6 +4,12 @@
 ### Fixed
 - Mismatched Allocation warning for newer GCC versions
 - TCP: a new connection that reuses the addresses and ports of a closed one was ignored; it now gets its own TCP file
+- DNS: transaction ID was displayed with swapped byte order
+- Crash when reading a corrupt or invalid index file; pcapFS now reports a clear error instead of aborting
+- Crash (heap corruption) when indexing certain FTP captures
+- Several memory leaks in crypto and HTTP decompression
+- Build failure with newer OpenSSL (version 4)
+- Several smaller bugfixes and out-of-bounds read hardening
 
 ### Added
 - SMB2: option `--snapshot`
