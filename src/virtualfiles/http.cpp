@@ -437,8 +437,9 @@ int pcapfs::HttpFile::calculateProcessedSize(const Index &idx) {
 
 
 int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Index &idx, char *buf) {
-    Bytes rawData(filesizeRaw);
+    Bytes rawData(filesizeRaw + 1);
     readRaw(0, filesizeRaw, idx, (char *) rawData.data());
+    rawData[filesizeRaw] = '\0'; // null terminator so stroul cannot read beyond the buffer (in case of missing \r\n at the end of the chunked data)
 
     Bytes out_buf(filesizeRaw);
     size_t raw_pos = 0;
@@ -447,7 +448,7 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
     bool incomplete_chunked = false;
     char *hex_end;
     while (true) {
-        if (raw_pos >= rawData.size()) {
+        if (raw_pos >= filesizeRaw) {
             break;
         }
 
@@ -485,6 +486,9 @@ int pcapfs::HttpFile::readChunked(uint64_t startOffset, size_t length, const Ind
     }
     if (out_pos == 0) {
         return 0;
+    }
+    if (startOffset >= out_pos) {
+        return 0; // requested offset is beyond the end of the decoded data
     }
 
     const size_t read_count = std::min((size_t) out_pos - startOffset, length);
