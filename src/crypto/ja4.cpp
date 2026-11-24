@@ -171,7 +171,7 @@ std::string const pcapfs::ja4::calculateJa4X(const Bytes &rawCertData) {
         }
 
         const ASN1_OBJECT *obj =  X509_NAME_ENTRY_get_object(entry);
-        if (!issuer) {
+        if (!obj) {
             X509_free(cert);
             return "";
         }
