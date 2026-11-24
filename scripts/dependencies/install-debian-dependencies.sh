@@ -26,7 +26,7 @@ boost_pkgs='
 if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-6]\.04|23\.10)$ ]]; } \
     || { [[ "${distro}" = 'Kali' ]]; } \
     || { [[ "${distro}" = 'Linuxmint' && "${release}" =~ ^2[1-2](\.[0-9])?$ ]]; } \
-    || { [[ "${distro}" = 'Debian' && ( "${release}" = '11' || "${release}" = '12' || "${release}" = '13' ) ]]; }; then
+    || { [[ "${distro}" = 'Debian' && ( "${release}" = '12' || "${release}" = '13' ) ]]; }; then
 
     while sudo fuser /var/lib/apt/lists/lock; do
         sleep 1
@@ -46,14 +46,7 @@ if { [[ "${distro}" = 'Ubuntu' && "${release}" =~ ^(2[0-6]\.04|23\.10)$ ]]; } \
                     fuse3 \
                     libfuse3-dev
 
-        if [[ "${distro}" = 'Debian' && "${release}" = '11' ]]; then
-            # Bullseye ships CMake 3.18; pcapFS needs >= 3.21.
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3-pip
-            sudo pip3 install --upgrade cmake
-            ${here}/install-openssl.sh
-        else
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev
-        fi
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev
     fi
 
     ${here}/install-pcap-plus-plus-precompiled.sh

@@ -6,7 +6,7 @@ If you are using one of the operating systems listed below, simply run [install-
 | Distribution    | Supported Releases             |
 |-----------------|--------------------------------|
 | Ubuntu          | 20.04, 22.04, 24.04, 26.04     |
-| Debian          | 11, 12, 13                     |
+| Debian          | 12, 13                         |
 | Kali            | Rolling                        |
 | Linux Mint      | 21.x, 22.x                     |
 | Fedora          | 40 and newer                   |
