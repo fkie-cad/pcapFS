@@ -741,8 +741,11 @@ size_t pcapfs::TlsFile::readCertificate(uint64_t startOffset, size_t length, con
     FilePtr filePtr = idx.get({offsetType, fragment.id});
     filePtr->read(fragment.start, fragment.length, idx, reinterpret_cast<char *>(rawData.data()));
     std::string pemString = crypto::convertToPem(rawData);
-    size_t readCount = std::min((size_t) pemString.length() - startOffset, length);
-    memcpy(buf, pemString.c_str() + startOffset, length);
+    if (startOffset >= pemString.length()) {
+        return 0;
+    }
+    size_t readCount = std::min(pemString.length() - startOffset, length);
+    memcpy(buf, pemString.c_str() + startOffset, readCount);
     return readCount;
 }
 
