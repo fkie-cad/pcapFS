@@ -183,7 +183,7 @@ int pcapfs::crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
     if (EVP_DecryptInit_ex(ctx, cipher, nullptr, key, iv) != 1) {
         LOG_ERROR << "Openssl: EVP_DecryptInit_ex() failed" << std::endl;
         ERR_print_errors_fp(stderr);
-        EVP_CIPHER_CTX_cleanup(ctx);
+        EVP_CIPHER_CTX_free(ctx);
         return 1;
     }
 
@@ -194,17 +194,17 @@ int pcapfs::crypto::opensslDecrypt(const EVP_CIPHER* cipher, const unsigned char
     if (EVP_DecryptUpdate(ctx, decryptedData.data(), &outlen, dataToDecrypt.data(), dataToDecrypt.size()) != 1) {
         LOG_ERROR << "Openssl: EVP_DecryptUpdate() failed" << std::endl;
         ERR_print_errors_fp(stderr);
-        EVP_CIPHER_CTX_cleanup(ctx);
+        EVP_CIPHER_CTX_free(ctx);
         return 1;
     }
 
     if (EVP_DecryptFinal_ex(ctx, decryptedData.data()+outlen, &outlen) != 1) {
         LOG_ERROR << "Openssl: EVP_DecryptFinal_ex() failed" << std::endl;
         ERR_print_errors_fp(stderr);
-        EVP_CIPHER_CTX_cleanup(ctx);
+        EVP_CIPHER_CTX_free(ctx);
         return 1;
     }
 
-    EVP_CIPHER_CTX_cleanup(ctx);
+    EVP_CIPHER_CTX_free(ctx);
     return 0;
  }
